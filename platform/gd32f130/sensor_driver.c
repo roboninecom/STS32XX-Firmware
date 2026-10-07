@@ -325,7 +325,7 @@ void I2C0_EV_IRQHandler(void)
     case SENSOR_I2C_REGISTER_SENT:
         if (status & I2C_STAT0_BTC) {
             /* Preserve the encoder's verified repeated-START ordering. */
-            (void)I2C_STAT0(I2C0);
+            /* The status read at IRQ entry precedes this DATA access. */
             (void)I2C_DATA(I2C0);
             I2C_CTL0(I2C0) |= I2C_CTL0_START;
             driver->phase = SENSOR_I2C_READ_START;
@@ -342,6 +342,10 @@ void I2C0_EV_IRQHandler(void)
             /* Two-byte DMA receive: hardware NACKs the last byte; the DMA
              * completion IRQ requests STOP. Disable event IRQs before data. */
             I2C_CTL1(I2C0) = 48u | I2C_CTL1_ERRIE | I2C_CTL1_DMAON | I2C_CTL1_DMALST;
+            /* CTL1 setup intervened after the IRQ status read. Repeat STAT0
+             * immediately before STAT1 or ADDSEND remains set on this MCU,
+             * holding SCL low and preventing the DMA receive from starting. */
+            (void)I2C_STAT0(I2C0);
             (void)I2C_STAT1(I2C0);
             driver->phase = SENSOR_I2C_RECEIVE;
         }

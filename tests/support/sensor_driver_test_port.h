@@ -87,12 +87,23 @@ static inline void NVIC_SetPriority(unsigned n, unsigned p) { sensor_mock_irq_pr
 #define GPIO_OMODE(unused) sensor_mock_registers[22]
 #define GPIO_OSPD(unused) sensor_mock_registers[23]
 #define I2C_CKCFG(unused) sensor_mock_registers[24]
-#define I2C_CTL0(unused) sensor_mock_registers[25]
-#define I2C_CTL1(unused) sensor_mock_registers[26]
-#define I2C_DATA(unused) sensor_mock_registers[27]
+/* Model ADDSEND's ordered MMIO acknowledgement. A CTL write between the
+ * status reads must not release the address phase. This side effect was
+ * absent from the original fake registers and allowed the DMA stall through. */
+extern unsigned sensor_mock_i2c_access;
+static inline volatile uintptr_t *sensor_mock_i2c(unsigned index) {
+    unsigned previous = sensor_mock_i2c_access;
+    sensor_mock_i2c_access = index;
+    if (index == 30u && previous == 29u)
+        sensor_mock_registers[29] &= ~I2C_STAT0_ADDSEND;
+    return &sensor_mock_registers[index];
+}
+#define I2C_CTL0(unused) (*sensor_mock_i2c(25))
+#define I2C_CTL1(unused) (*sensor_mock_i2c(26))
+#define I2C_DATA(unused) (*sensor_mock_i2c(27))
 #define I2C_RT(unused) sensor_mock_registers[28]
-#define I2C_STAT0(unused) sensor_mock_registers[29]
-#define I2C_STAT1(unused) sensor_mock_registers[30]
+#define I2C_STAT0(unused) (*sensor_mock_i2c(29))
+#define I2C_STAT1(unused) (*sensor_mock_i2c(30))
 static inline volatile uintptr_t *sensor_mock_adc(void) {
     sensor_mock_registers[63] &= ~((1u<<2) | (1u<<3));
     return &sensor_mock_registers[63];

@@ -7,6 +7,7 @@
 sensor_mock_core_t sensor_mock_tick, sensor_mock_dwt, sensor_mock_debug, sensor_mock_scb;
 volatile uintptr_t sensor_mock_registers[64];
 uint32_t sensor_mock_mask;
+unsigned sensor_mock_i2c_access;
 unsigned sensor_mock_irq_enabled[5], sensor_mock_irq_priority[5];
 void SysTick_Handler(void);
 void I2C0_EV_IRQHandler(void);
@@ -26,11 +27,14 @@ static void adc(sensor_driver_t *s)
 static void encoder(sensor_driver_t *s)
 {
     event(I2C_STAT0_SBSEND); assert(I2C_DATA(0)==0x6c);
-    event(I2C_STAT0_ADDSEND); assert(I2C_DATA(0)==0x0c);
+    event(I2C_STAT0_ADDSEND);
+    assert(!(I2C_STAT0(0) & I2C_STAT0_ADDSEND));
+    assert(I2C_DATA(0)==0x0c);
     event(I2C_STAT0_BTC);
     assert(I2C_CTL0(0)&I2C_CTL0_START);
     event(I2C_STAT0_SBSEND); assert(I2C_DATA(0)==0x6d);
     event(I2C_STAT0_ADDSEND);
+    assert(!(I2C_STAT0(0) & I2C_STAT0_ADDSEND)); /* Read address released to DMA. */
     assert((I2C_CTL1(0)&(I2C_CTL1_DMAON|I2C_CTL1_DMALST)) ==
            (I2C_CTL1_DMAON|I2C_CTL1_DMALST));
     assert(!(I2C_CTL1(0)&I2C_CTL1_EVIE));
