@@ -13,7 +13,7 @@ static void run(double authority, double gravity, double friction, unsigned dela
     assert(arm_control_configure(&s,(arm_config_t){
         .kp_q8=1024,.kd_q8=128,.ki_q8=512,.integral_limit=150,
         .effort_limit=350,.velocity_limit=120,.acceleration_limit=400,
-        .timeout_ms=2000,.velocity_filter_q8=64,
+        .timeout_ms=2000,.velocity_filter_q8=64, .ramp_time_ms=30,
         .position_min_q8=500*256,.position_max_q8=1500*256}));
     assert(arm_control_arm(&s,1,1000,0));
     double q=1000, v=0, effort_delay[5]={0};
@@ -21,9 +21,8 @@ static void run(double authority, double gravity, double friction, unsigned dela
     for (unsigned leg=0;leg<3;leg++) {
         const int target=leg==1?1032:1000;
         assert(arm_control_target(&s,1,(arm_target_t){.sequence=leg*2+1,
-            .position_q8=target*256,.speed_limit=120,.acceleration=400,
-            .braking=400},tick));
-        assert(arm_control_start(&s,1,tick));
+            .position_q8=target*256,.speed_limit=120,.acceleration=400},tick));
+
         double low=1e9,high=-1e9,absolute_error=0;
         for (unsigned n=0;n<15000;n++) {
             if (n==14000 && leg==0) {

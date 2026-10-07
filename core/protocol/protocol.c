@@ -64,7 +64,7 @@ bool protocol_feed(protocol_parser_t *parser, uint8_t own_id, uint8_t byte)
     bool extension_payload =
         (parser->state == PARAMETER || parser->state == CHECKSUM) &&
         parser->packet.instruction >= 0x90u &&
-        parser->packet.instruction <= 0x99u;
+        parser->packet.instruction <= 0x9Au;
     if (!extension_payload && older == 0xffu && parser->history_a == 0xffu)
         parser->state = ID;
 

@@ -11,6 +11,7 @@ flags = next(line.removeprefix("flags=") for line in manifest if line.startswith
 expected = {
     "MOTOR_TEST": "motor-test" in folder.name,
     "TIMING_PROBE": "-timing" in folder.name,
+    "ARM_TIMING_PROBE": "-timing-arm" in folder.name,
     "FLASH_DUMP": "-flash-dump" in folder.name,
 }
 for macro, enabled in expected.items():

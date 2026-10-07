@@ -15,6 +15,18 @@ static void effect(const protocol_result_t *result,
     device->registers.byte[65] = 0x04;
 }
 
+static unsigned extension_calls;
+static void extension(const protocol_packet_t *packet, register_table_t *registers,
+                       protocol_result_t *result, void *context)
+{
+    (void)registers;
+    (void)context;
+    assert(packet->instruction == 0x9A && packet->id == PROTOCOL_BROADCAST);
+    assert(packet->param_count == 13);
+    ++extension_calls;
+    result->response_size = 0;
+}
+
 int main(void)
 {
     register_table_t initial = {0};
@@ -70,5 +82,16 @@ int main(void)
     response = protocol_service_response(&service, &length, &delay);
     assert(length == 8 && response[5] == 0xab && response[6] == 0xcd);
     assert(effects == 1);
+    protocol_service_transmit_complete(&service);
+    protocol_service_bind_extension(&service, extension, NULL);
+    uint8_t group[] = {255,255,254,15,0x9A,9,0,2,1,0,0,0xe7,255,255,0xb0,4,0xb8,0xb,0};
+    unsigned sum = 0;
+    for (unsigned i = 2; i < sizeof group - 1; ++i) sum += group[i];
+    group[sizeof group - 1] = (uint8_t)~sum;
+    for (unsigned i = 0; i < sizeof group; ++i)
+        assert(protocol_service_feed(&service, group[i]));
+    assert(service.command_pending && extension_calls == 0);
+    protocol_service_dispatch(&service);
+    assert(extension_calls == 1 && effects == 1 && !service.response_ready);
     puts("Protocol deferred effects and coherent read publication: OK");
 }

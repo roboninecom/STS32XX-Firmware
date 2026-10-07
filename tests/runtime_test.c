@@ -59,15 +59,34 @@ bool sensor_driver_restart(sensor_driver_t *driver, bool complementary)
     return restart_success;
 }
 uint32_t sensor_driver_ticks(const sensor_driver_t *driver) { return driver->ticks; }
-bool sensor_driver_timer_tick(sensor_driver_t *driver) { (void)driver; return false; }
+static bool sensor_period, sensor_can_begin = true;
+static unsigned sensor_begins;
+bool sensor_driver_timer_tick(sensor_driver_t *driver)
+{ (void)driver; bool elapsed = sensor_period; sensor_period = false; return elapsed; }
+bool sensor_driver_can_begin(const sensor_driver_t *driver)
+{ (void)driver; return sensor_can_begin; }
 void sensor_driver_begin(sensor_driver_t *driver, uint32_t generation)
-{ (void)driver; (void)generation; }
+{ driver->generation = generation; ++sensor_begins; }
 bool sensor_driver_take_encoder(sensor_driver_t *driver, uint32_t *generation,
                                 bool *valid, uint16_t *raw)
-{ (void)driver; (void)generation; (void)valid; (void)raw; return false; }
+{
+    if (!driver->encoder_ready && !driver->encoder_failed) return false;
+    *generation = driver->generation;
+    *valid = driver->encoder_ready;
+    *raw = driver->encoder_raw;
+    driver->encoder_ready = driver->encoder_failed = false;
+    return true;
+}
 bool sensor_driver_take_adc(sensor_driver_t *driver, uint32_t *generation,
                             bool *valid, uint16_t samples[3])
-{ (void)driver; (void)generation; (void)valid; (void)samples; return false; }
+{
+    if (!driver->adc_ready && !driver->adc_failed) return false;
+    *generation = driver->generation;
+    *valid = driver->adc_ready;
+    for (unsigned i = 0; i < 3; ++i) samples[i] = driver->adc_dma[i];
+    driver->adc_ready = driver->adc_failed = false;
+    return true;
+}
 void sensor_driver_poll(sensor_driver_t *driver) { (void)driver; }
 bool storage_service_commit(const storage_mirror_t *mirror)
 {
@@ -175,7 +194,7 @@ static void arm_extension_transaction_test(void)
     config[10]=0x88; config[11]=0x13; /* velocity 5000 */
     config[12]=0x30; config[13]=0x75; /* acceleration 30000 */
     config[14]=0xf4; config[15]=1; /* timeout 500 ms */
-    config[16]=64;
+    config[16]=64; config[17]=30;
     /* Shared little-endian vector in StsServoDriver/test/arm-extension.test.js. */
     const uint8_t range_bytes[8] = {0, 0, 0xf0, 0xff, 0, 0, 0x10, 0};
     memcpy(config+18, range_bytes, sizeof range_bytes);
@@ -197,8 +216,10 @@ static void arm_extension_transaction_test(void)
     packet.params[0] = 0xBA;
     packet.params[1] = 7;
     packet.params[2] = 0;
+    arm_state.arm_feedback[12] = 1;
     arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
     assert(reply.response[5] == 0 && arm_state.arm.armed);
+    assert(!(arm_state.arm_feedback[12]&1u));
     arm_state.sensors.ticks = 13;
     arm_state.sensor_service.measurement.voltage = 60;
     arm_state.sensor_service.measurement.temperature = 20;
@@ -206,19 +227,11 @@ static void arm_extension_transaction_test(void)
     arm_state.sensor_service.temperature_valid = true;
     arm_state.sensor_service.temperature_spikes = 0x1234u;
     arm_state.sensor_service.temperature_candidate_count = 1u;
-    packet.instruction = 0x90;
-    packet.param_count = 2;
-    packet.params[0] = 0xD0;
-    packet.params[1] = 6;
-    arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
-    assert(reply.response[5] == 0);
-    const uint8_t quality_vector[6] = {20,19,0x34,0x12,3,1};
-    assert(memcmp(reply.response+6, quality_vector, sizeof quality_vector) == 0);
     packet.instruction = 0x91;
     app_runtime_service_control_pair(&arm_state);
     assert(arm_state.arm.armed); /* Torque-off preparation must survive a pair. */
     arm_state.sensors.ticks = 14;
-    packet.param_count = 21;
+    packet.param_count = 19;
     memset(packet.params, 0, 21);
     packet.params[0] = 0xE0;
     packet.params[1] = 7;
@@ -226,18 +239,34 @@ static void arm_extension_transaction_test(void)
     packet.params[5] = 100;
     int32_t target = 100*256;
     memcpy(packet.params+7, &target, 4);
+    arm_control_t before_retired = arm_state.arm;
     arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
-    assert(reply.response[5] == 0 && arm_state.arm.queue_count == 1);
-    packet.params[3] = 1; /* duplicate sequence stays rejected atomically */
+    assert(reply.response[5] == 1 && arm_state.arm.accepted_sequence == 0);
+    /* Retired segment and live-state selectors cannot mutate the controller. */
+    assert(memcmp(&before_retired, &arm_state.arm, sizeof before_retired) == 0);
     arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
-    assert(reply.response[5] != 0 && arm_state.arm.queue_count == 1);
+    assert(reply.response[5] == 1);
+    assert(memcmp(&before_retired, &arm_state.arm, sizeof before_retired) == 0);
+    packet.instruction = 0x90;
+    packet.param_count = 2;
+    packet.params[0] = 0xB0;
+    packet.params[1] = 8;
+    arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
+    assert(reply.response[5] == 1 && reply.response_size == 7);
+    assert(memcmp(&before_retired, &arm_state.arm, sizeof before_retired) == 0);
+    packet.params[0] = 0x90;
+    packet.params[1] = 16;
+    arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
+    const uint8_t expected_caps[16] = {'A','R','M','C',4,0,0,1,
+        0x90,0xA0,0xA1,0xA3,0,0xC1,0xC2,0};
+    assert(reply.response[5] == 0);
+    assert(memcmp(reply.response+6, expected_caps, sizeof expected_caps) == 0);
     arm_state.device.registers.byte[40] = 1;
     packet.instruction = 0x92;
-    packet.param_count = 2;
     packet.params[0] = 7;
     packet.params[1] = 0;
     arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
-    assert(reply.response[5] == 0 && arm_state.arm.running);
+    assert(reply.response[5] != 0 && !arm_state.arm.target_active);
 
     arm_control_disarm(&arm_state.arm);
     arm_state.device.registers.byte[40] = 0;
@@ -248,23 +277,93 @@ static void arm_extension_transaction_test(void)
     packet.params[2] = 0;
     arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
     assert(reply.response[5] == 0);
-    packet.param_count = 17;
+    packet.param_count = 13;
     packet.params[0] = 0xF0;
-    /* Shared target vector in StsServoDriver/test/arm-extension.test.js. */
-    const uint8_t target_bytes[16] = {9,0,1,0, 0,0xe7,0xff,0xff,
-                                      0xb0,4, 0xb8,0x0b, 8,7, 0xba,0xff};
-    memcpy(packet.params+1, target_bytes, sizeof target_bytes);
+    memset(packet.params + 1, 0, 12);
+    before_retired = arm_state.arm;
     arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
-    assert(reply.response[5] == 0 && arm_state.arm.target_pending);
-    assert(arm_state.arm.pending_target.position_q8 == -6400);
-    assert(arm_state.arm.pending_target.braking == 1800);
+    assert(reply.response[5] == 1); /* Retired staging selector. */
+    assert(memcmp(&before_retired, &arm_state.arm, sizeof before_retired) == 0);
+    arm_state.device.registers.byte[REG_ID] = 2;
     arm_state.device.registers.byte[40] = 1;
-    packet.instruction = 0x92;
-    packet.param_count = 2;
-    packet.params[0] = 9;
-    packet.params[1] = 0;
+    arm_state.device.registers.byte[65] = 0;
+    arm_state.output.phase = OUTPUT_READY;
+    arm_state.arm_drive_enabled = true;
+    arm_state.arm.last_tick = arm_state.last_good_tick = arm_state.sensors.ticks;
+    packet.instruction = 0x9A;
+    /* Shared Node/C vector: session9, ID2, seq1, q=-25, V1200, A3000. */
+    const uint8_t target_bytes[13] = {9,0,2,1,0, 0,0xe7,0xff,0xff,
+                                      0xb0,4, 0xb8,0x0b};
+    memcpy(packet.params, target_bytes, sizeof target_bytes);
+    before_retired = arm_state.arm;
+    /* Validate the entire group first, including entries after our own. */
+    packet.param_count = 24;
+    memcpy(packet.params + 13, target_bytes + 2, 11);
+    for (unsigned invalid = 0; invalid < 3; ++invalid) {
+        packet.params[13] = invalid == 0 ? 2 : 3;
+        packet.params[14] = invalid == 1 ? 0 : 1;
+        packet.params[22] = invalid == 2 ? 0 : 0xb8;
+        packet.params[23] = invalid == 2 ? 0 : 0x0b;
+        arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
+        assert(reply.response[5] == 1);
+        assert(memcmp(&before_retired, &arm_state.arm, sizeof before_retired) == 0);
+    }
+    packet.param_count = 12; /* Truncated entry. */
+    arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
+    assert(reply.response[5] == 1);
+    packet.param_count = 13;
+    packet.params[2] = 3; /* Unlisted axis has no effect, including on lease. */
+    arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
+    assert(reply.response[5] == 0);
+    assert(memcmp(&before_retired, &arm_state.arm, sizeof before_retired) == 0);
+    packet.params[2] = 2;
+    arm_state.last_good_tick -= 3;
+    arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
+    assert(reply.response[5] == 2 && arm_state.arm.accepted_sequence == 0);
+    arm_state.last_good_tick = arm_state.sensors.ticks;
     arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
     assert(reply.response[5] == 0 && arm_state.arm.target_active);
+    assert(arm_state.arm.accepted_sequence == 1);
+    before_retired = arm_state.arm;
+    arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
+    assert(reply.response[5] == 2); /* Duplicate sequence is not a new move. */
+    assert(memcmp(&before_retired, &arm_state.arm, sizeof before_retired) == 0);
+
+    /* Large numeric requests in any entry are valid. Only the addressed
+     * servo clips to its own configuration; structural validation stays atomic. */
+    app_state_t clipped = arm_state;
+    arm_control_disarm(&clipped.arm);
+    assert(arm_control_arm(&clipped.arm, 9, 0, clipped.sensors.ticks));
+    packet.param_count = 24;
+    memcpy(packet.params, target_bytes, sizeof target_bytes);
+    memcpy(packet.params + 13, target_bytes + 2, 11);
+    packet.params[13] = 3;
+    for (unsigned offset = 2; offset < 24; offset += 11) {
+        memset(packet.params + offset + 3, 0xff, 8);
+        packet.params[offset + 6] = 0x7f; /* INT32_MAX, V/A=UINT16_MAX. */
+    }
+    arm_extension_process(&packet, &clipped.device.registers, &reply, &clipped);
+    assert(reply.response[5] == 0 && clipped.arm.accepted_sequence == 1);
+    assert(clipped.arm.motion.goal == (int64_t)clipped.arm.config.position_max_q8 * (1LL << 28));
+    assert(clipped.arm.motion.speed_limit == clipped.arm.config.velocity_limit);
+    assert(clipped.arm.motion.acceleration_limit == clipped.arm.config.acceleration_limit);
+
+    /* All six entries fit one broadcast; seven and partial entries do not. */
+    packet.param_count = 79;
+    arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
+    assert(reply.response[5] == 1);
+    assert(memcmp(&before_retired, &arm_state.arm, sizeof before_retired) == 0);
+    packet.param_count = 68;
+    for (unsigned i = 0; i < 6; ++i) {
+        memcpy(packet.params + 2 + 11 * i, target_bytes + 2, 11);
+        packet.params[2 + 11 * i] = (uint8_t)(i + 1);
+        packet.params[3 + 11 * i] = 2;
+    }
+    packet.id = PROTOCOL_BROADCAST;
+    arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
+    assert(reply.response_size == 0 && arm_state.arm.accepted_sequence == 2);
+    assert(arm_state.arm.target_active);
+    packet.id = 2;
 
     /* v1.4 operations keep the original abort/arm contract. */
     arm_state.arm.session=0x1234;
@@ -281,27 +380,22 @@ static void arm_extension_transaction_test(void)
     packet.instruction=0x96;packet.param_count=6;
     const uint8_t takeover_vector[6]={0x34,0x12,0x2a,0,0x35,0x12};
     memcpy(packet.params,takeover_vector,6);
-    arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(reply.response[5]==2); /* not yet stationary-qualified */
-    arm_state.arm.stationary_ms=50;
-    arm_state.arm.expired=true;
-    arm_state.device.registers.byte[65]=4;
-    arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(reply.response[5]==2 && arm_state.arm.session==0x1234);
-    arm_state.device.registers.byte[65]=0;
-    packet.id=PROTOCOL_BROADCAST;
-    arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(arm_state.arm.session==0x1234 && reply.response_size==0);
-    packet.id=2;packet.param_count=5;
-    arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(reply.response[5]==1 && arm_state.arm.session==0x1234);
-    packet.param_count=6;
-    arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(reply.response[5]==0 && arm_state.arm.session==0x1235);
-    assert(!arm_state.arm.expired && arm_state.arm.accepted_sequence==0);
-    assert(arm_state.device.registers.byte[40]==1 && arm_state.arm.armed);
-    arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(reply.response[5]==2); /* stale takeover cannot reset sequence */
+    before_retired = arm_state.arm;
+    for (unsigned probe = 0; probe < 3; ++probe) {
+        packet.id = probe == 2 ? PROTOCOL_BROADCAST : 2;
+        packet.param_count = probe == 1 ? 5 : 6;
+        arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
+        if (probe == 2) assert(reply.response_size == 0);
+        else assert(reply.response[5] == 5); /* unsupported opcode */
+        assert(memcmp(&before_retired, &arm_state.arm, sizeof before_retired) == 0);
+        assert(arm_state.device.registers.byte[40] == 1 && arm_state.arm_drive_enabled);
+    }
+    /* New powered sessions now require the ordinary torque-off rearm path. */
+    arm_state.device.registers.byte[40] = 0;
+    arm_control_disarm(&arm_state.arm);
+    assert(arm_control_arm(&arm_state.arm,0x1235,0,arm_state.sensors.ticks));
+    arm_state.device.registers.byte[40] = 1;
+    packet.id = 2;
     /* v1.5 stage vector shared with the Node driver. */
     packet.instruction=0x97;packet.param_count=17;
     const uint8_t profile_vector[17]={0x35,0x12,1,1,0,0,1,0,0,0,1,100,0,0x2c,1,64,0};
@@ -328,29 +422,29 @@ static void arm_extension_transaction_test(void)
     assert(reply.response[5]==0 && arm_state.arm.active_profile==1);
     assert(arm_state.device.registers.byte[40]==1);
 
-    /* v1.6 FF vector shared with Node; no planner sequence consumption. */
-    packet.instruction=0x99;packet.param_count=12;
-    const uint8_t ff_vector[12]={0x35,0x12,1,0,0xba,0xff,0,0,0xe8,3,100,0};
-    memcpy(packet.params,ff_vector,12);
+    /* v2 gravity vector; no planner sequence consumption. */
+    packet.instruction=0x99;packet.param_count=10;
+    const uint8_t ff_vector[10]={0x35,0x12,1,0,0xba,0xff,0xe8,3,100,0};
+    memcpy(packet.params,ff_vector,10);
     arm_state.arm.last_feedforward=0;
-    packet.param_count=11;
+    packet.param_count=12; /* Old gravity+dynamic packet must be rejected. */
     arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(reply.response[5]==1 && !arm_state.arm.feedforward_enabled);
-    packet.param_count=12;packet.id=PROTOCOL_BROADCAST;
+    assert(reply.response[5]==1 && !arm_state.arm.gravity_received);
+    packet.param_count=10;packet.id=PROTOCOL_BROADCAST;
     arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(!arm_state.arm.feedforward_enabled);
+    assert(!arm_state.arm.gravity_received);
     packet.id=2;arm_state.device.registers.byte[65]=4;
     arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(reply.response[5]==2 && !arm_state.arm.feedforward_enabled);
+    assert(reply.response[5]==2 && !arm_state.arm.gravity_received);
     arm_state.device.registers.byte[65]=0;
     arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
     assert(reply.response[5]==0 && arm_state.arm.gravity_target==-70);
-    assert(arm_state.arm.feedforward_sequence==1 && arm_state.arm.accepted_sequence==1);
+    assert(arm_state.arm.gravity_sequence==1 && arm_state.arm.accepted_sequence==1);
     arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
     assert(reply.response[5]==2); /* replay */
     packet.instruction=0x90;packet.param_count=2;packet.params[0]=0xA2;packet.params[1]=20;
     arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(reply.response[5]==0 && reply.response[10]==1 && reply.response[24]==1);
+    assert(reply.response[5]==1); /* Retired overlapping FF telemetry. */
 
 }
 
@@ -373,6 +467,208 @@ static void snapshot_publication_test(void)
     assert(sample.bus.protocol.published[fault_index].byte[REG_SERVO_STATUS] & 2u);
     app_runtime_service_sensors(&sample);
     assert(atomic_load(&sample.bus.protocol.published_index) == fault_index);
+}
+
+static void acquisition_deadline_test(void)
+{
+    app_state_t sample = {0};
+    registers_factory_defaults(&sample.device.registers);
+    sample.device.registers.byte[REG_CONFIGURATION_FLAGS] = 0x5c;
+    bus_service_init(&sample.bus, &sample.device, command_service_apply, &sample, 0);
+    sensor_service_init(&sample.sensor_service);
+    sample.sensor_active = true;
+    uint32_t generation = sensor_service_begin(&sample.sensor_service, &sample.device.registers);
+    sensor_driver_begin(&sample.sensors, generation);
+    unsigned begins = sensor_begins;
+
+    /* A new period alone must not cancel a read within its driver deadline. */
+    sample.bus.protocol.parser.packet = (protocol_packet_t){
+        .id=PROTOCOL_BROADCAST, .instruction=3, .param_count=2, .params={50, 7}};
+    sample.bus.protocol.command_pending = true;
+    sample.sensors.ticks = 1;
+    sensor_period = true;
+    sensor_can_begin = false;
+    app_runtime_poll(&sample);
+    assert(sensor_begins == begins && sample.sensor_service.generation == generation);
+    assert(sample.sensor_service.acquisition.missed_pairs == 0);
+    assert(sample.bus.protocol.command_pending && sample.device.registers.byte[50] != 7);
+
+    /* Drain the completed old pair before reusing its generation/buffers. */
+    sample.sensors.encoder_ready = sample.sensors.adc_ready = true;
+    sample.sensors.encoder_raw = 1800;
+    sample.sensors.adc_dma[0] = 0x250u << 2;
+    sample.sensors.adc_dma[1] = 400;
+    sample.sensors.adc_dma[2] = 1600;
+    sample.sensors.ticks = 2;
+    sensor_period = sensor_can_begin = true;
+    app_runtime_service_sensors(&sample);
+    assert(sample.sensor_service.acquisition.completed_pairs == 1);
+    assert(sample.sensor_service.acquisition.missed_pairs == 0);
+    assert(sample.last_good_tick == 2 && sample.sensor_service.measurement.position == 1800);
+    assert(sensor_begins == begins + 1 && sample.sensor_service.generation == generation + 1);
+
+    /* Complete that pair between ticks: the held command can now run. */
+    sample.sensors.encoder_ready = sample.sensors.adc_ready = true;
+    app_runtime_poll(&sample);
+    assert(!sample.bus.protocol.command_pending && sample.device.registers.byte[50] == 7);
+    assert(sample.sensor_service.acquisition.completed_pairs == 2);
+
+    /* A sensor fault must also allow commands through during a pending pair,
+     * so recovery and torque-off commands cannot be starved. */
+    sample.sensors.ticks = 3;
+    sensor_period = true;
+    app_runtime_poll(&sample);
+    sample.bus.protocol.parser.packet.params[1] = 8;
+    sample.bus.protocol.command_pending = true;
+    sample.sensor_service.acquisition.fault = true;
+    app_runtime_poll(&sample);
+    assert(!sample.bus.protocol.command_pending && sample.device.registers.byte[50] == 8);
+    sample.sensor_service.acquisition.fault = false;
+
+    /* A genuinely expired pair is replaced; the unchanged age >2 guard
+     * still revokes output if no valid replacement arrives. */
+    sample.sensors.ticks = 4;
+    sensor_period = true;
+    app_runtime_service_sensors(&sample);
+    assert(sample.sensor_service.acquisition.missed_pairs == 1);
+    sample.sensors.ticks = 5;
+    app_runtime_service_sensors(&sample);
+    assert(sample.stale_reported && sample.last_good_tick == 2);
+}
+
+static uint16_t wire_u16(const uint8_t *p)
+{
+    return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
+}
+
+static protocol_result_t read_arm(app_state_t *state, uint8_t address, uint8_t count)
+{
+    protocol_packet_t packet={.id=2,.instruction=0x90,.param_count=2};
+    packet.params[0]=address;packet.params[1]=count;
+    protocol_result_t reply={0};
+    arm_extension_process(&packet,&state->device.registers,&reply,state);
+    return reply;
+}
+
+static void sensor_only_feedback_test(void)
+{
+    app_state_t state={0};
+    registers_factory_defaults(&state.device.registers);
+    state.sensor_service.measurement=(sensor_measurement_t){
+        .position=100,.arm_position=100,.voltage=120,.temperature=30,.current=12};
+    state.sensor_service.temperature_valid=true;
+    state.sensor_service.temperature_validated=29;
+    state.sensor_service.temperature_candidate_count=1;
+    for(unsigned selected=0;selected<2;selected++) {
+        state.arm_selected=selected;
+        state.sensors.ticks=selected+1;
+        app_runtime_service_control_pair(&state);
+        protocol_result_t reply=read_arm(&state,0xC2,ARM_TUNING_BYTES);
+        const uint8_t *data=reply.response+6;
+        assert(reply.response[5]==0 && !(data[12]&1u));
+        assert(wire_u16(data+12)&(1u<<10));
+        assert(wire_u16(data+12)&(1u<<11));
+        assert(data[27]==29 && data[26]==120 && wire_u16(data+24)==12);
+        assert(wire_u16(data+30)==0 && data[15]==100);
+        for(unsigned i=32;i<ARM_TUNING_BYTES;i++) assert(data[i]==0);
+    }
+    state.sensors.ticks+=3;
+    protocol_result_t stale=read_arm(&state,0xC1,ARM_FEEDBACK_BYTES);
+    assert(wire_u16(stale.response+6+30)==3);
+}
+
+static void coherent_feedback_test(const app_state_t *source, int direction)
+{
+    app_state_t state=*source;
+    protocol_result_t normal=read_arm(&state,0xC1,ARM_FEEDBACK_BYTES);
+    protocol_result_t detail=read_arm(&state,0xC2,ARM_TUNING_BYTES);
+    assert(normal.response_size==39 && detail.response_size==63);
+    assert(normal.response[5]==0 && detail.response[5]==0);
+    assert(memcmp(normal.response+6,detail.response+6,ARM_FEEDBACK_BYTES)==0);
+    const uint8_t *payload=detail.response+6;
+    assert(payload[0]==1 && wire_u16(payload+4)==1);
+    assert(wire_u16(payload+6)==1 && wire_u16(payload+8)==0);
+    assert(wire_u16(payload+12)&1u);
+    assert(payload[14]==0 && payload[15]==100); /* Position 100 in Q8. */
+    assert(wire_u16(payload+22)==(uint16_t)(direction*970));
+    assert(wire_u16(payload+40)==(uint16_t)(direction*1000));
+    assert(wire_u16(payload+30)==0 && (payload[12]&8u));
+    /* Live sensor/controller changes cannot mix into an already frozen sample. */
+    state.sensor_service.measurement.current=123;
+    state.sensor_service.temperature_validated=99;
+    state.arm_result.p_term=99;
+    state.arm_result.advanced=false;
+    arm_extension_publish_sample(&state);
+    protocol_result_t again=read_arm(&state,0xC2,ARM_TUNING_BYTES);
+    assert(memcmp(detail.response,again.response,detail.response_size)==0);
+    state.sensors.ticks=3;
+    again=read_arm(&state,0xC1,ARM_FEEDBACK_BYTES);
+    assert(wire_u16(again.response+6+30)==2 && (again.response[6+12]&1u));
+    state.sensors.ticks=4;
+    again=read_arm(&state,0xC1,ARM_FEEDBACK_BYTES);
+    assert(wire_u16(again.response+6+30)==3 && !(again.response[6+12]&1u));
+    state.sensors.ticks=100000;
+    again=read_arm(&state,0xC1,ARM_FEEDBACK_BYTES);
+    assert(wire_u16(again.response+6+30)==UINT16_MAX);
+    state.sensors.ticks=1;
+    state.arm.gravity_sequence++;
+    again=read_arm(&state,0xC1,ARM_FEEDBACK_BYTES);
+    assert(!(again.response[6+12]&1u)); /* Await the applied gravity sample. */
+    state.arm.gravity_sequence--;
+    state.arm.accepted_sequence++;
+    again=read_arm(&state,0xC1,ARM_FEEDBACK_BYTES);
+    assert(!(again.response[6+12]&1u));
+    state.arm.accepted_sequence--;
+    state.arm.session++;
+    again=read_arm(&state,0xC1,ARM_FEEDBACK_BYTES);
+    assert(!(again.response[6+12]&1u));
+    state.arm.session--;
+    output_safety_fail(&state.output);
+    again=read_arm(&state,0xC1,ARM_FEEDBACK_BYTES);
+    assert(!(again.response[6+12]&1u));
+    state.output=source->output;
+    state.arm_result=source->arm_result;
+    state.arm_sample_tick=UINT32_MAX-1;
+    arm_extension_publish_sample(&state);
+    state.sensors.ticks=0;
+    again=read_arm(&state,0xC1,ARM_FEEDBACK_BYTES);
+    assert(wire_u16(again.response+6+30)==2 && (again.response[6+12]&1u));
+    const uint8_t retired[][2]={{0xC0,30},{0xD0,6},{0xDC,18},{0xA2,20}};
+    for(unsigned i=0;i<sizeof retired/sizeof retired[0];i++)
+        assert(read_arm(&state,retired[i][0],retired[i][1]).response[5]==1);
+    assert(read_arm(&state,0xC1,ARM_FEEDBACK_BYTES-1).response[5]==1);
+}
+
+static void velocity_configuration_test(void)
+{
+    app_state_t state={0};
+    registers_factory_defaults(&state.device.registers);
+    arm_control_init(&state.arm,100,0);
+    protocol_packet_t packet={.id=2,.instruction=0x91,.param_count=7,
+        .params={0xA3,0,1,0,2,120,0}};
+    protocol_result_t reply={0};
+    arm_extension_process(&packet,&state.device.registers,&reply,&state);
+    assert(reply.response[5]==1); /* Base limits must be configured first. */
+    assert(arm_control_configure(&state.arm,(arm_config_t){
+        .effort_limit=300,.velocity_limit=1000,.acceleration_limit=1000,
+        .timeout_ms=1000,.velocity_filter_q8=64, .ramp_time_ms=30,.position_max_q8=4095*256}));
+    state.device.registers.byte[REG_TORQUE_ENABLE]=1;
+    arm_extension_process(&packet,&state.device.registers,&reply,&state);
+    assert(reply.response[5]==2 && !state.arm.velocity_ff.effort_limit);
+    state.device.registers.byte[REG_TORQUE_ENABLE]=0;
+    arm_extension_process(&packet,&state.device.registers,&reply,&state);
+    assert(reply.response[5]==0 && state.arm.velocity_ff.effort_limit==120);
+    reply=read_arm(&state,0xA3,6);
+    assert(memcmp(reply.response+6,packet.params+1,6)==0);
+    packet.params[5]=0; /* Nonzero gains with zero cap are not canonical. */
+    arm_extension_process(&packet,&state.device.registers,&reply,&state);
+    assert(reply.response[5]==1 && state.arm.velocity_ff.effort_limit==120);
+    assert(arm_control_arm(&state.arm,1,100,0));
+    packet.params[5]=120;
+    arm_extension_process(&packet,&state.device.registers,&reply,&state);
+    assert(reply.response[5]==2);
+    reply=read_arm(&state,0x90,16);
+    assert(reply.response[10]==4 && reply.response[11]==0); /* Version 3.0. */
 }
 
 static void final_effort_feedback_test(void)
@@ -401,11 +697,12 @@ static void final_effort_feedback_test(void)
                 .kp_q8 = 2560, .ki_q8 = 256, .integral_limit = 500,
                 .effort_limit = 1000, .velocity_limit = 1000,
                 .acceleration_limit = 1000, .timeout_ms = 1000,
-                .velocity_filter_q8 = 64,
+                .velocity_filter_q8 = 64, .ramp_time_ms=30,
                 .position_min_q8 = 0, .position_max_q8 = 4095 * 256};
             assert(arm_control_configure(&sample.arm, config));
             assert(arm_control_arm(&sample.arm, 1, 100, 0));
-            sample.arm.start_position_q8 = (100 + direction * 100) * 256;
+            assert(arm_control_gravity(&sample.arm,1,1,(int16_t)(direction*50),10000,100,0));
+            arm_motion_init(&sample.arm.motion, (100 + direction * 100) * 256);
             sample.sensors.ticks = 1;
             app_runtime_service_control_pair(&sample);
             assert(sample.arm_result.requested_effort == direction * 1000);
@@ -414,11 +711,18 @@ static void final_effort_feedback_test(void)
             assert(sample.arm_drive_enabled);
             assert(sample.arm.integral_effort_q16_ms == 0);
 
+            coherent_feedback_test(&sample,direction);
             bridge_accept = false;
             sample.sensors.ticks = 2;
             app_runtime_service_control_pair(&sample);
             assert(sample.arm_applied_effort == 0 && !sample.arm_drive_enabled);
             assert(!sample.arm.armed && sample.arm.integral_effort_q16_ms == 0);
+            protocol_result_t stopped=read_arm(&sample,0xC2,ARM_TUNING_BYTES);
+            assert(!(stopped.response[6+12]&1u));
+            assert(wire_u16(stopped.response+6+22)==0);
+            assert(wire_u16(stopped.response+6+48)==(uint16_t)(direction*20));
+            assert(wire_u16(stopped.response+6+10)==1);
+            assert(wire_u16(stopped.response+6+6)==1);
             bridge_accept = true;
         }
     }
@@ -426,7 +730,10 @@ static void final_effort_feedback_test(void)
 
 int main(void)
 {
+    sensor_only_feedback_test();
+    velocity_configuration_test();
     snapshot_publication_test();
+    acquisition_deadline_test();
     final_effort_feedback_test();
     arm_extension_transaction_test();
     register_write_result_t accepted = {.start = 34, .accepted_count = 6};

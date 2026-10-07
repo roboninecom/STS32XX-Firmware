@@ -64,7 +64,7 @@ void protocol_service_dispatch(protocol_service_t *service)
     if (!service->command_pending) return;
     register_table_t *registers = &service->device->registers;
     uint8_t instruction = service->parser.packet.instruction;
-    if (instruction >= 0x90u && instruction <= 0x99u) {
+    if (instruction >= 0x90u && instruction <= 0x9Au) {
         service->result.response_size = 0;
         service->result.delay_slot = 0;
         if (service->extension_handler != 0)

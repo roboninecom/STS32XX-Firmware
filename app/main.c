@@ -16,7 +16,9 @@
 /* Static composition root; policy and scheduling live in runtime.c. */
 static app_state_t app;
 
-int firmware_main(void)
+/* Release startup's register/storage scratch before entering the permanent
+ * loop; inlining it otherwise keeps that stack frame live through planning. */
+static __attribute__((noinline)) void initialize(void)
 {
     if (!board_init_safe()) board_halt_safe();
     status_led_driver_init();
@@ -78,10 +80,14 @@ int firmware_main(void)
     /* Include startup sensor faults in the first externally visible state. */
     protocol_service_publish(&app.bus.protocol);
 
+}
+
+int firmware_main(void)
+{
+    initialize();
     uint32_t last_watchdog_tick = sensor_driver_ticks(&app.sensors);
     for (;;) {
-        bus_service_poll(&app.bus, sensor_driver_ticks(&app.sensors));
-        app_runtime_service_sensors(&app);
+        app_runtime_poll(&app);
         uint32_t tick = sensor_driver_ticks(&app.sensors);
         if (tick != last_watchdog_tick) {
             last_watchdog_tick = tick;

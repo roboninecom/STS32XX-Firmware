@@ -10,6 +10,7 @@
 #include "output_safety.h"
 #include "status_led.h"
 #include "arm_control.h"
+#include "arm_extension.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -34,8 +35,9 @@ typedef struct app_state {
     bool arm_selected;
     int16_t arm_applied_effort;
     uint32_t arm_sample_tick;
-    uint16_t arm_sample_sequence;
     bool arm_drive_enabled;
+    uint16_t arm_feedback_sequence;
+    uint8_t arm_feedback[ARM_TUNING_BYTES];
     bool control_initialized;
     pending_motion_t motion;
     bool motion_rejected;
@@ -51,11 +53,19 @@ typedef struct app_state {
     storage_mirror_t storage_mirror;
     storage_source_t storage_source;
 #ifdef FW_TIMING_PROBE
+#ifndef FW_ARM_TIMING_PROBE
     uint32_t timing_started_cycles;
     uint16_t timing_max_latency_us;
     uint16_t timing_max_tick_late_us;
+#endif
     uint16_t timing_rejected_pairs;
     uint32_t timing_stack_mark_end;
+#ifdef FW_ARM_TIMING_PROBE
+    uint32_t timing_control_last_cycles;
+    uint32_t timing_control_max_cycles;
+    uint16_t timing_control_samples;
+    uint8_t timing_arm_revocation;
+#else
     uint32_t goal_packet_cycles;
     uint32_t goal_control_mean_cycles;
     uint32_t goal_control_max_cycles;
@@ -65,12 +75,14 @@ typedef struct app_state {
     uint16_t goal_replaced_count;
     bool goal_timing_pending;
 #endif
+#endif
 } app_state_t;
 
 
 void app_runtime_queue_motion(app_state_t *state, bool position_goal, bool auto_torque);
 void app_runtime_reanchor(app_state_t *state, int32_t position);
 void app_runtime_service_sensors(app_state_t *state);
+void app_runtime_poll(app_state_t *state);
 void app_runtime_service_control_pair(app_state_t *state);
 void app_runtime_revoke_output(app_state_t *state);
 /* Coordinates safe flash maintenance and acquisition restart. */

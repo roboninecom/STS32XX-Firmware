@@ -33,6 +33,9 @@ bool sensor_driver_init(sensor_driver_t *driver, bool complementary_output);
 bool sensor_driver_restart(sensor_driver_t *driver, bool complementary_output);
 bool sensor_driver_timer_tick(sensor_driver_t *driver);
 uint32_t sensor_driver_ticks(const sensor_driver_t *driver);
+/* A timer tick must not cancel an in-flight pair before its existing 2 ms
+ * deadline. Call after polling/draining completions and updating the clock. */
+bool sensor_driver_can_begin(const sensor_driver_t *driver);
 void sensor_driver_begin(sensor_driver_t *driver, uint32_t generation);
 void sensor_driver_poll(sensor_driver_t *driver);
 bool sensor_driver_take_encoder(sensor_driver_t *driver, uint32_t *generation,

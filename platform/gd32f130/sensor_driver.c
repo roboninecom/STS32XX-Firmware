@@ -147,6 +147,12 @@ uint32_t sensor_driver_ticks(const sensor_driver_t *driver)
     return driver->ticks;
 }
 
+bool sensor_driver_can_begin(const sensor_driver_t *driver)
+{
+    return (driver->phase == SENSOR_I2C_IDLE && !driver->adc_active) ||
+        (uint32_t)(driver->ticks - driver->started_tick) >= 2u;
+}
+
 void sensor_driver_begin(sensor_driver_t *driver, uint32_t generation)
 {
     driver->generation = generation;

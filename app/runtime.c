@@ -3,6 +3,7 @@
 #include "board.h"
 #ifdef FW_TIMING_PROBE
 #include "diagnostic_service.h"
+#include "diagnostics.h"
 #endif
 #include "bridge_driver.h"
 #include "control_adapter.h"
@@ -54,7 +55,7 @@ void app_runtime_reanchor(app_state_t *state, int32_t position)
     arm_control_disarm(&state->arm);
     state->arm_selected = false;
     state->motion = (pending_motion_t){0};
-#ifdef FW_TIMING_PROBE
+#if defined(FW_TIMING_PROBE) && !defined(FW_ARM_TIMING_PROBE)
     state->goal_timing_pending = false;
 #endif
 }
@@ -72,8 +73,12 @@ static control_result_t run_control_step(app_state_t *state,
         state->arm_result = arm_control_step(&state->arm,
             state->sensor_service.measurement.arm_position,
             tick, sample.fresh, false);
-        if (!state->arm_result.fresh && state->arm.armed)
+        if (!state->arm_result.fresh && state->arm.armed) {
+#ifdef FW_ARM_TIMING_PROBE
+            state->timing_arm_revocation = 1; /* Controller freshness / elapsed dt. */
+#endif
             arm_control_disarm(&state->arm);
+        }
         protection_result_t protected = protection_step(&state->control.protection,
             &protection, (protection_input_t){
                 .position = sample.position, .current = sample.current,
@@ -82,8 +87,12 @@ static control_result_t run_control_step(app_state_t *state,
                 .voltage = sample.voltage, .temperature = sample.temperature,
                 .fresh_sensors = sample.fresh});
         if ((protected.torque != 1u && registers->byte[REG_TORQUE_ENABLE] == 1u) ||
-            (protected.errors & protection.shutdown_mask) != 0u)
+            (protected.errors & protection.shutdown_mask) != 0u) {
+#ifdef FW_ARM_TIMING_PROBE
+            if (state->arm.armed) state->timing_arm_revocation = 2;
+#endif
             arm_control_disarm(&state->arm);
+        }
         result = (control_result_t){
             .requested_output = arm_control_flip_effort_polarity(
                 state->arm_result.requested_effort),
@@ -120,7 +129,7 @@ void app_runtime_service_control_pair(app_state_t *state)
     register_table_t *registers = &state->device.registers;
     const sensor_measurement_t *measurement = &state->sensor_service.measurement;
     int32_t position = measurement->position;
-#ifdef FW_TIMING_PROBE
+#if defined(FW_TIMING_PROBE) && !defined(FW_ARM_TIMING_PROBE)
     bool timed_goal = state->motion.pending && state->goal_timing_pending;
     uint32_t goal_control_started = timed_goal ?
         diagnostic_service_goal_started(state) : 0u;
@@ -172,7 +181,16 @@ void app_runtime_service_control_pair(app_state_t *state)
 #else
         true);
 #endif
+#ifdef FW_ARM_TIMING_PROBE
+    uint32_t control_started = diagnostics_probe_cycles();
+#endif
     control_result_t result = run_control_step(state, sample, permit);
+#ifdef FW_ARM_TIMING_PROBE
+    state->timing_control_last_cycles = diagnostics_probe_cycles() - control_started;
+    if (state->timing_control_last_cycles > state->timing_control_max_cycles)
+        state->timing_control_max_cycles = state->timing_control_last_cycles;
+    if (state->timing_control_samples != UINT16_MAX) ++state->timing_control_samples;
+#endif
     int16_t applied_effort;
     bool bridge_ok = bridge_driver_apply(result.bridge,
                              (registers->byte[REG_CONFIGURATION_FLAGS] & 0x01u) != 0u,
@@ -189,14 +207,13 @@ void app_runtime_service_control_pair(app_state_t *state)
             state->arm_result.saturated = true;
         arm_control_applied(&state->arm, state->arm_applied_effort,
                             state->arm_drive_enabled);
-        ++state->arm_sample_sequence;
     }
     if (!bridge_ok) {
         bridge_driver_disarm();
         output_safety_fail(&state->output);
         arm_control_disarm(&state->arm);
     }
-#ifdef FW_TIMING_PROBE
+#if defined(FW_TIMING_PROBE) && !defined(FW_ARM_TIMING_PROBE)
     if (timed_goal) diagnostic_service_goal_applied(state, goal_control_started);
 #endif
     telemetry_input_t telemetry = {
@@ -215,21 +232,19 @@ void app_runtime_service_control_pair(app_state_t *state)
     telemetry_publish_control(registers, telemetry);
     state->last_good_tick = sensor_driver_ticks(&state->sensors);
     state->stale_reported = false;
+    arm_extension_publish_sample(state);
 }
 
-void app_runtime_service_sensors(app_state_t *state)
+/* Do not keep acquisition/control scratch live while dispatching a planner. */
+__attribute__((noinline)) void app_runtime_service_sensors(app_state_t *state)
 {
     if (!state->sensor_active) return;
     uint8_t previous_errors = state->device.registers.byte[REG_SERVO_STATUS];
     bool state_changed = false;
-    if (sensor_driver_timer_tick(&state->sensors)) {
-#ifdef FW_TIMING_PROBE
-        diagnostic_service_period_started(state);
-#endif
-        uint32_t generation = sensor_service_begin(
-            &state->sensor_service, &state->device.registers);
-        sensor_driver_begin(&state->sensors, generation);
-    }
+    bool period_elapsed = sensor_driver_timer_tick(&state->sensors);
+    /* Complete the previous pair before scheduling another. A foreground
+     * planning pause may cross one tick without exceeding the sensor deadline;
+     * replacing that still-valid transaction causes unnecessary I2C recovery. */
     sensor_driver_poll(&state->sensors);
     uint32_t generation;
     bool valid;
@@ -254,6 +269,9 @@ void app_runtime_service_sensors(app_state_t *state)
     if (!published &&
         state->sensor_service.acquisition.completed_pairs != pairs_before) {
         state_changed = true;
+#ifdef FW_ARM_TIMING_PROBE
+        if (state->arm.armed) state->timing_arm_revocation = 3; /* Rejected sensor pair. */
+#endif
         app_runtime_revoke_output(state);
         arm_control_disarm(&state->arm);
     }
@@ -271,6 +289,9 @@ void app_runtime_service_sensors(app_state_t *state)
     else if (state->control_initialized && !state->stale_reported &&
              (uint32_t)(sensor_driver_ticks(&state->sensors) - state->last_good_tick) > 2u) {
         state_changed = true;
+#ifdef FW_ARM_TIMING_PROBE
+        if (state->arm.armed) state->timing_arm_revocation = 4; /* Sensor age. */
+#endif
         app_runtime_revoke_output(state);
         arm_control_disarm(&state->arm);
         control_sample_t stale = {
@@ -280,9 +301,28 @@ void app_runtime_service_sensors(app_state_t *state)
         (void)run_control_step(state, stale, false);
         state->stale_reported = true;
     }
+    if (period_elapsed && sensor_driver_can_begin(&state->sensors)) {
+#ifdef FW_TIMING_PROBE
+        diagnostic_service_period_started(state);
+#endif
+        uint32_t next_generation = sensor_service_begin(
+            &state->sensor_service, &state->device.registers);
+        sensor_driver_begin(&state->sensors, next_generation);
+    }
     /* IRQ readers retain the previous complete snapshot until all sample,
      * fault and optional diagnostic fields have been updated. Command-side
      * mutations are published separately before releasing their mailbox. */
     if (state_changed || state->device.registers.byte[REG_SERVO_STATUS] != previous_errors)
         protocol_service_publish(&state->bus.protocol);
+}
+
+void app_runtime_poll(app_state_t *state)
+{
+    app_runtime_service_sensors(state);
+    /* The polled I2C transaction needs short foreground visits between bytes.
+     * Finish it before a synchronous planner command. IRQs still serve reads;
+     * a fault opens dispatch for recovery and torque-off commands. */
+    const acquisition_t *acquisition = &state->sensor_service.acquisition;
+    if (!state->sensor_active || !acquisition->pending || acquisition->fault)
+        bus_service_poll(&state->bus, sensor_driver_ticks(&state->sensors));
 }

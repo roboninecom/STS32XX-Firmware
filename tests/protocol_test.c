@@ -50,7 +50,7 @@ int main(void)
     assert(memcmp(parser.packet.params, ff, sizeof(ff)) == 0);
     /* Exercise every pair position, including the payload/checksum boundary,
      * and ensure a subsequent ordinary packet is still parsed. */
-    for (unsigned inst = 0x90; inst <= 0x99; ++inst) {
+    for (unsigned inst = 0x90; inst <= 0x9A; ++inst) {
         for (unsigned offset = 0; offset + 1 < sizeof(ff); ++offset) {
             uint8_t payload[sizeof(ff)] = {0};
             payload[offset] = payload[offset + 1] = 0xff;
@@ -74,6 +74,24 @@ int main(void)
     assert(!feed(&parser, bytes, ff_count));
     ff_count = frame(bytes, 2, 1, NULL, 0);
     assert(feed(&parser, bytes, ff_count));
+    /* Maximum group packet: not complete until checksum, no reply needed.
+     * A corrupt broadcast must not reach foreground dispatch. */
+    uint8_t group[68] = {9, 0};
+    for (unsigned i = 0; i < 6; ++i) {
+        unsigned offset = 2 + i * 11;
+        group[offset] = (uint8_t)(i + 1);
+        group[offset + 1] = 1;
+        group[offset + 3] = group[offset + 4] = group[offset + 5] = group[offset + 6] = 0xff;
+        group[offset + 7] = group[offset + 9] = 100;
+    }
+    protocol_parser_init(&parser);
+    ff_count = frame(bytes, PROTOCOL_BROADCAST, 0x9A, group, sizeof group);
+    assert(!feed(&parser, bytes, ff_count - 1));
+    assert(protocol_feed(&parser, 2, bytes[ff_count - 1]));
+    assert(parser.packet.param_count == 68 && parser.packet.instruction == 0x9A);
+    assert(memcmp(parser.packet.params, group, sizeof group) == 0);
+    bytes[ff_count - 1] ^= 1;
+    assert(!feed(&parser, bytes, ff_count));
     protocol_parser_init(&parser);
 
     unsigned count = frame(bytes, 2, 1, NULL, 0);
