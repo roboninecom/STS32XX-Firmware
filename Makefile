@@ -33,7 +33,7 @@ PLATFORM_SOURCES := platform/gd32f130/board.c platform/gd32f130/memory.c \
 CORE_SOURCES := core/protocol/protocol.c core/protocol/bus_timing.c \
   core/registers/registers.c core/registers/control_adapter.c \
   core/registers/storage_adapter.c \
-  core/sensing/encoder.c core/sensing/adc.c core/sensing/acquisition.c \
+  core/sensing/encoder.c core/sensing/adc.c \
   core/storage/storage.c core/storage/journal.c \
   core/control/trajectory.c core/control/controller.c core/control/arm_control.c core/control/arm_motion.c core/control/bridge_policy.c \
   core/control/pipeline.c core/control/protection.c core/status_led.c
@@ -60,7 +60,8 @@ OBJECTS := $(patsubst %.c,$(FIRMWARE_DIR)/%.o,$(SOURCES))
 .PHONY: all firmware verify clean FORCE
 all: firmware
 firmware: $(FIRMWARE_DIR)/firmware.elf $(FIRMWARE_DIR)/firmware.bin $(FIRMWARE_DIR)/firmware.hex $(FIRMWARE_DIR)/firmware.size $(FIRMWARE_DIR)/manifest.txt
-verify: firmware build/host/memory_test build/host/arm_motion_arithmetic_test build/host/arm_motion_test build/host/arm_plant_test build/host/arm_feedback_test build/host/arm_control_test build/host/uart_driver_test build/host/protocol_test build/host/service_test build/host/sensing_test build/host/acquisition_test build/host/sensor_service_test build/host/storage_test build/host/storage_service_test build/host/journal_plan_test build/host/motion_request_test build/host/trajectory_test build/host/controller_test build/host/protection_test build/host/bridge_policy_test build/host/control_pipeline_test build/host/telemetry_test build/host/status_led_test build/host/output_safety_test build/host/runtime_test build/host/runtime_lease_test
+verify: firmware build/host/sensor_driver_test build/host/memory_test build/host/arm_motion_arithmetic_test build/host/arm_motion_test build/host/arm_plant_test build/host/arm_feedback_test build/host/arm_control_test build/host/uart_driver_test build/host/protocol_test build/host/service_test build/host/sensing_test build/host/sensor_service_test build/host/storage_test build/host/storage_service_test build/host/journal_plan_test build/host/motion_request_test build/host/trajectory_test build/host/controller_test build/host/protection_test build/host/bridge_policy_test build/host/control_pipeline_test build/host/telemetry_test build/host/status_led_test build/host/output_safety_test build/host/runtime_test build/host/runtime_lease_test
+	build/host/sensor_driver_test
 	build/host/memory_test
 	build/host/arm_motion_arithmetic_test
 	build/host/arm_motion_test
@@ -71,7 +72,6 @@ verify: firmware build/host/memory_test build/host/arm_motion_arithmetic_test bu
 	build/host/protocol_test
 	build/host/service_test
 	build/host/sensing_test
-	build/host/acquisition_test
 	build/host/sensor_service_test
 	build/host/storage_test
 	build/host/storage_service_test
@@ -109,9 +109,7 @@ build/host/service_test: tests/service_test.c tests/fixtures/initial_wire.h app/
 
 build/host/sensing_test: tests/sensing_test.c core/sensing/encoder.c core/sensing/adc.c include/sensing.h
 
-build/host/acquisition_test: tests/acquisition_test.c core/sensing/acquisition.c include/acquisition.h
-
-build/host/sensor_service_test: tests/sensor_service_test.c app/sensor_service.c app/protocol_service.c app/device.c core/registers/control_adapter.c core/sensing/acquisition.c core/sensing/encoder.c core/sensing/adc.c core/registers/registers.c core/protocol/protocol.c
+build/host/sensor_service_test: tests/sensor_service_test.c app/sensor_service.c app/protocol_service.c app/device.c core/registers/control_adapter.c core/sensing/encoder.c core/sensing/adc.c core/registers/registers.c core/protocol/protocol.c
 
 build/host/storage_test: tests/storage_test.c tests/support/storage_legacy_fixture.c core/storage/storage.c core/storage/journal.c core/registers/storage_adapter.c core/registers/registers.c include/storage.h include/storage_journal.h tests/fixtures/2026-09-25-target-storage-readback.bin
 
@@ -146,7 +144,7 @@ RUNTIME_TEST_SOURCES := platform/gd32f130/bridge_output.c tests/runtime_test.c a
   app/output_safety.c core/protocol/protocol.c core/protocol/bus_timing.c \
   core/registers/registers.c core/registers/control_adapter.c \
   core/registers/storage_adapter.c \
-  core/sensing/acquisition.c core/sensing/encoder.c core/sensing/adc.c \
+  core/sensing/encoder.c core/sensing/adc.c \
   core/storage/storage.c core/storage/journal.c \
   core/control/trajectory.c core/control/controller.c core/control/arm_control.c core/control/arm_motion.c core/control/bridge_policy.c \
   core/control/pipeline.c core/control/protection.c core/status_led.c
@@ -195,13 +193,15 @@ clean:
 -include $(wildcard build/host/*.d)
 
 # Fake MMIO exercises the target driver without adding a production HAL.
+build/host/sensor_driver_test: tests/sensor_driver_test.c platform/gd32f130/sensor_driver.c
+
 build/host/uart_driver_test: tests/uart_driver_test.c platform/gd32f130/uart.c core/protocol/bus_timing.c platform/gd32f130/uart_driver.h include/bus_timing.h tests/support/uart_driver_test_port.h
 
 # All host executables have explicit source closures above. Profile/test flags
 # also reach dependency generation, so conditional includes stay tracked.
-HOST_TEST_TARGETS := build/host/arm_motion_test build/host/protocol_test build/host/service_test \
+HOST_TEST_TARGETS := build/host/sensor_driver_test build/host/arm_motion_test build/host/protocol_test build/host/service_test \
   build/host/arm_control_test build/host/arm_feedback_test build/host/arm_plant_test \
-  build/host/sensing_test build/host/acquisition_test build/host/sensor_service_test \
+  build/host/sensing_test build/host/sensor_service_test \
   build/host/storage_test build/host/storage_service_test build/host/journal_plan_test \
   build/host/motion_request_test build/host/trajectory_test build/host/controller_test \
   build/host/protection_test build/host/bridge_policy_test build/host/control_pipeline_test \
@@ -209,6 +209,7 @@ HOST_TEST_TARGETS := build/host/arm_motion_test build/host/protocol_test build/h
   build/host/runtime_lease_test build/host/telemetry_test build/host/status_led_test \
   build/host/uart_driver_test
 build/host/arm_motion_test: RUNTIME_FLAGS := -DFW_ARM_TIMING_PROBE
+build/host/sensor_driver_test: RUNTIME_FLAGS := -DFW_SENSOR_HOST_TEST -Itests/support
 build/host/uart_driver_test: RUNTIME_FLAGS := -DFW_UART_HOST_TEST -Itests/support
 $(HOST_TEST_TARGETS):
 	@mkdir -p $(dir $@)

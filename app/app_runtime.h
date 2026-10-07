@@ -83,7 +83,7 @@ void app_runtime_queue_motion(app_state_t *state, bool position_goal, bool auto_
 void app_runtime_reanchor(app_state_t *state, int32_t position);
 void app_runtime_service_sensors(app_state_t *state);
 void app_runtime_poll(app_state_t *state);
-void app_runtime_service_control_pair(app_state_t *state);
+void app_runtime_service_control_pair(app_state_t *state, uint32_t sample_tick);
 void app_runtime_revoke_output(app_state_t *state);
 /* Coordinates safe flash maintenance and acquisition restart. */
 bool app_runtime_commit_storage(app_state_t *state);

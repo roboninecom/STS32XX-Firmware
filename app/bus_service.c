@@ -36,21 +36,6 @@ void bus_service_init(bus_service_t *bus, device_t *device,
 #endif
 }
 
-#ifdef FW_TIMING_PROBE
-static void timing_record(uint32_t *mean, uint32_t *maximum,
-                          uint32_t sample, uint16_t count)
-{
-    if (sample > *maximum) *maximum = sample;
-    if (count == 1u) {
-        *mean = sample;
-    } else if (sample > *mean) {
-        *mean += (sample - *mean) / count;
-    } else {
-        *mean -= (*mean - sample) / count;
-    }
-}
-#endif
-
 void bus_service_request_baud(bus_service_t *bus)
 {
     bus->baud_pending = true;
@@ -158,11 +143,11 @@ void bus_service_poll(bus_service_t *bus, uint32_t now_tick)
 #ifdef FW_TIMING_PROBE
         uint32_t dispatch_finished = diagnostics_probe_cycles();
         if (bus->timed_commands < 1024u) ++bus->timed_commands;
-        timing_record(&bus->command_wait_mean_cycles,
+        diagnostics_record(&bus->command_wait_mean_cycles,
                       &bus->command_wait_max_cycles,
                       dispatch_started - bus->command_completed_cycles,
                       bus->timed_commands);
-        timing_record(&bus->command_dispatch_mean_cycles,
+        diagnostics_record(&bus->command_dispatch_mean_cycles,
                       &bus->command_dispatch_max_cycles,
                       dispatch_finished - dispatch_started,
                       bus->timed_commands);

@@ -25,6 +25,7 @@ bool app_runtime_commit_storage(app_state_t *state)
     state->arm_selected = false;
     if (state->storage_source == STORAGE_SOURCE_NONE) return false;
     output_safety_begin_maintenance(&state->output);
+    sensor_driver_stop(&state->sensors);
     bool success = storage_service_commit(&state->storage_mirror);
     if (!success) board_system_reset();
     /* Flash stalls the foreground long enough to strand an in-flight I2C
@@ -62,13 +63,16 @@ void app_runtime_reanchor(app_state_t *state, int32_t position)
 
 static control_result_t run_control_step(app_state_t *state,
                                          control_sample_t sample,
-                                         bool permit)
+                                         bool permit, uint32_t sample_tick)
 {
     register_table_t *registers = &state->device.registers;
     protection_config_t protection;
     protection_settings_decode(registers, &protection);
     control_result_t result;
     if (state->arm_selected) {
+        /* Controller deadlines use current time. Acquisition may have started
+         * before a just-accepted gravity/heartbeat command; rewinding this
+         * clock would falsely expire it through unsigned age arithmetic. */
         uint32_t tick = sensor_driver_ticks(&state->sensors);
         state->arm_result = arm_control_step(&state->arm,
             state->sensor_service.measurement.arm_position,
@@ -79,33 +83,23 @@ static control_result_t run_control_step(app_state_t *state,
 #endif
             arm_control_disarm(&state->arm);
         }
-        protection_result_t protected = protection_step(&state->control.protection,
-            &protection, (protection_input_t){
-                .position = sample.position, .current = sample.current,
-                .requested_output = arm_control_flip_effort_polarity(
-                    state->arm_result.requested_effort),
-                .voltage = sample.voltage, .temperature = sample.temperature,
-                .fresh_sensors = sample.fresh});
-        if ((protected.torque != 1u && registers->byte[REG_TORQUE_ENABLE] == 1u) ||
-            (protected.errors & protection.shutdown_mask) != 0u) {
+        result = (control_result_t){
+            .requested_output = arm_control_flip_effort_polarity(
+                state->arm_result.requested_effort),
+            .target_position = state->arm_result.reference_position_q8 / 256,
+            .target_speed = state->arm_result.reference_velocity_q8_s / 256,
+        };
+        control_pipeline_output(&state->control, &protection, &sample, &result,
+            permit && state->arm_result.active, false,
+            (registers->byte[REG_CONFIGURATION_FLAGS] & 0x20u) != 0u);
+        if ((result.torque != 1u && registers->byte[REG_TORQUE_ENABLE] == 1u) ||
+            (result.errors & protection.shutdown_mask) != 0u) {
 #ifdef FW_ARM_TIMING_PROBE
             if (state->arm.armed) state->timing_arm_revocation = 2;
 #endif
             arm_control_disarm(&state->arm);
         }
-        result = (control_result_t){
-            .requested_output = arm_control_flip_effort_polarity(
-                state->arm_result.requested_effort),
-            .protected_output = protected.output,
-            .target_position = state->arm_result.reference_position_q8 / 256,
-            .target_speed = state->arm_result.reference_velocity_q8_s / 256,
-            .errors = protected.errors, .torque = protected.torque,
-        };
-        result.bridge = bridge_policy_apply(&state->control.bridge,
-            protected.output, protected.torque,
-            permit && sample.fresh && state->arm_result.active,
-            (registers->byte[REG_CONFIGURATION_FLAGS] & 0x20u) != 0u);
-        state->arm_sample_tick = tick;
+        state->arm_sample_tick = sample_tick;
     } else {
         controller_settings_t controllers;
         controller_settings_decode(registers, &controllers);
@@ -124,7 +118,7 @@ static control_result_t run_control_step(app_state_t *state,
     return result;
 }
 
-void app_runtime_service_control_pair(app_state_t *state)
+__attribute__((noinline)) void app_runtime_service_control_pair(app_state_t *state, uint32_t sample_tick)
 {
     register_table_t *registers = &state->device.registers;
     const sensor_measurement_t *measurement = &state->sensor_service.measurement;
@@ -184,7 +178,7 @@ void app_runtime_service_control_pair(app_state_t *state)
 #ifdef FW_ARM_TIMING_PROBE
     uint32_t control_started = diagnostics_probe_cycles();
 #endif
-    control_result_t result = run_control_step(state, sample, permit);
+    control_result_t result = run_control_step(state, sample, permit, sample_tick);
 #ifdef FW_ARM_TIMING_PROBE
     state->timing_control_last_cycles = diagnostics_probe_cycles() - control_started;
     if (state->timing_control_last_cycles > state->timing_control_max_cycles)
@@ -230,67 +224,51 @@ void app_runtime_service_control_pair(app_state_t *state)
     registers->byte[REG_PRESENT_VOLTAGE] = measurement->voltage;
     registers->byte[REG_PRESENT_TEMPERATURE] = measurement->temperature;
     telemetry_publish_control(registers, telemetry);
-    state->last_good_tick = sensor_driver_ticks(&state->sensors);
+    state->last_good_tick = sample_tick;
     state->stale_reported = false;
     arm_extension_publish_sample(state);
 }
 
-/* Do not keep acquisition/control scratch live while dispatching a planner. */
+/* Sensor IRQs own acquisition. Foreground consumes a single immutable pair,
+ * validates it and runs control before accepting another command. */
 __attribute__((noinline)) void app_runtime_service_sensors(app_state_t *state)
 {
     if (!state->sensor_active) return;
     uint8_t previous_errors = state->device.registers.byte[REG_SERVO_STATUS];
     bool state_changed = false;
-    bool period_elapsed = sensor_driver_timer_tick(&state->sensors);
-    /* Complete the previous pair before scheduling another. A foreground
-     * planning pause may cross one tick without exceeding the sensor deadline;
-     * replacing that still-valid transaction causes unnecessary I2C recovery. */
-    sensor_driver_poll(&state->sensors);
-    uint32_t generation;
-    bool valid;
-    uint16_t raw_angle;
-    if (sensor_driver_take_encoder(&state->sensors, &generation, &valid,
-                                   &raw_angle)) {
-        if (!valid) app_runtime_revoke_output(state);
-        sensor_service_encoder_done(&state->sensor_service,
-                                    &state->device.registers,
-                                    generation, valid, raw_angle);
+    sensor_pair_t pair;
+    if (sensor_driver_take_pair(&state->sensors, &pair)) {
+#ifdef FW_TIMING_PROBE
+        diagnostic_service_period_started(state, pair.started_cycles, pair.tick_late_us);
+#endif
+        uint32_t age = sensor_driver_ticks(&state->sensors) - pair.tick_ms;
+        /* A delayed foreground must never restamp an old DMA result as fresh. */
+        bool published = age <= 2u && sensor_service_accept_pair(
+            &state->sensor_service, &state->device.registers, &pair,
+            state->device.cached_motion_limits.rate);
+        state_changed = true;
+        if (published) {
+            app_runtime_service_control_pair(state, pair.tick_ms);
+#ifdef FW_TIMING_PROBE
+            diagnostic_service_pair_complete(state);
+#endif
+        } else {
+#ifdef FW_ARM_TIMING_PROBE
+            if (state->arm.armed) state->timing_arm_revocation = 3;
+#endif
+#ifdef FW_TIMING_PROBE
+            diagnostic_service_pair_rejected(state);
+#endif
+            app_runtime_revoke_output(state);
+            arm_control_disarm(&state->arm);
+            state->device.registers.byte[REG_SERVO_STATUS] |= 0x02u;
+        }
     }
-    uint16_t samples[3];
-    if (sensor_driver_take_adc(&state->sensors, &generation, &valid, samples)) {
-        if (!valid) app_runtime_revoke_output(state);
-        sensor_service_adc_done(&state->sensor_service,
-                                generation, valid, valid ? samples : 0);
-    }
-    uint32_t pairs_before = state->sensor_service.acquisition.completed_pairs;
-    bool published = sensor_service_publish(&state->sensor_service,
-                                            &state->device.registers,
-                                            state->device.cached_motion_limits.rate);
-    if (!published &&
-        state->sensor_service.acquisition.completed_pairs != pairs_before) {
+    if (state->control_initialized && !state->stale_reported &&
+        (uint32_t)(sensor_driver_ticks(&state->sensors) - state->last_good_tick) > 2u) {
         state_changed = true;
 #ifdef FW_ARM_TIMING_PROBE
-        if (state->arm.armed) state->timing_arm_revocation = 3; /* Rejected sensor pair. */
-#endif
-        app_runtime_revoke_output(state);
-        arm_control_disarm(&state->arm);
-    }
-#ifdef FW_TIMING_PROBE
-    if (!published && state->sensor_service.acquisition.completed_pairs != pairs_before)
-        diagnostic_service_pair_rejected(state);
-#endif
-    if (published) {
-        state_changed = true;
-        app_runtime_service_control_pair(state);
-#ifdef FW_TIMING_PROBE
-        diagnostic_service_pair_complete(state);
-#endif
-    }
-    else if (state->control_initialized && !state->stale_reported &&
-             (uint32_t)(sensor_driver_ticks(&state->sensors) - state->last_good_tick) > 2u) {
-        state_changed = true;
-#ifdef FW_ARM_TIMING_PROBE
-        if (state->arm.armed) state->timing_arm_revocation = 4; /* Sensor age. */
+        if (state->arm.armed) state->timing_arm_revocation = 4;
 #endif
         app_runtime_revoke_output(state);
         arm_control_disarm(&state->arm);
@@ -298,31 +276,19 @@ __attribute__((noinline)) void app_runtime_service_sensors(app_state_t *state)
             .position = state->sensor_service.measurement.position,
             .voltage = state->sensor_service.measurement.voltage,
             .temperature = state->sensor_service.measurement.temperature};
-        (void)run_control_step(state, stale, false);
+        (void)run_control_step(state, stale, false, sensor_driver_ticks(&state->sensors));
         state->stale_reported = true;
     }
-    if (period_elapsed && sensor_driver_can_begin(&state->sensors)) {
-#ifdef FW_TIMING_PROBE
-        diagnostic_service_period_started(state);
-#endif
-        uint32_t next_generation = sensor_service_begin(
-            &state->sensor_service, &state->device.registers);
-        sensor_driver_begin(&state->sensors, next_generation);
-    }
-    /* IRQ readers retain the previous complete snapshot until all sample,
-     * fault and optional diagnostic fields have been updated. Command-side
-     * mutations are published separately before releasing their mailbox. */
     if (state_changed || state->device.registers.byte[REG_SERVO_STATUS] != previous_errors)
         protocol_service_publish(&state->bus.protocol);
+    /* Recovery can toggle a stuck bus, but only after output revocation. */
+    sensor_driver_service(&state->sensors);
 }
 
 void app_runtime_poll(app_state_t *state)
 {
     app_runtime_service_sensors(state);
-    /* The polled I2C transaction needs short foreground visits between bytes.
-     * Finish it before a synchronous planner command. IRQs still serve reads;
-     * a fault opens dispatch for recovery and torque-off commands. */
-    const acquisition_t *acquisition = &state->sensor_service.acquisition;
-    if (!state->sensor_active || !acquisition->pending || acquisition->fault)
-        bus_service_poll(&state->bus, sensor_driver_ticks(&state->sensors));
+    /* I2C/DMA progress independently. Short legacy writes no longer wait for
+     * the current encoder transaction; long commands still need timing checks. */
+    bus_service_poll(&state->bus, sensor_driver_ticks(&state->sensors));
 }

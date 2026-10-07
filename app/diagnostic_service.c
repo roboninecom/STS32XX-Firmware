@@ -64,28 +64,16 @@ void diagnostic_service_write(struct app_state *state,
 #endif
 }
 
-void diagnostic_service_period_started(struct app_state *state)
+void diagnostic_service_period_started(struct app_state *state,
+                                     uint32_t started_cycles, uint16_t late_us)
 {
 #if defined(FW_TIMING_PROBE) && !defined(FW_ARM_TIMING_PROBE)
-    uint32_t late = diagnostics_probe_tick_late_us();
-    if (late > state->timing_max_tick_late_us)
-        state->timing_max_tick_late_us = (uint16_t)late;
-    state->timing_started_cycles = diagnostics_probe_cycles();
+    if (late_us > state->timing_max_tick_late_us) state->timing_max_tick_late_us = late_us;
+    state->timing_started_cycles = started_cycles;
 #else
-    (void)state;
+    (void)state; (void)started_cycles; (void)late_us;
 #endif
 }
-
-#if defined(FW_TIMING_PROBE) && !defined(FW_ARM_TIMING_PROBE)
-static void timing_average(uint32_t *mean, uint32_t *maximum,
-                           uint32_t sample, uint16_t count)
-{
-    if (sample > *maximum) *maximum = sample;
-    if (count == 1u) *mean = sample;
-    else if (sample > *mean) *mean += (sample - *mean) / count;
-    else *mean -= (*mean - sample) / count;
-}
-#endif
 
 void diagnostic_service_goal_queued(struct app_state *state)
 {
@@ -118,11 +106,11 @@ void diagnostic_service_goal_applied(struct app_state *state,
     if (!state->goal_timing_pending) return;
     state->goal_timing_pending = false;
     if (state->goal_timing_count < 1024u) ++state->goal_timing_count;
-    timing_average(&state->goal_control_mean_cycles,
+    diagnostics_record(&state->goal_control_mean_cycles,
                    &state->goal_control_max_cycles,
                    control_started_cycles - state->goal_packet_cycles,
                    state->goal_timing_count);
-    timing_average(&state->goal_output_mean_cycles,
+    diagnostics_record(&state->goal_output_mean_cycles,
                    &state->goal_output_max_cycles,
                    output_cycles - state->goal_packet_cycles,
                    state->goal_timing_count);
@@ -140,7 +128,7 @@ void diagnostic_service_pair_rejected(struct app_state *state)
 #ifndef FW_ARM_TIMING_PROBE
     registers_set_u16(&state->device.registers, REG_ACTIVE_PROFILE_GOAL_POSITION, state->timing_rejected_pairs);
     registers_set_u16(&state->device.registers, REG_PRESENT_CURRENT,
-                      state->sensor_service.acquisition.encoder_raw);
+                      state->sensor_service.encoder_raw);
 #endif
 #else
     (void)state;
@@ -160,7 +148,7 @@ void diagnostic_service_pair_complete(struct app_state *state)
     registers_set_u16(registers, REG_ACTIVE_PROFILE_VELOCITY, state->timing_max_latency_us);
     registers_set_u16(registers, REG_UNDOCUMENTED_STATUS73, state->timing_max_tick_late_us);
     registers_set_u16(registers, REG_UNDOCUMENTED_STATUS75,
-                      (uint16_t)state->sensor_service.acquisition.completed_pairs);
+                      (uint16_t)state->sensor_service.completed_pairs);
     if (registers->byte[REG_UNDOCUMENTED_RUNTIME50] == 201u) {
         registers_set_u16(registers, REG_ACTIVE_PROFILE_GOAL_POSITION, state->bus.uart.max_rx_occupancy);
         registers_set_u16(registers, REG_PRESENT_CURRENT, state->bus.response_timeouts);
@@ -178,6 +166,7 @@ void diagnostic_service_pair_complete(struct app_state *state)
     }
     registers->byte[REG_UNDOCUMENTED_STATUS77] = state->bus.timing_overflows;
     uint32_t values[4];
+    unsigned cycle_mask = 0;
     unsigned mode = registers->byte[REG_UNDOCUMENTED_RUNTIME50];
     switch (mode) {
 #ifdef FW_ARM_TIMING_PROBE
@@ -196,24 +185,27 @@ void diagnostic_service_pair_complete(struct app_state *state)
         break;
 #endif
     case 203:
-        values[0] = state->bus.command_wait_mean_cycles / 48u;
-        values[1] = state->bus.command_wait_max_cycles / 48u;
-        values[2] = state->bus.command_dispatch_mean_cycles / 48u;
-        values[3] = state->bus.command_dispatch_max_cycles / 48u;
+        cycle_mask = 0x0fu;
+        values[0] = state->bus.command_wait_mean_cycles;
+        values[1] = state->bus.command_wait_max_cycles;
+        values[2] = state->bus.command_dispatch_mean_cycles;
+        values[3] = state->bus.command_dispatch_max_cycles;
         break;
 #ifndef FW_ARM_TIMING_PROBE
     case 204:
-        values[0] = state->goal_control_mean_cycles / 48u;
-        values[1] = state->goal_control_max_cycles / 48u;
-        values[2] = state->goal_output_mean_cycles / 48u;
-        values[3] = state->goal_output_max_cycles / 48u;
+        cycle_mask = 0x0fu;
+        values[0] = state->goal_control_mean_cycles;
+        values[1] = state->goal_control_max_cycles;
+        values[2] = state->goal_output_mean_cycles;
+        values[3] = state->goal_output_max_cycles;
         registers_set_u16(registers, REG_UNDOCUMENTED_STATUS75, state->goal_timing_count);
         break;
 #endif
 #ifdef FW_ARM_TIMING_PROBE
     case 205:
-        values[0] = state->timing_control_last_cycles / 48u;
-        values[1] = state->timing_control_max_cycles / 48u;
+        cycle_mask = 0x03u;
+        values[0] = state->timing_control_last_cycles;
+        values[1] = state->timing_control_max_cycles;
         values[2] = state->timing_control_samples;
         values[3] = state->timing_arm_revocation;
         break;
@@ -221,8 +213,9 @@ void diagnostic_service_pair_complete(struct app_state *state)
     default:
 #ifdef FW_ARM_TIMING_PROBE
         if (mode < 206 || mode >= 206 + ARM_TIMING_COUNT) return;
+        cycle_mask = 0x02u;
         values[0] = mode == 206 ? motion_timing[0].iterations : 0;
-        values[1] = motion_timing[mode - 206].maximum / 48u;
+        values[1] = motion_timing[mode - 206].maximum;
         values[2] = motion_timing[mode - 206].samples;
         values[3] = state->timing_arm_revocation;
         break;
@@ -231,8 +224,10 @@ void diagnostic_service_pair_complete(struct app_state *state)
 #endif
     }
     /* Diagnostic words occupy consecutive u16 slots at registers 67–74. */
-    for (unsigned i = 0; i < 4; ++i)
+    for (unsigned i = 0; i < 4; ++i) {
+        if (cycle_mask & (1u << i)) values[i] /= 48u;
         registers_set_u16(registers, REG_ACTIVE_PROFILE_GOAL_POSITION + 2u * i, values[i] > UINT16_MAX ? UINT16_MAX : (uint16_t)values[i]);
+    }
 
 #else
     (void)state;

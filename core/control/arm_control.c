@@ -421,7 +421,8 @@ static void step_feedback(arm_control_t *state, int32_t measured,
     result->accepted_sequence = state->accepted_sequence;
 }
 
-arm_result_t arm_control_step(arm_control_t *state, int32_t position_counts,
+/* Keep controller scratch out of the caller frame shared with legacy mode. */
+__attribute__((noinline)) arm_result_t arm_control_step(arm_control_t *state, int32_t position_counts,
                               uint32_t now_ms, bool fresh,
                               bool current_limit_active)
 {

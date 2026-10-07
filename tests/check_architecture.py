@@ -74,5 +74,6 @@ for path in sorted((ROOT / "app").rglob("*.c")):
     assert not re.search(r'"(?:platform/|gd32)', source), path
     assert not re.search(
         r"\b(?:state->|app\.)sensors\.(?:adc_dma|phase|encoder_ready|"
-        r"encoder_failed|adc_ready|adc_failed|ticks)", source), path
+        r"encoder_failed|adc_ready|adc_failed|ticks|encoder_dma|in_flight|"
+        r"ready|completed|recovery_pending|clock)", source), path
 print("Application hardware boundary: no MMIO or sensor-driver internals")

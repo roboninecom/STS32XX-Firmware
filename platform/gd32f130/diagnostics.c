@@ -4,8 +4,7 @@
 #include "mcu.h"
 
 enum {
-    STACK_TOP = 0x20001000u,
-    CPU_CLOCK_HZ = 48000000u, TICK_RELOAD = CPU_CLOCK_HZ / 1000u - 1u
+    STACK_TOP = 0x20001000u
 };
 
 /* Measure the complete free-RAM stack area, including deeper planning calls.
@@ -41,8 +40,11 @@ uint16_t diagnostics_probe_stack_used(uint32_t stack_mark_end)
     return (uint16_t)(STACK_TOP - stack_mark_end);
 }
 
-uint16_t diagnostics_probe_tick_late_us(void)
+__attribute__((noinline)) void diagnostics_record(uint32_t *mean, uint32_t *maximum,
+                                                 uint32_t sample, uint16_t count)
 {
-    return (uint16_t)((TICK_RELOAD - SysTick->VAL) /
-                      (CPU_CLOCK_HZ / 1000000u));
+    if (sample > *maximum) *maximum = sample;
+    /* At count one the whole difference is applied, resetting the mean. */
+    if (sample > *mean) *mean += (sample - *mean) / count;
+    else *mean -= (*mean - sample) / count;
 }

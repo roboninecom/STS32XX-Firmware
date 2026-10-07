@@ -36,7 +36,8 @@ bool control_pipeline_accept(control_pipeline_t *state,
     return true;
 }
 
-control_result_t control_pipeline_step(control_pipeline_t *state,
+/* Keep the legacy controller frame separate from arm control and dispatch. */
+__attribute__((noinline)) control_result_t control_pipeline_step(control_pipeline_t *state,
                                        const controller_settings_t *controllers,
                                        const protection_config_t *protection,
                                        uint8_t selected_mode,
@@ -82,20 +83,9 @@ control_result_t control_pipeline_step(control_pipeline_t *state,
             break;
         }
     }
-    protection_input_t input = {
-        .position = sample.position,
-        .current = sample.current,
-        .requested_output = result.requested_output,
-        .voltage = sample.voltage,
-        .temperature = sample.temperature,
-        .fresh_sensors = sample.fresh,
-    };
-    protection_result_t protected = protection_step(&state->protection,
-                                                    protection, input);
-    result.protected_output = protected.output;
-    result.errors = protected.errors;
-    result.torque = protected.torque;
-    if ((protection->shutdown_mask & protected.errors & 0x05u) != 0u) {
+    control_pipeline_output(state, protection, &sample, &result,
+                            platform_permit && can_step, platform_permit, complementary);
+    if ((protection->shutdown_mask & result.errors & 0x05u) != 0u) {
         trajectory_alarm_reanchor(&state->trajectory, sample.position);
         if (state->request_valid &&
             (state->request.mode == MOTION_MODE_POSITION ||
@@ -104,10 +94,32 @@ control_result_t control_pipeline_step(control_pipeline_t *state,
         result.target_position = sample.position;
         result.target_speed = 0;
     }
-    bool brake_state = protected.torque == 2u;
-    result.bridge = bridge_policy_apply(
-        &state->bridge, result.protected_output, protected.torque,
-        platform_permit && (can_step || brake_state) && sample.fresh,
-        complementary);
     return result;
+}
+
+/* Keeping this boundary out of the larger controller frame also bounds stack
+ * overlap and avoids duplicating protection setup in the two control modes. */
+__attribute__((noinline)) void control_pipeline_output(control_pipeline_t *state,
+                             const protection_config_t *protection,
+                             const control_sample_t *sample, control_result_t *result,
+                             bool drive_permitted, bool brake_permitted,
+                             bool complementary)
+{
+    protection_input_t input = {
+        .position = sample->position,
+        .current = sample->current,
+        .requested_output = result->requested_output,
+        .voltage = sample->voltage,
+        .temperature = sample->temperature,
+        .fresh_sensors = sample->fresh,
+    };
+    protection_result_t protected = protection_step(&state->protection,
+                                                    protection, input);
+    result->protected_output = protected.output;
+    result->errors = protected.errors;
+    result->torque = protected.torque;
+    result->bridge = bridge_policy_apply(&state->bridge,
+        result->protected_output, result->torque,
+        sample->fresh && (drive_permitted || (brake_permitted && result->torque == 2u)),
+        complementary);
 }

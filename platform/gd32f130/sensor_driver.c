@@ -1,14 +1,100 @@
 #include "sensor_driver.h"
 
 #include <stdint.h>
+#ifndef FW_SENSOR_HOST_TEST
 #include "mcu.h"
+#else
+#include "sensor_driver_test_port.h"
+#endif
+
+static sensor_driver_t *active_driver;
+enum { SENSOR_PRIORITY = 4u };
+static const IRQn_Type sensor_irqs[] = {
+    DMA_Channel0_IRQn, DMA_Channel1_2_IRQn, I2C0_EV_IRQn, I2C0_ER_IRQn
+};
+
+static __attribute__((noinline)) void sensor_irqs_enable(bool enable)
+{
+    for (unsigned i = 0; i < sizeof sensor_irqs / sizeof sensor_irqs[0]; ++i) {
+        IRQn_Type irq = sensor_irqs[i];
+        if (enable) {
+            NVIC_SetPriority(irq, SENSOR_PRIORITY);
+            NVIC_EnableIRQ(irq);
+        } else {
+            NVIC_DisableIRQ(irq);
+            NVIC_ClearPendingIRQ(irq);
+        }
+    }
+}
+
+static __attribute__((noinline)) void update_clock(sensor_driver_t *driver)
+{
+    elapsed_clock_update(&driver->clock, DWT->CYCCNT);
+    driver->ticks = driver->clock.milliseconds;
+}
+
+static uint32_t lock_sensors(void)
+{
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    __DMB();
+    return mask;
+}
+
+static void unlock_sensors(uint32_t mask)
+{
+    __DMB();
+    __set_PRIMASK(mask);
+}
+
+static void dma_stop(void)
+{
+    DMA_CH0CTL = 0;
+    DMA_CH2CTL = 0;
+    DMA_INTC = 0x0f0fu;
+    I2C_CTL1(I2C0) = 48u; /* Clock setting; no IRQ or DMA requests. */
+}
+
+static __attribute__((noinline)) void publish_pair(sensor_driver_t *driver, bool valid)
+{
+    /* Overwriting unread data must not silently count as a healthy control
+     * period. Publish the newest timestamp but revoke this sample's validity. */
+    valid = valid && !driver->ready;
+    driver->completed = (sensor_pair_t){
+        .tick_ms = driver->started_tick,
+        .encoder_raw = (uint16_t)(((uint16_t)driver->encoder_dma[0] << 8) |
+                                  driver->encoder_dma[1]),
+        .adc_raw = {driver->adc_dma[0], driver->adc_dma[1], driver->adc_dma[2]},
+        .valid = valid,
+#ifdef FW_TIMING_PROBE
+        .started_cycles = driver->started_cycles,
+        .tick_late_us = driver->tick_late_us,
+#endif
+    };
+    driver->ready = true;
+    driver->in_flight = false;
+}
+
+static void fail_pair(sensor_driver_t *driver)
+{
+    dma_stop();
+    I2C_CTL0(I2C0) |= I2C_CTL0_STOP;
+    driver->phase = SENSOR_I2C_IDLE;
+    driver->recovery_pending = true;
+    publish_pair(driver, false);
+}
+
+static void complete_pair(sensor_driver_t *driver)
+{
+    if (driver->encoder_done && driver->adc_done) publish_pair(driver, true);
+}
 
 enum { CALIBRATION_TIMEOUT = 1000000u };
 
 static void i2c_gpio_pause(void)
 {
     for (volatile unsigned remaining = 0; remaining < 240u; ++remaining) {
-        __asm volatile("nop");
+        __NOP();
     }
 }
 
@@ -39,9 +125,9 @@ static void i2c_recover(void)
     I2C_CTL0(I2C0) = 0;
     i2c_gpio_recover();
     I2C_CTL0(I2C0) = 1u << 15;
-    __asm volatile("nop\n nop\n nop");
+    __NOP(); __NOP(); __NOP();
     I2C_CTL0(I2C0) = 0;
-    __asm volatile("nop\n nop\n nop");
+    __NOP(); __NOP(); __NOP();
     I2C_CTL1(I2C0) = 48u;
     I2C_CKCFG(I2C0) = 240u;
     I2C_RT(I2C0) = 48u;
@@ -58,38 +144,42 @@ static bool adc_calibrate(uint32_t bit)
     return false;
 }
 
+void sensor_driver_stop(sensor_driver_t *driver)
+{
+    uint32_t mask = lock_sensors();
+    driver->enabled = false;
+    SysTick->CTRL = 0;
+    dma_stop();
+    I2C_CTL0(I2C0) = 0;
+    sensor_irqs_enable(false);
+    SCB->ICSR = SCB_ICSR_PENDSTCLR_Msk;
+    driver->in_flight = driver->ready = false;
+    unlock_sensors(mask);
+}
+
 bool sensor_driver_init(sensor_driver_t *driver, bool complementary_output)
 {
     *driver = (sensor_driver_t){0};
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
     uint32_t initial_cycles = DWT->CYCCNT;
-    /* Fail closed if the target does not provide a running cycle counter. */
-    for (unsigned i=0; i<32u; ++i) __asm volatile("nop");
+    for (unsigned i = 0; i < 32u; ++i) __NOP();
     if (DWT->CYCCNT == initial_cycles) return false;
     driver->clock.last_cycles = DWT->CYCCNT;
-    /* SysTick supplies the 1 kHz acquisition cadence without an IRQ.
-     * TIMER0 and bridge pins belong exclusively to the board/bridge driver. */
-    SysTick->LOAD = 47999u;
-    SysTick->VAL = 0u;
-    SysTick->CTRL = 5u;
-
+    active_driver = driver;
     return sensor_driver_restart(driver, complementary_output);
 }
 
 bool sensor_driver_restart(sensor_driver_t *driver, bool complementary_output)
 {
-    uint32_t ticks = driver->ticks;
-    elapsed_clock_t clock = driver->clock;
-    uint32_t generation = driver->generation;
-    /* DMA may still target the old buffer while foreground was stalled. Stop
-     * it before clearing driver state and reconfiguring the ADC. */
-    DMA_CH0CTL = 0u;
-    I2C_CTL0(I2C0) = 0u;
-    *driver = (sensor_driver_t){0};
-    driver->ticks = ticks;
-    driver->clock = clock;
-    driver->generation = generation;
+    sensor_driver_stop(driver);
+    update_clock(driver);
+    driver->phase = SENSOR_I2C_IDLE;
+    driver->recovery_pending = false;
+    driver->recovery_cooldown = 0;
+    /* stop() cancelled the mailbox; begin_pair() resets completion state.
+     * DMA rewrites every byte before publication, so buffers need no reset. */
+    active_driver = driver;
 
     /* PA9/PA10: AF4, open-drain. The reconstruction constants named PA6
      * target PA9's bit positions; PA6 remains the disabled bridge gate. */
@@ -107,38 +197,35 @@ bool sensor_driver_restart(sensor_driver_t *driver, bool complementary_output)
     /* Factory DMA slots: normal [1=temp, 3=current, 4=voltage];
      * complementary [3=voltage, 4=current, 5=temp]. Scan order is
      * immaterial to the portable converter once arranged logically. */
-    const uint32_t channels[3] = {
-        complementary_output ? 5u : 1u,
-        complementary_output ? 4u : 3u,
-        complementary_output ? 3u : 4u
-    };
-    for (unsigned i = 0; i < 3; ++i) {
-        unsigned channel = channels[i];
-        GPIO_CTL(GPIOA) |= 3u << (channel * 2u);
-        ADC_SAMPT1 |= 1u << (channel * 3u);
+    if (complementary_output) {
+        GPIO_CTL(GPIOA) |= (3u << 6) | (3u << 8) | (3u << 10);
+        ADC_SAMPT1 |= (1u << 9) | (1u << 12) | (1u << 15);
+        ADC_RSQ2 = 5u | (4u << 5) | (3u << 10);
+    } else {
+        GPIO_CTL(GPIOA) |= (3u << 2) | (3u << 6) | (3u << 8);
+        ADC_SAMPT1 |= (1u << 3) | (1u << 9) | (1u << 12);
+        ADC_RSQ2 = 1u | (3u << 5) | (4u << 10);
     }
-    ADC_RSQ2 = channels[0] | (channels[1] << 5) |
-                             (channels[2] << 10);
     ADC_RSQ0 = 2u << 20;
     ADC_CTL0 |= 1u << 8;
     ADC_CTL1 |= ADC_CTL1_ETSRC | ADC_CTL1_ETERC |
         ADC_CTL1_DMA | ADC_CTL1_ADCON;
     if (!adc_calibrate(1u << 3) || !adc_calibrate(1u << 2)) return false;
 
-    DMA_CH0CTL = 0;
-    DMA_CH0PADDR = (uint32_t)(uintptr_t)&ADC_RDATA;
-    DMA_CH0MADDR = (uint32_t)(uintptr_t)driver->adc_dma;
-    DMA_INTC = 0x0fu;
-    return true;
-}
+    DMA_CH0PADDR = (uintptr_t)&ADC_RDATA;
+    DMA_CH0MADDR = (uintptr_t)driver->adc_dma;
+    DMA_CH2PADDR = (uintptr_t)&I2C_DATA(I2C0);
+    DMA_CH2MADDR = (uintptr_t)driver->encoder_dma;
+    DMA_INTC = 0x0f0fu;
 
-bool sensor_driver_timer_tick(sensor_driver_t *driver)
-{
-    /* COUNTFLAG schedules acquisition only. Elapsed time must count every
-     * hardware cycle even if foreground missed several SysTick periods. */
-    elapsed_clock_update(&driver->clock, DWT->CYCCNT);
-    driver->ticks = driver->clock.milliseconds;
-    if ((SysTick->CTRL & (1u << 16)) == 0u) return false;
+    /* Same-priority sensor IRQs cannot interleave transaction mutations.
+     * UART retains its own priority and DMA channels 3/4. */
+    NVIC_SetPriority(SysTick_IRQn, SENSOR_PRIORITY);
+    sensor_irqs_enable(true);
+    driver->enabled = true;
+    SysTick->LOAD = 47999u;
+    SysTick->VAL = 0u;
+    SysTick->CTRL = 7u; /* 1 kHz, processor clock, interrupt enabled. */
     return true;
 }
 
@@ -147,156 +234,147 @@ uint32_t sensor_driver_ticks(const sensor_driver_t *driver)
     return driver->ticks;
 }
 
-bool sensor_driver_can_begin(const sensor_driver_t *driver)
+static void begin_pair(sensor_driver_t *driver)
 {
-    return (driver->phase == SENSOR_I2C_IDLE && !driver->adc_active) ||
-        (uint32_t)(driver->ticks - driver->started_tick) >= 2u;
-}
-
-void sensor_driver_begin(sensor_driver_t *driver, uint32_t generation)
-{
-    driver->generation = generation;
-    if (driver->phase != SENSOR_I2C_IDLE) {
-        i2c_recover();
-        driver->phase = SENSOR_I2C_IDLE;
-        driver->recovery_cooldown = 9u;
-    }
-    driver->encoder_ready = false;
-    driver->encoder_failed = false;
-    driver->adc_ready = false;
-    driver->adc_failed = false;
     driver->started_tick = driver->ticks;
-    if (driver->recovery_cooldown != 0u) {
-        --driver->recovery_cooldown;
-        driver->encoder_failed = true;
-    } else {
-        driver->phase = SENSOR_I2C_WRITE_START;
-        I2C_CTL0(I2C0) = 1u | I2C_CTL0_ACKEN | I2C_CTL0_START;
-    }
-
-    DMA_CH0CTL = (DMA_CHXCTL_CMEN | DMA_CHXCTL_MNAGA |
-        DMA_PERIPHERAL_WIDTH_16BIT | DMA_MEMORY_WIDTH_16BIT |
-        DMA_PRIORITY_MEDIUM);
-    DMA_INTC = 0x0fu;
+#ifdef FW_TIMING_PROBE
+    driver->started_cycles = DWT->CYCCNT;
+    driver->tick_late_us = (uint16_t)((47999u - SysTick->VAL) / 48u);
+#endif
+    driver->in_flight = true;
+    driver->encoder_done = driver->adc_done = false;
+    driver->phase = SENSOR_I2C_WRITE_START;
     DMA_CH0CNT = 3u;
-    DMA_CH0CTL |= 1u;
-    ADC_CTL1 |= 1u << 22;
-    driver->adc_active = true;
+    DMA_CH0CTL = DMA_CHXCTL_CMEN | DMA_CHXCTL_MNAGA |
+        DMA_PERIPHERAL_WIDTH_16BIT | DMA_MEMORY_WIDTH_16BIT |
+        DMA_PRIORITY_MEDIUM | DMA_CHXCTL_FTFIE | DMA_CHXCTL_ERRIE | DMA_CHXCTL_CHEN;
+    DMA_CH2CNT = 2u;
+    DMA_CH2CTL = DMA_CHXCTL_MNAGA | DMA_PRIORITY_MEDIUM |
+        DMA_CHXCTL_FTFIE | DMA_CHXCTL_ERRIE | DMA_CHXCTL_CHEN;
+    I2C_CTL1(I2C0) = 48u | I2C_CTL1_ERRIE | I2C_CTL1_EVIE;
+    I2C_CTL0(I2C0) = 1u | I2C_CTL0_ACKEN | I2C_CTL0_START;
+    ADC_CTL1 |= ADC_CTL1_SWRCST;
 }
 
-bool sensor_driver_take_encoder(sensor_driver_t *driver, uint32_t *generation,
-                                bool *valid, uint16_t *raw_angle)
+void SysTick_Handler(void)
 {
-    if (!driver->encoder_ready && !driver->encoder_failed) return false;
-    *generation = driver->generation;
-    *valid = driver->encoder_ready;
-    *raw_angle = driver->encoder_raw;
-    driver->encoder_ready = false;
-    driver->encoder_failed = false;
-    return true;
-}
-
-bool sensor_driver_take_adc(sensor_driver_t *driver, uint32_t *generation,
-                            bool *valid, uint16_t samples[3])
-{
-    if (!driver->adc_ready && !driver->adc_failed) return false;
-    *generation = driver->generation;
-    *valid = driver->adc_ready;
-    for (unsigned i = 0; i < 3; ++i) samples[i] = driver->adc_dma[i];
-    driver->adc_ready = false;
-    driver->adc_failed = false;
-    return true;
-}
-
-static void i2c_fail(sensor_driver_t *driver)
-{
-    i2c_recover();
-    driver->phase = SENSOR_I2C_IDLE;
-    driver->encoder_failed = true;
-    driver->recovery_cooldown = 9u;
-}
-
-void sensor_driver_poll(sensor_driver_t *driver)
-{
-    if (driver->adc_active) {
-        uint32_t flags = DMA_INTF;
-        if ((flags & DMA_INTF_ERRIF) != 0u) {
-            DMA_CH0CTL = 0;
-            DMA_INTC = 0x0fu;
-            driver->adc_active = false;
-            driver->adc_failed = true;
-        } else if ((flags & DMA_INTF_FTFIF) != 0u) {
-            DMA_CH0CTL = 0;
-            DMA_INTC = 0x0fu;
-            driver->adc_active = false;
-            driver->adc_ready = true;
-        }
+    sensor_driver_t *driver = active_driver;
+    if (driver == 0 || !driver->enabled) return;
+    update_clock(driver);
+    if (driver->in_flight) {
+        if ((uint32_t)(driver->ticks - driver->started_tick) >= 2u) fail_pair(driver);
+        return; /* Never replace a transaction within its deadline. */
     }
-    if (driver->phase == SENSOR_I2C_IDLE) return;
-    if ((uint32_t)(driver->ticks - driver->started_tick) >= 2u ||
-        (I2C_STAT0(I2C0) & (I2C_STAT0_BERR | I2C_STAT0_LOSTARB | I2C_STAT0_AERR | I2C_STAT0_OUERR)) != 0u) {
-        i2c_fail(driver);
+    if (driver->recovery_pending) return;
+    if (driver->recovery_cooldown) { --driver->recovery_cooldown; return; }
+    begin_pair(driver);
+}
+
+void sensor_driver_service(sensor_driver_t *driver)
+{
+    if (!driver->enabled || !driver->recovery_pending) return;
+    /* Error IRQs have disabled peripheral/DMA requests. The timer keeps time
+     * but cannot restart acquisition until this bounded recovery completes. */
+    i2c_recover();
+    uint32_t mask = lock_sensors();
+    for (unsigned i = 0; i < sizeof sensor_irqs / sizeof sensor_irqs[0]; ++i)
+        NVIC_ClearPendingIRQ(sensor_irqs[i]);
+    driver->recovery_cooldown = 9u;
+    driver->recovery_pending = false;
+    unlock_sensors(mask);
+}
+
+bool sensor_driver_take_pair(sensor_driver_t *driver, sensor_pair_t *pair)
+{
+    uint32_t mask = lock_sensors();
+    bool ready = driver->ready;
+    if (ready) { *pair = driver->completed; driver->ready = false; }
+    unlock_sensors(mask);
+    return ready;
+}
+
+void I2C0_ER_IRQHandler(void)
+{
+    sensor_driver_t *driver = active_driver;
+    if (driver != 0 && driver->in_flight) fail_pair(driver);
+}
+
+void I2C0_EV_IRQHandler(void)
+{
+    sensor_driver_t *driver = active_driver;
+    if (driver == 0 || !driver->in_flight) return;
+    uint32_t status = I2C_STAT0(I2C0);
+    if (status & (I2C_STAT0_BERR | I2C_STAT0_LOSTARB | I2C_STAT0_AERR | I2C_STAT0_OUERR)) {
+        fail_pair(driver);
         return;
     }
-    uint32_t status = I2C_STAT0(I2C0);
     switch (driver->phase) {
     case SENSOR_I2C_WRITE_START:
-        if ((status & I2C_STAT0_SBSEND) != 0u) {
+        if (status & I2C_STAT0_SBSEND) {
             I2C_DATA(I2C0) = 0x36u << 1;
             driver->phase = SENSOR_I2C_WRITE_ADDRESS;
         }
         break;
     case SENSOR_I2C_WRITE_ADDRESS:
-        if ((status & I2C_STAT0_ADDSEND) != 0u) {
+        if (status & I2C_STAT0_ADDSEND) {
             (void)I2C_STAT1(I2C0);
             I2C_DATA(I2C0) = 0x0cu;
             driver->phase = SENSOR_I2C_REGISTER_SENT;
         }
         break;
     case SENSOR_I2C_REGISTER_SENT:
-        if ((status & I2C_STAT0_BTC) != 0u) {
-            /* Clear the write-byte transfer state before issuing repeated
-             * START. Leaving DATA unread can make the following two-byte
-             * receive appear as a duplicated first byte. */
+        if (status & I2C_STAT0_BTC) {
+            /* Preserve the encoder's verified repeated-START ordering. */
             (void)I2C_STAT0(I2C0);
             (void)I2C_DATA(I2C0);
-            I2C_CTL0(I2C0) |= I2C_CTL0_POAP | I2C_CTL0_START;
+            I2C_CTL0(I2C0) |= I2C_CTL0_START;
             driver->phase = SENSOR_I2C_READ_START;
         }
         break;
     case SENSOR_I2C_READ_START:
-        if ((status & I2C_STAT0_SBSEND) != 0u) {
+        if (status & I2C_STAT0_SBSEND) {
             I2C_DATA(I2C0) = (0x36u << 1) | 1u;
             driver->phase = SENSOR_I2C_READ_ADDRESS;
         }
         break;
     case SENSOR_I2C_READ_ADDRESS:
-        if ((status & I2C_STAT0_ADDSEND) != 0u) {
-            I2C_CTL0(I2C0) &= ~I2C_CTL0_ACKEN;
-            (void)I2C_STAT0(I2C0);
+        if (status & I2C_STAT0_ADDSEND) {
+            /* Two-byte DMA receive: hardware NACKs the last byte; the DMA
+             * completion IRQ requests STOP. Disable event IRQs before data. */
+            I2C_CTL1(I2C0) = 48u | I2C_CTL1_ERRIE | I2C_CTL1_DMAON | I2C_CTL1_DMALST;
             (void)I2C_STAT1(I2C0);
-            driver->phase = SENSOR_I2C_READ_BYTES;
+            driver->phase = SENSOR_I2C_RECEIVE;
         }
         break;
-    case SENSOR_I2C_READ_BYTES:
-        if ((status & (I2C_STAT0_BTC | I2C_STAT0_RBNE)) ==
-            (I2C_STAT0_BTC | I2C_STAT0_RBNE)) {
-            I2C_CTL0(I2C0) |= I2C_CTL0_STOP;
-            driver->encoder_high = (uint8_t)I2C_DATA(I2C0);
-            driver->phase = SENSOR_I2C_READ_LOW;
-        }
-        break;
-    case SENSOR_I2C_READ_LOW:
-        if ((status & I2C_STAT0_RBNE) != 0u) {
-            uint16_t low = (uint8_t)I2C_DATA(I2C0);
-            driver->encoder_raw = (uint16_t)(
-                ((uint16_t)driver->encoder_high << 8) | low);
-            driver->encoder_ready = true;
-            driver->phase = SENSOR_I2C_IDLE;
-        }
-        break;
-    default:
-        i2c_fail(driver);
-        break;
+    default: break;
     }
+}
+
+void DMA_Channel0_IRQHandler(void)
+{
+    uint32_t flags = DMA_INTF;
+    DMA_INTC = 0x0fu;
+    sensor_driver_t *driver = active_driver;
+    if (driver == 0 || !driver->in_flight || driver->adc_done) return;
+    if (flags & DMA_INTF_ERRIF) { fail_pair(driver); return; }
+    if (!(flags & DMA_INTF_FTFIF)) return;
+    DMA_CH0CTL = 0;
+    driver->adc_done = true;
+    complete_pair(driver);
+}
+
+void DMA_Channel1_2_IRQHandler(void)
+{
+    uint32_t flags = DMA_INTF >> 8;
+    DMA_INTC = 0x0f00u; /* Channel 2 only; channel 1 is unused. */
+    sensor_driver_t *driver = active_driver;
+    if (driver == 0 || !driver->in_flight) return;
+    if (flags & DMA_INTF_ERRIF) { fail_pair(driver); return; }
+    if (!(flags & DMA_INTF_FTFIF) || driver->phase != SENSOR_I2C_RECEIVE) return;
+    DMA_CH2CTL = 0;
+    I2C_CTL0(I2C0) |= I2C_CTL0_STOP;
+    I2C_CTL1(I2C0) = 48u;
+    driver->phase = SENSOR_I2C_IDLE;
+    driver->encoder_done = true;
+    complete_pair(driver);
 }

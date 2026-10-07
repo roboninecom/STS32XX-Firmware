@@ -2,8 +2,9 @@
 #define ELAPSED_CLOCK_H
 #include <stdint.h>
 
-/* Foreground-only counter extension. Poll more often than one 32-bit cycle
- * wrap (89 s at 48 MHz); the target watchdog expires much earlier. */
+/* Single-owner counter extension. Update more often than one 32-bit cycle
+ * wrap (89 s at 48 MHz). The sensor IRQ owns this clock while enabled;
+ * restart advances it with that IRQ stopped to include flash-maintenance time. */
 typedef struct { uint32_t last_cycles, remainder_cycles, milliseconds; } elapsed_clock_t;
 
 static inline void elapsed_clock_update(elapsed_clock_t *clock, uint32_t cycles)

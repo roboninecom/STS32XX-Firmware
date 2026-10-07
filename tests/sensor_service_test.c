@@ -13,11 +13,9 @@ static void publish_temperature(sensor_service_t *sensor,
                                 register_table_t *registers,
                                 uint16_t raw_temperature)
 {
-    uint16_t adc[3] = {raw_temperature, 400, 1600};
-    uint32_t generation = sensor_service_begin(sensor, registers);
-    sensor_service_encoder_done(sensor, registers, generation, true, 1800);
-    sensor_service_adc_done(sensor, generation, true, adc);
-    assert(sensor_service_publish(sensor, registers, 50u));
+    sensor_pair_t pair = {.valid=true, .encoder_raw=1800,
+        .adc_raw={raw_temperature, 400, 1600}};
+    assert(sensor_service_accept_pair(sensor, registers, &pair, 50u));
 }
 
 static void temperature_validation_test(void)
@@ -72,11 +70,9 @@ int main(void)
     protocol_service_init(&bus, &device, 0, 0);
     sensor_service_t sensor;
     sensor_service_init(&sensor);
-    const uint16_t adc[3] = {0x250u << 2, 400, 1600};
+    sensor_pair_t pair = {.valid=true, .encoder_raw=1800,
+        .adc_raw={0x250u << 2, 400, 1600}};
 
-    uint32_t generation = sensor_service_begin(&sensor, &device.registers);
-    sensor_service_adc_done(&sensor, generation, true, adc);
-    assert(!sensor_service_publish(&sensor, &device.registers, 50u));
     for (unsigned i = 0; i < sizeof(read_telemetry); ++i) {
         assert(protocol_service_feed(&bus, read_telemetry[i]));
     }
@@ -85,36 +81,25 @@ int main(void)
     assert(reply[5] == 0 && reply[11] == 0); /* No partial telemetry. */
     protocol_service_transmit_complete(&bus);
 
-    sensor_service_encoder_done(&sensor, &device.registers, generation, true, 1800);
-    assert(sensor_service_publish(&sensor, &device.registers, 50u));
+    assert(sensor_service_accept_pair(&sensor, &device.registers, &pair, 50u));
     assert(registers_u16(&device.registers, 56) == 0);
     assert(sensor.measurement.position == 1800 && sensor.measurement.current == 0);
     assert(sensor.measurement.voltage == 100 && sensor.measurement.temperature == 0);
     assert(device.registers.byte[62] == 0 && device.registers.byte[63] == 0);
     assert(device.registers.byte[65] == 0);
 
-    /* A failed encoder completion must not publish the ADC-only half. */
-    generation = sensor_service_begin(&sensor, &device.registers);
-    sensor_service_encoder_done(&sensor, &device.registers, generation, false, 0);
-    sensor_service_adc_done(&sensor, generation, true, adc);
-    assert(!sensor_service_publish(&sensor, &device.registers, 50u));
-    assert(device.registers.byte[65] == 2 && registers_u16(&device.registers, 56) == 0);
-    assert(sensor.measurement.position == 1800); /* Rejected pair is never consumed. */
-    generation = sensor_service_begin(&sensor, &device.registers);
-    assert(sensor.acquisition.missed_pairs == 1);
-    sensor_service_encoder_done(&sensor, &device.registers, generation, true, 1801);
-    sensor_service_adc_done(&sensor, generation, false, 0);
-    assert(!sensor_service_publish(&sensor, &device.registers, 50u));
-    generation = sensor_service_begin(&sensor, &device.registers);
-    assert(sensor.acquisition.missed_pairs == 2);
-    /* A completion from the prior period cannot mark the new period valid or
-     * set an encoder fault. The driver passes the originating generation. */
-    device.registers.byte[65] &= (uint8_t)~0x02u;
-    sensor_service_encoder_done(&sensor, &device.registers, generation - 1u,
-                                false, 0);
-    sensor_service_adc_done(&sensor, generation - 1u, true, adc);
-    assert(!sensor.acquisition.encoder_ready && !sensor.acquisition.adc_ready);
-    assert((device.registers.byte[65] & 0x02u) == 0u);
+    /* Invalid DMA results and out-of-range values cannot change history. */
+    pair.valid = false;
+    assert(!sensor_service_accept_pair(&sensor, &device.registers, &pair, 50u));
+    pair.valid = true;
+    pair.encoder_raw = 4096;
+    assert(!sensor_service_accept_pair(&sensor, &device.registers, &pair, 50u));
+    pair.encoder_raw = 1802;
+    pair.adc_raw[1] = 4096;
+    assert(!sensor_service_accept_pair(&sensor, &device.registers, &pair, 50u));
+    pair.adc_raw[1] = 400;
+    assert(device.registers.byte[65] == 2 && sensor.measurement.position == 1800);
+    assert(sensor.completed_pairs == 1);
 
     /* Sensor service owns typed measurements. The application control cycle is
      * the sole normal telemetry publisher, so a concurrent wire read still
@@ -122,9 +107,7 @@ int main(void)
     for (unsigned i = 0; i + 1 < sizeof(read_telemetry); ++i) {
         assert(protocol_service_feed(&bus, read_telemetry[i]));
     }
-    sensor_service_encoder_done(&sensor, &device.registers, generation, true, 1802);
-    sensor_service_adc_done(&sensor, generation, true, adc);
-    assert(sensor_service_publish(&sensor, &device.registers, 50u));
+    assert(sensor_service_accept_pair(&sensor, &device.registers, &pair, 50u));
     assert(protocol_service_feed(&bus, read_telemetry[sizeof(read_telemetry) - 1]));
     reply = finish_read(&bus, &length);
     assert(reply[4] == 0 && reply[5] == 0 && reply[6] == 0);
@@ -140,35 +123,25 @@ int main(void)
     assert(sensor_service_calibrate(&sensor, &device.registers, -4095));
     assert(registers_u16(&device.registers, 31) == 0);
     assert(sensor.measurement.position == 1);
-    generation = sensor_service_begin(&sensor, &device.registers);
-    sensor_service_encoder_done(&sensor, &device.registers, generation, true, 1802);
-    sensor_service_adc_done(&sensor, generation, true, adc);
-    assert(sensor_service_publish(&sensor, &device.registers, 50u));
+    pair.encoder_raw = 1802;
+    assert(sensor_service_accept_pair(&sensor, &device.registers, &pair, 50u));
     assert(sensor.measurement.position == 1);
-    /* Maintenance cancels partial acquisition, but not runtime calibration. */
-    generation = sensor_service_begin(&sensor, &device.registers);
-    sensor_service_adc_done(&sensor, generation, true, adc);
+    /* Maintenance clears accepted history, but not runtime calibration. */
     sensor_service_restart(&sensor);
-    assert(!sensor_service_publish(&sensor, &device.registers, 50u));
+    assert(sensor.completed_pairs == 0);
     assert(sensor.runtime_calibration_offset_valid);
-    generation = sensor_service_begin(&sensor, &device.registers);
-    sensor_service_encoder_done(&sensor, &device.registers, generation, true, 1802);
-    sensor_service_adc_done(&sensor, generation, true, adc);
-    assert(sensor_service_publish(&sensor, &device.registers, 50u));
+    pair.encoder_raw = 1802;
+    assert(sensor_service_accept_pair(&sensor, &device.registers, &pair, 50u));
     assert(sensor.measurement.position == 1);
     sensor_service_init(&sensor);
     assert(!sensor.runtime_calibration_offset_valid);
-    generation = sensor_service_begin(&sensor, &device.registers);
-    sensor_service_encoder_done(&sensor, &device.registers, generation, true, 1802);
-    sensor_service_adc_done(&sensor, generation, true, adc);
-    assert(sensor_service_publish(&sensor, &device.registers, 50u));
+    pair.encoder_raw = 1802;
+    assert(sensor_service_accept_pair(&sensor, &device.registers, &pair, 50u));
     assert(sensor.measurement.position == 1802);
     assert(sensor_service_calibrate(&sensor, &device.registers, -4095));
     sensor_service_offset_written(&sensor);
-    generation = sensor_service_begin(&sensor, &device.registers);
-    sensor_service_encoder_done(&sensor, &device.registers, generation, true, 1802);
-    sensor_service_adc_done(&sensor, generation, true, adc);
-    assert(sensor_service_publish(&sensor, &device.registers, 50u));
+    pair.encoder_raw = 1802;
+    assert(sensor_service_accept_pair(&sensor, &device.registers, &pair, 50u));
     assert(sensor.measurement.position == 1802);
     puts("Sensor service event/traffic tests: OK");
 }

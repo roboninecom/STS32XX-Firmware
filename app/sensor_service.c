@@ -42,7 +42,8 @@ static void validate_temperature(sensor_service_t *service, uint8_t raw)
 
 void sensor_service_restart(sensor_service_t *service)
 {
-    acquisition_init(&service->acquisition);
+    service->completed_pairs = 0;
+    service->encoder_raw = 0;
     encoder_tracker_init(&service->encoder);
     speed_tracker_init(&service->speed);
     adc_tracker_init(&service->adc);
@@ -52,7 +53,6 @@ void sensor_service_restart(sensor_service_t *service)
     service->temperature_candidate_count = 0u;
     service->temperature_valid = false;
     service->temperature_spikes = 0u;
-    service->generation = 0;
 }
 
 void sensor_service_init(sensor_service_t *service)
@@ -62,42 +62,19 @@ void sensor_service_init(sensor_service_t *service)
     service->runtime_calibration_offset_valid = false;
 }
 
-uint32_t sensor_service_begin(sensor_service_t *service, register_table_t *registers)
+/* Keep filter scratch separate from the subsequent control/planning stack. */
+__attribute__((noinline)) bool sensor_service_accept_pair(sensor_service_t *service, register_table_t *registers,
+                                const sensor_pair_t *pair, uint8_t motion_rate_scale)
 {
-    if (service->acquisition.pending && !service->acquisition.encoder_ready) {
+    /* Every input is unsigned 12-bit; one combined mask validates all four. */
+    uint16_t raw_bits = pair->encoder_raw | pair->adc_raw[0] |
+                        pair->adc_raw[1] | pair->adc_raw[2];
+    if (!pair->valid || raw_bits > 4095u) {
         registers->byte[REG_SERVO_STATUS] |= 0x02u;
+        return false;
     }
-    service->generation = acquisition_begin(&service->acquisition);
-    return service->generation;
-}
-
-void sensor_service_encoder_done(sensor_service_t *service,
-                                 register_table_t *registers,
-                                 uint32_t generation, bool valid, uint16_t raw_angle)
-{
-    if (!acquisition_encoder_done(&service->acquisition, generation,
-                                  valid, raw_angle) &&
-        generation == service->generation) {
-        registers->byte[REG_SERVO_STATUS] |= 0x02u;
-    }
-}
-
-void sensor_service_adc_done(sensor_service_t *service,
-                             uint32_t generation, bool valid,
-                             const uint16_t samples[3])
-{
-    (void)acquisition_adc_done(&service->acquisition, generation,
-                               valid, samples);
-}
-
-bool sensor_service_publish(sensor_service_t *service,
-                            register_table_t *registers,
-                            uint8_t motion_rate_scale)
-{
-    uint16_t raw;
-    uint16_t samples[3];
-    if (!acquisition_take_pair(&service->acquisition, &raw, samples)) return false;
-
+    uint16_t raw = pair->encoder_raw;
+    const uint16_t *samples = pair->adc_raw;
     int32_t position;
     uint16_t encoded_position;
     bool mode_changed = service->encoder.mode_valid &&
@@ -117,6 +94,8 @@ bool sensor_service_publish(sensor_service_t *service,
     if (!adc_tracker_sample(&service->adc, samples, complementary, &reading)) {
         return false;
     }
+    service->encoder_raw = raw;
+    ++service->completed_pairs;
     validate_temperature(service, reading.temperature);
     registers->byte[REG_SERVO_STATUS] &= (uint8_t)~0x02u;
     if (mode_changed) speed_tracker_init(&service->speed);
@@ -138,11 +117,11 @@ bool sensor_service_calibrate(sensor_service_t *service,
                               register_table_t *registers,
                               int16_t desired_position)
 {
-    if (service->acquisition.completed_pairs == 0u ||
+    if (service->completed_pairs == 0u ||
         (registers->byte[REG_SERVO_STATUS] & 0x02u) != 0u) return false;
     bool reverse = (registers->byte[REG_CONFIGURATION_FLAGS] & 0x80u) != 0u;
     int32_t offset;
-    if (!encoder_calibration_offset(service->acquisition.encoder_raw,
+    if (!encoder_calibration_offset(service->encoder_raw,
                                     reverse, desired_position, &offset)) return false;
     uint16_t encoded;
     /* The factory offset codec stores zero for an unencodable positive
@@ -157,7 +136,7 @@ bool sensor_service_calibrate(sensor_service_t *service,
     speed_tracker_init(&service->speed);
     int32_t position;
     if (!encoder_tracker_sample(&service->encoder,
-                                service->acquisition.encoder_raw,
+                                service->encoder_raw,
                                 reverse,
                                 offset, registers->byte[REG_OPERATION_MODE], &position)) return false;
     if (register_encode_signed(position, 15u, &encoded))

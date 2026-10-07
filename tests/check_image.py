@@ -26,6 +26,14 @@ for line in symbol_text.splitlines():
     fields = line.split()
     if len(fields) >= 8 and fields[0].endswith(":") and re.fullmatch(r"[0-9a-fA-F]+", fields[1]):
         symbols[fields[7]] = int(fields[1], 16)
+# Sensor acquisition runs in these IRQs in every image profile. Verify the
+# actual vector contents, not merely that the handlers survived linking.
+for slot, name in ((15, "SysTick_Handler"), (25, "DMA_Channel0_IRQHandler"),
+                   (26, "DMA_Channel1_2_IRQHandler"), (39, "I2C0_EV_IRQHandler"),
+                   (48, "I2C0_ER_IRQHandler")):
+    vector = struct.unpack_from("<I", blob, slot * 4)[0]
+    assert vector == symbols[name] | 1, (name, hex(vector))
+    assert vector != symbols["Default_Handler"] | 1, name
 assert symbols["_end"] + symbols["_min_stack"] <= 0x20001000
 assert symbols["_min_stack"] >= 1280
 print(f"Image: {len(blob)} bytes; SP=0x{stack:08x}, reset=0x{reset:08x}; bounds OK")

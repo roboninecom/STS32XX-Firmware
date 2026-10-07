@@ -1,7 +1,7 @@
 #ifndef SENSOR_SERVICE_H
 #define SENSOR_SERVICE_H
 
-#include "acquisition.h"
+#include "sensor_sample.h"
 #include "registers.h"
 #include "sensing.h"
 
@@ -18,7 +18,8 @@ typedef struct {
 } sensor_measurement_t;
 
 typedef struct {
-    acquisition_t acquisition;
+    uint32_t completed_pairs;
+    uint16_t encoder_raw;
     encoder_tracker_t encoder;
     speed_tracker_t speed;
     adc_tracker_t adc;
@@ -30,26 +31,16 @@ typedef struct {
     uint8_t temperature_candidate_count;
     bool temperature_valid;
     uint16_t temperature_spikes;
-    uint32_t generation;
     int32_t runtime_calibration_offset;
     bool runtime_calibration_offset_valid;
 } sensor_service_t;
 
-/* Cold boot discards runtime-only calibration. Maintenance restart clears
- * acquisition/history after the driver has cancelled all in-flight work,
- * preserving the calibration that remains authoritative until a real reset. */
+/* Consume a complete driver mailbox; there is no asynchronous app-level join. */
+bool sensor_service_accept_pair(sensor_service_t *service, register_table_t *registers,
+                                const sensor_pair_t *pair, uint8_t motion_rate_scale);
+/* Cold boot clears calibration; maintenance restart preserves it. */
 void sensor_service_init(sensor_service_t *service);
 void sensor_service_restart(sensor_service_t *service);
-uint32_t sensor_service_begin(sensor_service_t *service, register_table_t *registers);
-void sensor_service_encoder_done(sensor_service_t *service,
-                                 register_table_t *registers,
-                                 uint32_t generation, bool valid, uint16_t raw_angle);
-void sensor_service_adc_done(sensor_service_t *service,
-                             uint32_t generation, bool valid,
-                             const uint16_t samples[3]);
-bool sensor_service_publish(sensor_service_t *service,
-                            register_table_t *registers,
-                            uint8_t motion_rate_scale);
 bool sensor_service_calibrate(sensor_service_t *service,
                               register_table_t *registers,
                               int16_t desired_position);

@@ -59,35 +59,15 @@ bool sensor_driver_restart(sensor_driver_t *driver, bool complementary)
     return restart_success;
 }
 uint32_t sensor_driver_ticks(const sensor_driver_t *driver) { return driver->ticks; }
-static bool sensor_period, sensor_can_begin = true;
-static unsigned sensor_begins;
-bool sensor_driver_timer_tick(sensor_driver_t *driver)
-{ (void)driver; bool elapsed = sensor_period; sensor_period = false; return elapsed; }
-bool sensor_driver_can_begin(const sensor_driver_t *driver)
-{ (void)driver; return sensor_can_begin; }
-void sensor_driver_begin(sensor_driver_t *driver, uint32_t generation)
-{ driver->generation = generation; ++sensor_begins; }
-bool sensor_driver_take_encoder(sensor_driver_t *driver, uint32_t *generation,
-                                bool *valid, uint16_t *raw)
+void sensor_driver_stop(sensor_driver_t *driver) { driver->enabled = false; }
+void sensor_driver_service(sensor_driver_t *driver) { (void)driver; }
+bool sensor_driver_take_pair(sensor_driver_t *driver, sensor_pair_t *pair)
 {
-    if (!driver->encoder_ready && !driver->encoder_failed) return false;
-    *generation = driver->generation;
-    *valid = driver->encoder_ready;
-    *raw = driver->encoder_raw;
-    driver->encoder_ready = driver->encoder_failed = false;
+    if (!driver->ready) return false;
+    *pair = driver->completed;
+    driver->ready = false;
     return true;
 }
-bool sensor_driver_take_adc(sensor_driver_t *driver, uint32_t *generation,
-                            bool *valid, uint16_t samples[3])
-{
-    if (!driver->adc_ready && !driver->adc_failed) return false;
-    *generation = driver->generation;
-    *valid = driver->adc_ready;
-    for (unsigned i = 0; i < 3; ++i) samples[i] = driver->adc_dma[i];
-    driver->adc_ready = driver->adc_failed = false;
-    return true;
-}
-void sensor_driver_poll(sensor_driver_t *driver) { (void)driver; }
 bool storage_service_commit(const storage_mirror_t *mirror)
 {
     (void)mirror;
@@ -228,8 +208,14 @@ static void arm_extension_transaction_test(void)
     arm_state.sensor_service.temperature_spikes = 0x1234u;
     arm_state.sensor_service.temperature_candidate_count = 1u;
     packet.instruction = 0x91;
-    app_runtime_service_control_pair(&arm_state);
+    app_runtime_service_control_pair(&arm_state, arm_state.sensors.ticks);
     assert(arm_state.arm.armed); /* Torque-off preparation must survive a pair. */
+    arm_state.sensors.ticks = 14;
+    assert(arm_control_gravity(&arm_state.arm, 7, 1, 10, 100, 100, 14));
+    app_runtime_service_control_pair(&arm_state, 13);
+    assert(arm_state.arm.last_tick == 14 && !arm_state.arm.gravity_stale);
+    assert(arm_state.arm_sample_tick == 13 && arm_state.last_good_tick == 13);
+
     arm_state.sensors.ticks = 14;
     packet.param_count = 19;
     memset(packet.params, 0, 21);
@@ -477,63 +463,40 @@ static void acquisition_deadline_test(void)
     bus_service_init(&sample.bus, &sample.device, command_service_apply, &sample, 0);
     sensor_service_init(&sample.sensor_service);
     sample.sensor_active = true;
-    uint32_t generation = sensor_service_begin(&sample.sensor_service, &sample.device.registers);
-    sensor_driver_begin(&sample.sensors, generation);
-    unsigned begins = sensor_begins;
-
-    /* A new period alone must not cancel a read within its driver deadline. */
+    sample.sensors.in_flight = true;
     sample.bus.protocol.parser.packet = (protocol_packet_t){
         .id=PROTOCOL_BROADCAST, .instruction=3, .param_count=2, .params={50, 7}};
     sample.bus.protocol.command_pending = true;
     sample.sensors.ticks = 1;
-    sensor_period = true;
-    sensor_can_begin = false;
-    app_runtime_poll(&sample);
-    assert(sensor_begins == begins && sample.sensor_service.generation == generation);
-    assert(sample.sensor_service.acquisition.missed_pairs == 0);
-    assert(sample.bus.protocol.command_pending && sample.device.registers.byte[50] != 7);
-
-    /* Drain the completed old pair before reusing its generation/buffers. */
-    sample.sensors.encoder_ready = sample.sensors.adc_ready = true;
-    sample.sensors.encoder_raw = 1800;
-    sample.sensors.adc_dma[0] = 0x250u << 2;
-    sample.sensors.adc_dma[1] = 400;
-    sample.sensors.adc_dma[2] = 1600;
-    sample.sensors.ticks = 2;
-    sensor_period = sensor_can_begin = true;
-    app_runtime_service_sensors(&sample);
-    assert(sample.sensor_service.acquisition.completed_pairs == 1);
-    assert(sample.sensor_service.acquisition.missed_pairs == 0);
-    assert(sample.last_good_tick == 2 && sample.sensor_service.measurement.position == 1800);
-    assert(sensor_begins == begins + 1 && sample.sensor_service.generation == generation + 1);
-
-    /* Complete that pair between ticks: the held command can now run. */
-    sample.sensors.encoder_ready = sample.sensors.adc_ready = true;
     app_runtime_poll(&sample);
     assert(!sample.bus.protocol.command_pending && sample.device.registers.byte[50] == 7);
-    assert(sample.sensor_service.acquisition.completed_pairs == 2);
+    assert(sample.sensor_service.completed_pairs == 0);
 
-    /* A sensor fault must also allow commands through during a pending pair,
-     * so recovery and torque-off commands cannot be starved. */
-    sample.sensors.ticks = 3;
-    sensor_period = true;
-    app_runtime_poll(&sample);
-    sample.bus.protocol.parser.packet.params[1] = 8;
-    sample.bus.protocol.command_pending = true;
-    sample.sensor_service.acquisition.fault = true;
-    app_runtime_poll(&sample);
-    assert(!sample.bus.protocol.command_pending && sample.device.registers.byte[50] == 8);
-    sample.sensor_service.acquisition.fault = false;
+    sample.sensors.completed = (sensor_pair_t){.tick_ms=1, .valid=true,
+        .encoder_raw=1800, .adc_raw={0x250u << 2, 400, 1600}};
+    sample.sensors.ready = true;
+    sample.sensors.ticks = 2;
+    app_runtime_service_sensors(&sample);
+    assert(sample.sensor_service.completed_pairs == 1);
+    assert(sample.last_good_tick == 1 && sample.sensor_service.measurement.position == 1800);
 
-    /* A genuinely expired pair is replaced; the unchanged age >2 guard
-     * still revokes output if no valid replacement arrives. */
+    /* A recent DMA completion cannot make a genuinely old sample fresh. */
+    sample.sensors.completed.tick_ms = 1;
+    sample.sensors.ready = true;
     sample.sensors.ticks = 4;
-    sensor_period = true;
+    sample.output.phase = OUTPUT_READY;
     app_runtime_service_sensors(&sample);
-    assert(sample.sensor_service.acquisition.missed_pairs == 1);
-    sample.sensors.ticks = 5;
+    assert(sample.sensor_service.completed_pairs == 1);
+    assert(sample.last_good_tick == 1 && sample.stale_reported);
+    assert(sample.output.phase == OUTPUT_REQUALIFYING);
+    assert(sample.device.registers.byte[REG_SERVO_STATUS] & 2u);
+
+    sample.sensors.completed.tick_ms = 4;
+    sample.sensors.completed.valid = false;
+    sample.sensors.ready = true;
+    sample.output.phase = OUTPUT_READY;
     app_runtime_service_sensors(&sample);
-    assert(sample.stale_reported && sample.last_good_tick == 2);
+    assert(sample.output.phase == OUTPUT_REQUALIFYING);
 }
 
 static uint16_t wire_u16(const uint8_t *p)
@@ -562,7 +525,7 @@ static void sensor_only_feedback_test(void)
     for(unsigned selected=0;selected<2;selected++) {
         state.arm_selected=selected;
         state.sensors.ticks=selected+1;
-        app_runtime_service_control_pair(&state);
+        app_runtime_service_control_pair(&state, state.sensors.ticks);
         protocol_result_t reply=read_arm(&state,0xC2,ARM_TUNING_BYTES);
         const uint8_t *data=reply.response+6;
         assert(reply.response[5]==0 && !(data[12]&1u));
@@ -704,7 +667,7 @@ static void final_effort_feedback_test(void)
             assert(arm_control_gravity(&sample.arm,1,1,(int16_t)(direction*50),10000,100,0));
             arm_motion_init(&sample.arm.motion, (100 + direction * 100) * 256);
             sample.sensors.ticks = 1;
-            app_runtime_service_control_pair(&sample);
+            app_runtime_service_control_pair(&sample, sample.sensors.ticks);
             assert(sample.arm_result.requested_effort == direction * 1000);
             assert(sample.arm_applied_effort == direction * 970);
             assert(sample.arm_result.saturated);
@@ -714,7 +677,7 @@ static void final_effort_feedback_test(void)
             coherent_feedback_test(&sample,direction);
             bridge_accept = false;
             sample.sensors.ticks = 2;
-            app_runtime_service_control_pair(&sample);
+            app_runtime_service_control_pair(&sample, sample.sensors.ticks);
             assert(sample.arm_applied_effort == 0 && !sample.arm_drive_enabled);
             assert(!sample.arm.armed && sample.arm.integral_effort_q16_ms == 0);
             protocol_result_t stopped=read_arm(&sample,0xC2,ARM_TUNING_BYTES);
@@ -891,13 +854,13 @@ int main(void)
     registers_set_u16(regs, 9, 200);
     registers_set_u16(regs, 11, 100);
     state.motion.pending = true;
-    app_runtime_service_control_pair(&state);
+    app_runtime_service_control_pair(&state, state.sensors.ticks);
     assert(state.motion_rejected);
     assert(!state.control.bridge.previous_permit);
     registers_set_u16(regs, 9, 0);
     registers_set_u16(regs, 11, 0);
     state.motion.pending = true;
-    app_runtime_service_control_pair(&state);
+    app_runtime_service_control_pair(&state, state.sensors.ticks);
     assert(!state.motion_rejected);
     assert(registers_u16(regs, 56) == 100);
     assert(registers_u16(regs, 69) == 7);
@@ -907,7 +870,7 @@ int main(void)
     regs->byte[84] = 1;
     state.control_initialized = false; /* Offset/maintenance reanchor. */
     state.motion.pending = true;
-    app_runtime_service_control_pair(&state);
+    app_runtime_service_control_pair(&state, state.sensors.ticks);
     assert(!state.motion_rejected);
     assert(state.control.limits.rate == 50);
     assert(state.control.limits.maximum_velocity == 150);
@@ -962,7 +925,7 @@ int main(void)
     assert(lease.drive_lease_valid && lease.drive_lease_deadline == 400);
     assert(lease.output.phase == OUTPUT_READY); /* Heartbeat does not revoke. */
     lease.sensors.ticks = 400;
-    app_runtime_service_control_pair(&lease);
+    app_runtime_service_control_pair(&lease, lease.sensors.ticks);
     assert(!lease.drive_lease_valid && lease.device.registers.byte[40] == 0);
     assert(lease.output.phase == OUTPUT_REQUALIFYING);
     lease.device.registers.byte[40] = 1;
@@ -989,7 +952,7 @@ int main(void)
     state.output.phase = OUTPUT_READY;
     state.output.fresh_pairs = 10;
     bridge_accept = false;
-    app_runtime_service_control_pair(&state);
+    app_runtime_service_control_pair(&state, state.sensors.ticks);
     assert(state.output.phase == OUTPUT_FAILED && state.output.fresh_pairs == 0);
     bridge_accept = true;
 

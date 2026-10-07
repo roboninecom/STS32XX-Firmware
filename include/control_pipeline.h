@@ -52,6 +52,14 @@ bool control_pipeline_accept(control_pipeline_t *state,
                              const motion_request_t *request,
                              const motion_limits_t *limits,
                              bool position_goal_changed);
+/* Both controllers submit native-polarity effort through this final portable
+ * protection/bridge gate. Brake permission is explicit because only legacy
+ * torque=2 supports that behaviour. Platform PWM mapping remains outside it. */
+void control_pipeline_output(control_pipeline_t *state,
+                             const protection_config_t *protection,
+                             const control_sample_t *sample, control_result_t *result,
+                             bool drive_permitted, bool brake_permitted,
+                             bool complementary);
 control_result_t control_pipeline_step(control_pipeline_t *state,
                                        const controller_settings_t *controllers,
                                        const protection_config_t *protection,

@@ -68,14 +68,11 @@ static void put_u32(uint8_t *p, uint32_t v)
     p[3] = (uint8_t)(v >> 24);
 }
 
-void arm_extension_publish_sample(app_state_t *state)
+static void encode_sample(app_state_t *state)
 {
     const arm_control_t *arm = &state->arm;
     const arm_result_t *sample = &state->arm_result;
     const sensor_service_t *sensor = &state->sensor_service;
-    /* Same-tick calls reuse output without computing new P/D/I. Retain the
-     * last complete sample; the read gate invalidates it if output is revoked. */
-    if (state->arm_selected && arm->armed && !sample->advanced) return;
     bool computed = state->arm_selected && sample->advanced;
     uint8_t *out = state->arm_feedback;
     for (unsigned i = 0; i < ARM_TUNING_BYTES; ++i) out[i] = 0;
@@ -92,7 +89,7 @@ void arm_extension_publish_sample(app_state_t *state)
      * torque-off/legacy health checks available without claiming usable control.
      * A computed fault sample retains its terms despite subsequent disarming. */
     put_u32(out, computed ? state->arm_sample_tick : state->last_good_tick);
-    put_u16(out + 4, ++state->arm_feedback_sequence);
+    put_u16(out + 4, state->arm_feedback_sequence);
     put_u16(out + 12, flags);
     put_u32(out + 14, (uint32_t)sensor->measurement.arm_position * 256u);
     put_u16(out + 24, (uint16_t)sensor->measurement.current);
@@ -118,6 +115,16 @@ void arm_extension_publish_sample(app_state_t *state)
     put_u16(out + 54, arm->overrun_count);
 }
 
+void arm_extension_publish_sample(app_state_t *state)
+{
+    /* Keep sequence tied to acquisition, including legacy health samples. */
+    if (state->arm_selected && state->arm.armed && !state->arm_result.advanced) return;
+    ++state->arm_feedback_sequence;
+    /* Preserve computed terms at their control boundary. Legacy health has no
+     * arm terms and can be encoded from the same foreground-owned sample on read. */
+    if (state->arm_selected) encode_sample(state);
+}
+
 static uint8_t read_extension(app_state_t *state, uint8_t address,
                               uint8_t count, uint8_t *out)
 {
@@ -137,6 +144,7 @@ static uint8_t read_extension(app_state_t *state, uint8_t address,
     }
     if ((address == ARM_ADDRESS_FEEDBACK && count == ARM_FEEDBACK_BYTES) ||
         (address == ARM_ADDRESS_TUNING && count == ARM_TUNING_BYTES)) {
+        if (!state->arm_selected) encode_sample(state);
         for (unsigned i = 0; i < count; ++i) out[i] = state->arm_feedback[i];
         uint32_t tick = (uint32_t)get_i32(out);
         uint32_t age = sensor_driver_ticks(&state->sensors) - tick;

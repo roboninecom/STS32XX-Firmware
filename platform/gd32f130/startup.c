@@ -7,6 +7,11 @@ extern uint32_t _estack, _sidata, _sdata, _edata, _sbss, _ebss;
 int firmware_main(void);
 void Reset_Handler(void);
 void Default_Handler(void);
+void SysTick_Handler(void);
+void DMA_Channel0_IRQHandler(void);
+void DMA_Channel1_2_IRQHandler(void);
+void I2C0_EV_IRQHandler(void);
+void I2C0_ER_IRQHandler(void);
 void DMA_Channel3_4_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 void TIMER15_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 void USART1_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
@@ -20,12 +25,14 @@ const uintptr_t vector_table[51] = {
     [3] = (uintptr_t)Default_Handler,
     [11] = (uintptr_t)Default_Handler,
     [14] = (uintptr_t)Default_Handler,
-    [15] = (uintptr_t)Default_Handler,
+    [15] = (uintptr_t)SysTick_Handler,
+    [16 + DMA_Channel0_IRQn] = (uintptr_t)DMA_Channel0_IRQHandler,
+    [16 + DMA_Channel1_2_IRQn] = (uintptr_t)DMA_Channel1_2_IRQHandler,
     [16 + DMA_Channel3_4_IRQn] = (uintptr_t)DMA_Channel3_4_IRQHandler,
     [16 + TIMER15_IRQn] = (uintptr_t)TIMER15_IRQHandler,
-    [16 + 23] = (uintptr_t)Default_Handler,
+    [16 + I2C0_EV_IRQn] = (uintptr_t)I2C0_EV_IRQHandler,
     [16 + USART1_IRQn] = (uintptr_t)USART1_IRQHandler,
-    [16 + 32] = (uintptr_t)Default_Handler,
+    [16 + I2C0_ER_IRQn] = (uintptr_t)I2C0_ER_IRQHandler,
 };
 
 __attribute__((section(".text.Reset_Handler"), noreturn))
