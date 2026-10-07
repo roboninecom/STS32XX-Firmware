@@ -1,0 +1,37 @@
+{
+  "captured_utc": "2026-09-25T07:25:14.173603+00:00",
+  "port": "/dev/cu.usbmodem5AE60863271",
+  "servo_id": 2,
+  "diagnostic_image_sha256": "94490e6cac7e6b196092157191b7ddb4956c1f08b2990674f4988e94ce05b5ee",
+  "address_start": "0x08007000",
+  "length": 2048,
+  "readback_sha256": "587c2cfb6357369915bd0c4c53f6dc0e3513007b051a1c49b61c8bc317294259",
+  "passes": [
+    {
+      "pass": 0,
+      "sha256": "587c2cfb6357369915bd0c4c53f6dc0e3513007b051a1c49b61c8bc317294259",
+      "length": 2048
+    },
+    {
+      "pass": 1,
+      "sha256": "587c2cfb6357369915bd0c4c53f6dc0e3513007b051a1c49b61c8bc317294259",
+      "length": 2048
+    }
+  ],
+  "window_registers": "73..86",
+  "selector_register": 50,
+  "selector_restored": true,
+  "writes_to_flash": false,
+  "physical_pages": [
+    {
+      "start": "0x08007000",
+      "sha256": "5f4ecdb7b71c3e403983fe405cddcdc2f2576b655fdb3e80d94a6f7c32e58bc2",
+      "non_ff_bytes": 0
+    },
+    {
+      "start": "0x08007400",
+      "sha256": "0981fd2af19e8511e59898a379dea9649ba314917a5feaf5014277b0ffac7fc7",
+      "non_ff_bytes": 94
+    }
+  ]
+}

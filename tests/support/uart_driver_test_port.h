@@ -1,0 +1,48 @@
+#ifndef UART_DRIVER_TEST_PORT_H
+#define UART_DRIVER_TEST_PORT_H
+#include <stdint.h>
+/* Independent GD32 address/bit expectations for the fake MMIO bank. */
+enum {
+    HW_USART = 0x40004400u, HW_DMA = 0x40020000u, HW_RCU = 0x40021000u,
+    HW_GPIOA = 0x48000000u, HW_TIMER15 = 0x40014400u,
+    HW_USART_CTL0 = HW_USART + 0x00u, HW_USART_CTL2 = HW_USART + 0x08u,
+    HW_USART_BAUD = HW_USART + 0x0cu, HW_USART_STAT = HW_USART + 0x1cu,
+    HW_USART_INTC = HW_USART + 0x20u, HW_USART_RDATA = HW_USART + 0x24u,
+    HW_USART_TDATA = HW_USART + 0x28u,
+    HW_DMA_INTF = HW_DMA + 0x00u, HW_DMA_INTC = HW_DMA + 0x04u,
+    HW_DMA_TX_CTL = HW_DMA + 0x44u, HW_DMA_TX_COUNT = HW_DMA + 0x48u,
+    HW_DMA_TX_PERIPHERAL = HW_DMA + 0x4cu, HW_DMA_TX_MEMORY = HW_DMA + 0x50u,
+    HW_DMA_RX_CTL = HW_DMA + 0x58u, HW_DMA_RX_COUNT = HW_DMA + 0x5cu,
+    HW_DMA_RX_PERIPHERAL = HW_DMA + 0x60u, HW_DMA_RX_MEMORY = HW_DMA + 0x64u,
+    HW_RCU_AHBEN = HW_RCU + 0x14u, HW_RCU_APB2EN = HW_RCU + 0x18u,
+    HW_RCU_APB1EN = HW_RCU + 0x1cu,
+    HW_GPIOA_CTL = HW_GPIOA + 0x00u, HW_GPIOA_SPEED = HW_GPIOA + 0x08u,
+    HW_GPIOA_AF = HW_GPIOA + 0x20u,
+    HW_TIMER15_DMAINTEN = HW_TIMER15 + 0x0cu, HW_TIMER15_CREP = HW_TIMER15 + 0x30u,
+    HW_TIMER15_CTL = HW_TIMER15 + 0x00u, HW_TIMER15_INTF = HW_TIMER15 + 0x10u,
+    HW_TIMER15_SWEVG = HW_TIMER15 + 0x14u,
+    HW_TIMER15_PSC = HW_TIMER15 + 0x28u, HW_TIMER15_CAR = HW_TIMER15 + 0x2cu,
+    HW_NVIC_ISER = 0xe000e100u, HW_NVIC_ICER = 0xe000e180u,
+    HW_NVIC_ISPR = 0xe000e200u, HW_NVIC_PRIO = 0xe000e400u,
+    HW_CYCLE_COUNTER = 0xe0001004u,
+    HW_TIMER15_IRQ = 21u,
+    HW_DMA_RX_IRQ = 11u, HW_DMA_RX_FTF = 1u << 17, HW_DMA_RX_ERR = 1u << 19,
+    HW_DMA_RX_FLAGS = 0xfu << 16,
+    HW_USART_UEN = 1u, HW_USART_REN = 1u << 2, HW_USART_TEN = 1u << 3,
+    HW_USART_TCIE = 1u << 6, HW_USART_IDLEIE = 1u << 4, HW_USART1_IRQ = 28u,
+    HW_USART_HDEN = 1u << 3, HW_USART_DENR = 1u << 6, HW_USART_DENT = 1u << 7,
+    HW_USART_RX_ERRORS = 0x0fu, HW_USART_IDLEF = 1u << 4, HW_USART_TC = 1u << 6,
+    HW_USART_CLOCK_HZ = 48000000u,
+    HW_DMA_TX_CONFIG = 0x90u, HW_DMA_RX_CONFIG = 0x30afu,
+    HW_DMA_ENABLE = 1u, HW_TIMER_ONE_PULSE = 1u << 3,
+    HW_TIMER_ENABLE = 1u, HW_TIMER_UPDATE = 1u,
+    HW_TIMER_UPDATE_IRQ = 1u, HW_IRQ_PRIORITY = 0x40u,
+    HW_DMA_CLOCK = 1u, HW_USART_CLOCK = 1u << 17,
+    HW_TIMER_CLOCK = 1u << 17, HW_PA2_AF = 0x20u,
+    HW_PA2_SPEED = 0x10u, HW_PA2_AF1 = 0x100u,
+};
+
+volatile uint32_t *uart_test_register(uint32_t address);
+#define REG32(address) (*uart_test_register(address))
+#define REG8(address) (*(volatile uint8_t *)uart_test_register(address))
+#endif

@@ -1,0 +1,18 @@
+{
+  "source": "../../archive/2026-10-03-tuning-reset/docs/hardware-evidence/2026-09-25-initial-snapshot.json",
+  "provenance": "Pre-flash test target, reported 9.3 / 3.10; installed binary unverified",
+  "baud": 1000000,
+  "id": 2,
+  "exchanges": [
+    {
+      "name": "ping",
+      "request_hex": "ffff020201fa",
+      "response_hex": "ffff020200fb"
+    },
+    {
+      "name": "read_0_86",
+      "request_hex": "ffff0204020057a0",
+      "response_hex": "ffff025900030a000903020000010000ff0f50a028e8035c2c2f20200018000101e60001ab070014fa500ac8c80000000000000000e8030000000000010e00000000007e220000000e00000000000000000000ffff010f320182fa145c"
+    }
+  ]
+}
