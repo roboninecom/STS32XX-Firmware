@@ -9,7 +9,7 @@ MEMORY {
 }
 
 _estack = ORIGIN(RAM) + LENGTH(RAM);
-_min_stack = 0x400;
+_min_stack = 0x500;
 
 SECTIONS {
     .isr_vector ORIGIN(FLASH) : {

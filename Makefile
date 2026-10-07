@@ -57,7 +57,8 @@ OBJECTS := $(patsubst %.c,$(FIRMWARE_DIR)/%.o,$(SOURCES))
 .PHONY: all firmware verify clean FORCE
 all: firmware
 firmware: $(FIRMWARE_DIR)/firmware.elf $(FIRMWARE_DIR)/firmware.bin $(FIRMWARE_DIR)/firmware.hex $(FIRMWARE_DIR)/firmware.size $(FIRMWARE_DIR)/manifest.txt
-verify: firmware build/host/arm_plant_test build/host/arm_feedback_test build/host/arm_control_test build/host/uart_driver_test build/host/protocol_test build/host/service_test build/host/sensing_test build/host/acquisition_test build/host/sensor_service_test build/host/storage_test build/host/storage_service_test build/host/journal_plan_test build/host/motion_request_test build/host/trajectory_test build/host/controller_test build/host/protection_test build/host/bridge_policy_test build/host/control_pipeline_test build/host/telemetry_test build/host/status_led_test build/host/output_safety_test build/host/runtime_test build/host/runtime_lease_test
+verify: firmware build/host/memory_test build/host/arm_plant_test build/host/arm_feedback_test build/host/arm_control_test build/host/uart_driver_test build/host/protocol_test build/host/service_test build/host/sensing_test build/host/acquisition_test build/host/sensor_service_test build/host/storage_test build/host/storage_service_test build/host/journal_plan_test build/host/motion_request_test build/host/trajectory_test build/host/controller_test build/host/protection_test build/host/bridge_policy_test build/host/control_pipeline_test build/host/telemetry_test build/host/status_led_test build/host/output_safety_test build/host/runtime_test build/host/runtime_lease_test
+	build/host/memory_test
 	build/host/arm_control_test
 	build/host/arm_feedback_test
 	build/host/arm_plant_test
@@ -86,6 +87,11 @@ verify: firmware build/host/arm_plant_test build/host/arm_feedback_test build/ho
 	python3 tests/check_architecture.py
 	python3 tests/check_profiles.py $(FIRMWARE_DIR)
 	python3 tests/check_image.py $(FIRMWARE_DIR)/firmware.elf $(FIRMWARE_DIR)/firmware.bin "$(ARM_READELF)"
+
+build/host/memory_test: tests/memory_test.c platform/gd32f130/memory.c
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Wno-unknown-attributes -ffreestanding -fno-builtin \
+	  -Dmemcpy=runtime_memcpy -Dmemset=runtime_memset $^ -o $@
 
 build/host/protocol_test: tests/protocol_test.c tests/fixtures/initial_wire.h core/protocol/protocol.c core/registers/registers.c include/protocol.h include/registers.h
 

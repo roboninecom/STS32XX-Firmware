@@ -19,4 +19,13 @@ assert blob[reset_offset:reset_offset + 2] != b"\xff\xff"
 readelf = subprocess.check_output([readelf_tool, "-S", str(elf)], text=True)
 for forbidden in (".eeprom", ".boot"):
     assert not re.search(r"\]\s+" + forbidden + r"\s", readelf)
+# Check the enlarged compile-time stack reserve as well as the flash image.
+symbol_text = subprocess.check_output([readelf_tool, "-sW", str(elf)], text=True)
+symbols = {}
+for line in symbol_text.splitlines():
+    fields = line.split()
+    if len(fields) >= 8 and fields[0].endswith(":") and re.fullmatch(r"[0-9a-fA-F]+", fields[1]):
+        symbols[fields[7]] = int(fields[1], 16)
+assert symbols["_end"] + symbols["_min_stack"] <= 0x20001000
+assert symbols["_min_stack"] >= 1280
 print(f"Image: {len(blob)} bytes; SP=0x{stack:08x}, reset=0x{reset:08x}; bounds OK")
