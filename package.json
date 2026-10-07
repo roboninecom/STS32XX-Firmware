@@ -1,0 +1,16 @@
+{
+  "name": "sts32xx-firmware",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GD32F130 STS firmware and generic host interfaces",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test host/servo-driver/test/*.test.js host/teleoperation/*.test.js tests/hardware/telemetry_soak.test.js"
+  },
+  "dependencies": {
+    "serialport": "^13.0.0"
+  }
+}

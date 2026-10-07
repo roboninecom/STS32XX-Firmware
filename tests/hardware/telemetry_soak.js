@@ -7,9 +7,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { setTimeout: delay } = require('node:timers/promises');
-const { PacketEncoder, Instruction, BAUD_RATES } = require('../../../hw_tests/StsServoDriver');
-const { Probe, MeasuredTransport } = require('../../../hw_tests/bus-bench/probe');
-const { distribution } = require('../../../hw_tests/bus-bench/stats');
+const { PacketEncoder, Instruction, BAUD_RATES } = require('../../host/servo-driver');
+const { Probe, MeasuredTransport } = require('../../host/diagnostics/probe');
+const { distribution } = require('../../host/diagnostics/stats');
 
 const persistent = data => [...data.subarray(4, 40), ...data.subarray(78, 87)];
 const signed15 = (lo, hi) => (hi & 0x80) ? -(((hi & 0x7f) << 8) | lo) : (hi << 8) | lo;
@@ -86,8 +86,9 @@ async function run(options, progress = console.log) {
   fs.mkdirSync(output, { recursive: true });
   const csv = fs.openSync(path.join(output, 'samples.csv'), 'wx');
   const anomalyFile = fs.openSync(path.join(output, 'anomalies.jsonl'), 'wx');
-  fs.writeSync(csv, 'id,index,elapsed_ms,latency_ms,position,speed,pwm,voltage,temperature,status,moving,active_position,current,active_velocity,flags\n');
+  fs.writeSync(csv, 'id,index,elapsed_ms,latency_ms,position,speed,pwm,voltage,raw_temperature_diagnostic,status,moving,active_position,current,active_velocity,flags\n');
   const report = { startedAt: new Date().toISOString(), options,
+    temperatureSource: 'raw-register-63-diagnostic-only',
     scope: 'stationary read-only; 17-byte READ from register 56; one sample per ID per round',
     limitations: 'Host timing includes USB/OS; thresholds flag candidates for inspection, not proof of sensor damage. No sequence number exists in telemetry.',
     before: {}, after: {}, devices: {}, errors: [] };

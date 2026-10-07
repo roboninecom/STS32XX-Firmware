@@ -1,6 +1,6 @@
 # Pinned GD32F1x0 declarations
 
-Source: `archive/sts3215-firmware/firmware/lib` at repository revision
+Source: community `sts3215-firmware/firmware/lib` at repository revision
 `24ba15ba80bfe8213684c6bb4523a7d7ee079998`. The GD32 device/SPL
 headers identify GigaDevice V3.3.0 (2020-09-21). The CMSIS core header
 identifies ARM V3.30. `SHA256SUMS` records every copied header's exact bytes.

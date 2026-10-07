@@ -57,7 +57,7 @@ CFLAGS += -DFW_MOTOR_TEST
 endif
 OBJECTS := $(patsubst %.c,$(FIRMWARE_DIR)/%.o,$(SOURCES))
 
-.PHONY: all firmware verify clean FORCE
+.PHONY: all firmware verify host-verify arm-host-verify teleop-host-verify clean FORCE
 all: firmware
 firmware: $(FIRMWARE_DIR)/firmware.elf $(FIRMWARE_DIR)/firmware.bin $(FIRMWARE_DIR)/firmware.hex $(FIRMWARE_DIR)/firmware.size $(FIRMWARE_DIR)/manifest.txt
 verify: firmware build/host/sensor_driver_test build/host/memory_test build/host/arm_motion_arithmetic_test build/host/arm_motion_test build/host/arm_plant_test build/host/arm_feedback_test build/host/arm_control_test build/host/uart_driver_test build/host/protocol_test build/host/service_test build/host/sensing_test build/host/sensor_service_test build/host/storage_test build/host/storage_service_test build/host/journal_plan_test build/host/motion_request_test build/host/trajectory_test build/host/controller_test build/host/protection_test build/host/bridge_policy_test build/host/control_pipeline_test build/host/telemetry_test build/host/status_led_test build/host/output_safety_test build/host/runtime_test build/host/runtime_lease_test
@@ -215,3 +215,13 @@ $(HOST_TEST_TARGETS):
 	@mkdir -p $(dir $@)
 	$(HOST_CC) $(HOST_CFLAGS) $(RUNTIME_FLAGS) $(filter %.c,$^) -o $@
 	$(HOST_CC) $(HOST_DEPFLAGS) $(RUNTIME_FLAGS) -MT $@ $(filter %.c,$^) > $@.d
+
+# Host interfaces are local to this repository; these targets are offline.
+host-verify:
+	node --test host/servo-driver/test/*.test.js host/teleoperation/*.test.js tests/hardware/telemetry_soak.test.js
+
+arm-host-verify:
+	node --test host/servo-driver/test/arm-extension.test.js
+
+teleop-host-verify:
+	node --test host/teleoperation/*.test.js
