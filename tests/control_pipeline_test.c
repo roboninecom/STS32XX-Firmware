@@ -52,8 +52,86 @@ static control_result_t step(control_pipeline_t *pipeline,
     return result;
 }
 
+static void torque_enable_holds_position(void)
+{
+    /* The shaft is at 2000 after torque-off. Limits must apply to new goals,
+     * not to the hold anchor, in both absolute and relative position modes. */
+    const struct { uint16_t low, high; int32_t goal; } cases[] = {
+        {2064, 2160, 2160}, {1840, 1936, 1840},
+        {1936, 2064, 2064}, {0, 0, 2400},
+    };
+    const uint8_t modes[] = {MOTION_MODE_POSITION, MOTION_MODE_RELATIVE};
+    const uint8_t disabled_states[] = {0, 2};
+    for (unsigned m = 0; m < sizeof(modes); ++m) {
+        for (unsigned d = 0; d < sizeof(disabled_states); ++d) {
+            for (unsigned n = 0; n < sizeof(cases) / sizeof(cases[0]); ++n) {
+                register_table_t registers = settings();
+                registers.byte[33] = modes[m];
+                registers.byte[41] = 30;
+                registers_set_u16(&registers, 9, 0);
+                registers_set_u16(&registers, 11, 0);
+                registers_set_u16(&registers, 46, 600);
+                motion_limits_t limits = motion_limits_capture(&registers);
+                control_pipeline_t pipeline;
+                control_pipeline_reanchor(&pipeline, 1997);
+                control_sample_t sample = {.position = 1997, .fresh = true};
+                registers_set_u16(&registers, 42,
+                    modes[m] == MOTION_MODE_POSITION ? 2500 : 503);
+                assert(accept(&pipeline, &registers, &limits, true));
+                assert(pipeline.request.position_goal == 2500);
+                (void)step(&pipeline, &registers, sample, true);
+
+                registers.byte[40] = disabled_states[d];
+                (void)step(&pipeline, &registers, sample, true);
+                sample.position = 2000; /* Hand movement while disabled. */
+                (void)step(&pipeline, &registers, sample, true);
+                assert(!pipeline.request_valid);
+                assert(pipeline.relative_origin == 2000);
+                registers_set_u16(&registers, 9, cases[n].low);
+                registers_set_u16(&registers, 11, cases[n].high);
+
+                /* A speed/acceleration update while disabled must not bring
+                 * the old position goal back on the subsequent enable. */
+                registers.byte[41] = 40;
+                registers_set_u16(&registers, 46, 700);
+                assert(accept(&pipeline, &registers, &limits, false));
+                (void)step(&pipeline, &registers, sample, true);
+                registers.byte[40] = 1;
+                assert(accept(&pipeline, &registers, &limits, false));
+                for (unsigned tick = 0; tick < 600; ++tick) {
+                    control_result_t result = step(&pipeline, &registers, sample, true);
+                    assert(result.target_position == 2000);
+                    assert(result.target_speed == 0);
+                    assert(result.requested_output == 0);
+                }
+                assert(pipeline.relative_origin == 2000);
+
+                /* Limit and speed changes while holding also preserve the
+                 * anchor, even when decoding the old register would clamp it. */
+                assert(accept(&pipeline, &registers, &limits, false));
+                assert(pipeline.request.position_goal == 2000);
+
+                /* A new goal still moves and clamps; relative mode uses the
+                 * measured hold origin, not the discarded old goal. */
+                int32_t desired = n == 1 ? 1600 : 2400;
+                int32_t value = modes[m] == MOTION_MODE_RELATIVE ? desired - 2000 : desired;
+                uint16_t encoded;
+                assert(register_encode_signed(value, 15, &encoded));
+                registers_set_u16(&registers, 42, encoded);
+                assert(accept(&pipeline, &registers, &limits, true));
+                assert(pipeline.request.position_goal == cases[n].goal);
+                assert(pipeline.relative_origin == cases[n].goal);
+                for (unsigned tick = 0; tick < 1000; ++tick)
+                    (void)step(&pipeline, &registers, sample, true);
+                assert(trajectory_position(&pipeline.trajectory) == cases[n].goal);
+            }
+        }
+    }
+}
+
 int main(void)
 {
+    torque_enable_holds_position();
     register_table_t registers = settings();
     motion_limits_t limits = motion_limits_capture(&registers);
     control_pipeline_t pipeline;

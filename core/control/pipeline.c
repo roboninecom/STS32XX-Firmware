@@ -24,8 +24,12 @@ bool control_pipeline_accept(control_pipeline_t *state,
 {
     if (state == 0 || new_request == 0 || limits == 0) return false;
     motion_request_t request = *new_request;
-    if (!position_goal_changed && state->request_valid)
-        request.position_goal = state->request.position_goal;
+    /* Torque-off/reanchor leaves relative_origin at the measured position.
+     * Enabling hold or changing speed must not replay the old goal register,
+     * including its limit clamp. Only a new position write replaces this goal. */
+    if (!position_goal_changed)
+        request.position_goal = state->request_valid
+            ? state->request.position_goal : state->relative_origin;
     if (!trajectory_set_request(&state->trajectory, &request)) return false;
     state->limits = *limits;
     state->request = request;
