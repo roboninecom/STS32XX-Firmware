@@ -56,8 +56,48 @@ static const uint8_t *finish_read(protocol_service_t *bus, uint8_t *length)
     return reply;
 }
 
+static void offset_write_publication_test(void)
+{
+    sensor_service_t sensor;
+    sensor_service_init(&sensor);
+    register_table_t registers;
+    registers_factory_defaults(&registers);
+    registers.byte[REG_CONFIGURATION_FLAGS] = 0;
+    registers_set_u16(&registers, REG_PRESENT_POSITION, 99);
+    sensor_service_offset_written(&sensor, &registers);
+    assert(registers_u16(&registers, REG_PRESENT_POSITION) == 99);
+
+    /* LeRobot clears the stored offset, immediately reads position, then
+     * writes the offset that centres that observation at 2047. No intervening
+     * sensor pair is guaranteed after either persistent write. */
+    uint16_t encoded;
+    assert(register_encode_position_offset(-557, &encoded));
+    registers_set_u16(&registers, REG_POSITION_CORRECTION, encoded);
+    sensor_pair_t pair = {.valid=true, .encoder_raw=1367,
+        .adc_raw={1023, 0, 2025}};
+    assert(sensor_service_accept_pair(&sensor, &registers, &pair, 50));
+    assert(sensor.measurement.position == 1924);
+    registers_set_u16(&registers, REG_PRESENT_POSITION, 1924);
+    sensor_service_restart(&sensor);
+    registers_set_u16(&registers, REG_POSITION_CORRECTION, 0);
+    sensor_service_offset_written(&sensor, &registers);
+    assert(registers_u16(&registers, REG_PRESENT_POSITION) == 1367);
+    assert(sensor.measurement.position == 1367);
+    assert(sensor.completed_pairs == 0 && !sensor.temperature_valid);
+
+    assert(register_encode_position_offset(-680, &encoded));
+    registers_set_u16(&registers, REG_POSITION_CORRECTION, encoded);
+    sensor_service_restart(&sensor);
+    sensor_service_offset_written(&sensor, &registers);
+    assert(registers_u16(&registers, REG_PRESENT_POSITION) == 2047);
+    assert(sensor.completed_pairs == 0);
+    assert(sensor_service_accept_pair(&sensor, &registers, &pair, 50));
+    assert(sensor.measurement.position == 2047); /* Fresh reading agrees. */
+}
+
 int main(void)
 {
+    offset_write_publication_test();
     temperature_validation_test();
     register_table_t initial = {0};
     registers_factory_defaults(&initial);
@@ -139,7 +179,7 @@ int main(void)
     assert(sensor_service_accept_pair(&sensor, &device.registers, &pair, 50u));
     assert(sensor.measurement.position == 1802);
     assert(sensor_service_calibrate(&sensor, &device.registers, -4095));
-    sensor_service_offset_written(&sensor);
+    sensor_service_offset_written(&sensor, &device.registers);
     pair.encoder_raw = 1802;
     assert(sensor_service_accept_pair(&sensor, &device.registers, &pair, 50u));
     assert(sensor.measurement.position == 1802);

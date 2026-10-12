@@ -44,6 +44,7 @@ void sensor_service_restart(sensor_service_t *service);
 bool sensor_service_calibrate(sensor_service_t *service,
                               register_table_t *registers,
                               int16_t desired_position);
-void sensor_service_offset_written(sensor_service_t *service);
+void sensor_service_offset_written(sensor_service_t *service,
+                                   register_table_t *registers);
 
 #endif

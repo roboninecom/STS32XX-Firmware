@@ -43,7 +43,8 @@ static void validate_temperature(sensor_service_t *service, uint8_t raw)
 void sensor_service_restart(sensor_service_t *service)
 {
     service->completed_pairs = 0;
-    service->encoder_raw = 0;
+    /* Retain encoder_raw for offset-write publication across flash restart.
+     * completed_pairs/freshness and the estimators still restart from zero. */
     encoder_tracker_init(&service->encoder);
     speed_tracker_init(&service->speed);
     adc_tracker_init(&service->adc);
@@ -58,6 +59,7 @@ void sensor_service_restart(sensor_service_t *service)
 void sensor_service_init(sensor_service_t *service)
 {
     sensor_service_restart(service);
+    service->encoder_raw = UINT16_MAX; /* No encoder observation yet. */
     service->runtime_calibration_offset = 0;
     service->runtime_calibration_offset_valid = false;
 }
@@ -113,6 +115,28 @@ __attribute__((noinline)) bool sensor_service_accept_pair(sensor_service_t *serv
     return true;
 }
 
+/* Re-express the last observed encoder value in the new coordinate system.
+ * This publishes no new sensor sample and does not qualify output freshness. */
+static bool reanchor_position(sensor_service_t *service,
+                              register_table_t *registers, int32_t offset)
+{
+    encoder_tracker_init(&service->encoder);
+    speed_tracker_init(&service->speed);
+    int32_t position;
+    uint16_t encoded;
+    if (!encoder_tracker_sample(&service->encoder,
+                                service->encoder_raw,
+                                (registers->byte[REG_CONFIGURATION_FLAGS] & 0x80u) != 0u,
+                                offset, registers->byte[REG_OPERATION_MODE], &position)) return false;
+    if (register_encode_signed(position, 15u, &encoded))
+        registers_set_u16(registers, REG_PRESENT_POSITION, encoded);
+    service->measurement.position = position;
+    service->measurement.arm_position = encoder_arm_position(&service->encoder);
+    service->measurement.speed = 0;
+    service->measurement.moving = false;
+    return true;
+}
+
 bool sensor_service_calibrate(sensor_service_t *service,
                               register_table_t *registers,
                               int16_t desired_position)
@@ -132,25 +156,13 @@ bool sensor_service_calibrate(sensor_service_t *service,
     registers_set_u16(registers, REG_POSITION_CORRECTION, encoded);
     service->runtime_calibration_offset = offset;
     service->runtime_calibration_offset_valid = offset >= 4096;
-    encoder_tracker_init(&service->encoder);
-    speed_tracker_init(&service->speed);
-    int32_t position;
-    if (!encoder_tracker_sample(&service->encoder,
-                                service->encoder_raw,
-                                reverse,
-                                offset, registers->byte[REG_OPERATION_MODE], &position)) return false;
-    if (register_encode_signed(position, 15u, &encoded))
-        registers_set_u16(registers, REG_PRESENT_POSITION, encoded);
-    service->measurement.position = position;
-    service->measurement.arm_position = encoder_arm_position(&service->encoder);
-    service->measurement.speed = 0;
-    service->measurement.moving = false;
-    return true;
+    return reanchor_position(service, registers, offset);
 }
 
-void sensor_service_offset_written(sensor_service_t *service)
+void sensor_service_offset_written(sensor_service_t *service,
+                                   register_table_t *registers)
 {
     service->runtime_calibration_offset_valid = false;
-    encoder_tracker_init(&service->encoder);
-    speed_tracker_init(&service->speed);
+    (void)reanchor_position(service, registers,
+        register_decode_position_offset(registers_u16(registers, REG_POSITION_CORRECTION)));
 }

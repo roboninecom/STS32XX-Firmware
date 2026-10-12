@@ -98,7 +98,7 @@ void command_service_apply(const protocol_result_t *result, void *context)
         if (registers_write_touches(&result->write, 31u, 32u)) {
             /* The corrected encoder position anchors a new active profile.
              * The commanded goal register remains untouched. */
-            sensor_service_offset_written(&state->sensor_service);
+            sensor_service_offset_written(&state->sensor_service, registers);
             state->control_initialized = false;
             app_runtime_queue_motion(state, false, false);
         }
