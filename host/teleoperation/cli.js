@@ -50,8 +50,8 @@ async function main() {
           if(Date.now()-lastReport>=1000){console.log(JSON.stringify({type:'frame',...frame}));lastReport=Date.now();}
         },
       });
-      record({type:'stopped',follower:'powered hold requested'});
-      console.log(JSON.stringify({type:'stopped',follower:'powered hold requested'}));
+      record({type:'stopped',follower:config.protocol === 'extension' ? 'last target retained; torque remains enabled' : 'powered hold requested'});
+      console.log(JSON.stringify({type:'stopped',follower:config.protocol === 'extension' ? 'last target retained; torque remains enabled' : 'powered hold requested'}));
     }
   } catch(error) {
     record({type:'error',message:error.message}); throw error;

@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Teleoperation, mapPosition } = require('./Teleoperation');
 const { Instruction } = require('../servo-driver');
-const profile = {kpQ8:256,kdQ8:32,kiQ8:0,integralLimit:0,effortLimit:100,velocityFilterQ8:64,timeoutMs:2000};
+const profile = {gravitySlewEffortPerS:1000,velocityFeedforward:{positiveGainQ8:0,negativeGainQ8:0,effortLimit:0},kpQ8:256,kdQ8:32,kiQ8:0,integralLimit:0,effortLimit:100,velocityFilterQ8:64};
 function rig(protocol='legacy') {
   const calls = [], joints = [1,2].map(id => ({leaderId:id,followerId:id,mapping:'angle'}));
   const config = {protocol,joints,acceleration:10000,rampTimeMs:30,profiles:{1:profile,2:profile}};
@@ -20,11 +20,11 @@ function rig(protocol='legacy') {
     s.protocol.syncWrite = async (address,entries) => calls.push([name,'sync',address,entries]);
     s.protocol.armCommand = async (id,instruction,payload) => calls.push([name,'arm',id,instruction,payload]);
     s.protocol.transaction = async fn => fn(s.protocol);
-    s.arm.capabilities = async()=>({major:4,minor:0});
-    for(const method of ['select','configure','configureVelocityFeedforward','arm','stopPowered','heartbeat']) s.arm[method]=async(...args)=>calls.push([name,method,...args]);
+    s.arm.capabilities = async()=>({major:9,minor:0});
+    for(const method of ['select','configure']) s.arm[method]=async(...args)=>calls.push([name,method,...args]);
     let sample=0;
-    s.arm.feedback=async()=>({temperatureValid:true,temperatureValidated:30,temperatureCandidatePending:false,
-      sampleMs:++sample,sampleSequence:sample,ageMs:0,selected:true,armed:true,session:1,expired:false,
+    s.arm.feedback=async()=>({temperatureValid:true,temperatureValidated:30,
+      sampleMs:++sample,sampleSequence:sample,ageMs:0,selected:true,armed:true,session:1,
       fresh:true,faults:0,driveEnabled:true,outputReady:true,acceptedSequence:1});
     return s;
   }
@@ -54,10 +54,18 @@ test('invalid stored limits and unexpected IDs fail before mutation',async()=>{
   const x=rig();x.leader.protocol.read=async()=>Buffer.alloc(66);
   await assert.rejects(x.t.preflight(),/limits/);
 });
-test('extension profiles intersect stored bounds and remove operating speed cap',async()=>{
-  const r=rig('extension');r.config.profiles[1]={...profile,positionMinQ8:200*256,positionMaxQ8:5000*256};
-  await r.t.preflight();assert.equal(r.t.profiles[1].positionMinQ8,200*256);
-  assert.equal(r.t.profiles[1].positionMaxQ8,4000*256);assert.equal(r.t.profiles[1].velocityLimit,65535);
+test('extension uses saved bounds for mapping and rejects separate limits',async()=>{
+  const r=rig('extension');await r.t.preflight();
+  assert.equal(r.t.profiles[1].positionMinQ8,undefined);
+  assert.equal(r.t.profiles[1].positionMaxQ8,undefined);
+  assert.equal(r.t.profiles[1].velocityLimit,65535);
+  const read=r.leader.protocol.syncRead;
+  r.leader.protocol.syncRead=async ids=>({responses:new Map(ids.map(id=>[id,Buffer.from([0xff,0x7f])]))});
+  assert((await r.t.sample()).targets.every(t=>t.position===4000));
+  r.leader.protocol.syncRead=read;
+  r.config.profiles[1]={...profile,positionMinQ8:200*256};
+  await assert.rejects(r.t.preflight(),/removed.*legacy position limits/);
+  assert.equal(r.calls.length,0);
 });
 test('missing extension gains fail instead of manufacturing tuning',async()=>{
   const r=rig('extension');delete r.config.profiles[2];
@@ -105,7 +113,7 @@ test('legacy synchronized frames have zero speed/time and no leader writes',asyn
 test('extension broadcasts a complete frame with maximum speed',async()=>{
   const r=rig('extension');await r.t.preflight();await r.t.send(await r.t.sample());
   const c=r.calls.filter(c=>c[1]==='arm');assert.deepEqual(c.map(c=>c[3]),[Instruction.ARM_TARGETS]);
-  assert.equal(c[0][4].readUInt16LE(9),65535);assert.equal(c[0][4].readUInt16LE(11),10000);
+  assert.equal(c[0][4].readUInt16LE(9),65535);assert.equal(c[0][4].length,20);
   assert.equal(c[0][2],254);assert.equal(r.t.sequence,1);
 });
 test('frame aged while queued never reaches the bus',async()=>{
@@ -118,20 +126,24 @@ test('missing leader response rejects whole frame',async()=>{
   const r=rig();await r.t.preflight();r.leader.protocol.syncRead=async()=>({responses:new Map([[1,Buffer.from([0,8])]])});
   await assert.rejects(r.t.sample(),/Missing position/);assert.equal(r.calls.length,0);
 });
-test('sequence exhaustion stops without wrapping identity',async()=>{
-  const r=rig('extension');await r.t.preflight();r.t.sequence=65535;
-  await assert.rejects(r.t.send(await r.t.sample()),/Sequence exhausted/);assert.equal(r.calls.length,0);
+test('sequence wraps through zero without starting a new session',async()=>{
+  const r=rig('extension');await r.t.preflight();r.t.sequence=65534;
+  const reported=[];
+  for(const expected of [65535,0,1]) {
+    await r.t.send(await r.t.sample());reported.push(r.t.sequence);
+    const last=r.calls.at(-1);assert.equal(last[4].readUInt16LE(3),expected);
+  }
+  assert.deepEqual(reported,[65535,0,1]);assert.equal(r.t.session,1);
 });
-test('run failure stops all owned followers, never torque off',async()=>{
+test('run failure turns off all owned followers',async()=>{
   const r=rig('extension');await r.t.preflight();r.follower.protocol.armCommand=async()=>{throw Error('lost response');};
   await assert.rejects(r.t.run(),/lost response/);
-  assert.equal(r.calls.filter(c=>c[1]==='stopPowered').length,2);
-  assert(!r.calls.some(c=>c[1]==='write'&&c[3]===40&&c[4][0]===0));
+  assert.deepEqual(r.calls.filter(c=>c[1]==='write'&&c[3]===40&&c[4][0]===0).map(c=>c[2]),[1,2]);
 });
-test('hold attempts remaining joints after one stop fails',async()=>{
-  const r=rig('extension');r.t.armed=new Set([1,2]);const seen=[];
-  r.follower.arm.stopPowered=async id=>{seen.push(id);if(id===1)throw Error('offline');};
-  assert.equal((await r.t.stopMotion()).length,1);assert.deepEqual(seen,[1,2]);
+test('torque-off cleanup attempts remaining joints after one write fails',async()=>{
+  const r=rig('extension');r.t.prepared=new Set([1,2]);const seen=[];
+  r.follower.protocol.write=async (id,address,data)=>{assert.equal(address,40);assert.equal(data[0],0);seen.push(id);if(id===1)throw Error('offline');};
+  assert.equal((await r.t.disableTorque()).length,1);assert.deepEqual(seen,[1,2]);
 });
 test('normal exit holds current legacy position and never turns torque off',async()=>{
   const r=rig();await r.t.preflight();let frames=0;
@@ -139,11 +151,11 @@ test('normal exit holds current legacy position and never turns torque off',asyn
   assert.equal(frames,1);assert.equal(r.calls.filter(c=>c[1]==='sync').length,1);
   assert(!r.calls.some(c=>c[1]==='write'&&c[3]===40&&c[4][0]===0));
 });
-test('uncertain arm ACK is included in cleanup without enabling torque',async()=>{
-  const r=rig('extension');await r.t.preflight();r.follower.arm.arm=async()=>{throw Error('arm ACK lost');};
-  await assert.rejects(r.t.run(),/arm ACK lost/);
-  assert.equal(r.calls.filter(c=>c[1]==='stopPowered').length,1);
-  assert(!r.calls.some(c=>c[1]==='write'&&c[3]===40));
+test('uncertain setup ACK is included in cleanup without enabling torque',async()=>{
+  const r=rig('extension');await r.t.preflight();r.follower.arm.select=async(id,enabled)=>{if(enabled)throw Error('setup ACK lost');};
+  await assert.rejects(r.t.run(),/setup ACK lost/);
+  assert.equal(r.calls.filter(c=>c[1]==='write'&&c[3]===40&&c[4][0]===0).length,1);
+  assert(!r.calls.some(c=>c[1]==='write'&&c[3]===40&&c[4][0]===1));
 });
 test('temperature and accepted sequence failures terminate monitoring',async()=>{
   const r=rig('extension');r.t.enabled.add(1);r.t.sequence=2;
@@ -169,7 +181,7 @@ test('extension startup never writes legacy goals that can auto-enable torque',a
     assert.notEqual(address,42,'legacy goals can auto-enable before extension selection');
     return write(id,address,data);
   };
-  await r.t.initialize();assert.equal(r.t.armed.size,2);
+  await r.t.initialize();assert.equal(r.t.prepared.size,2);
 });
 test('monitor exports one coherent normal feedback sample with timestamp',async()=>{
   const r=rig('extension');r.t.enabled.add(1);r.t.sequence=1;r.setTime(123);
@@ -190,9 +202,9 @@ test('discovery mismatch identifies follower bus and missing responses',async()=
   await assert.rejects(r.t.preflight(),/Follower bus.*expected \[1,2\], found \[\]/);
 });
 for(const protocol of ['legacy','extension']) {
-  test(`${protocol}: pending temperature candidate does not trip validated guard`,async()=>{
+  test(`${protocol}: validated temperature below the limit passes the guard`,async()=>{
     const r=rig(protocol),feedback=r.follower.arm.feedback;
-    r.follower.arm.feedback=async()=>({...await feedback(),temperatureValidated:35,temperatureCandidatePending:true});
+    r.follower.arm.feedback=async()=>({...await feedback(),temperatureValidated:35});
     await r.t.preflight();r.t.enabled.add(1);r.t.sequence=1;
     const samples=[];await r.t.monitor(x=>samples.push(x));
     assert.equal(samples[0].telemetry.temperatureValidated,35);
@@ -222,18 +234,21 @@ test('monitor rejects stale or repeated samples and performs only one feedback r
   sample.ageMs=3;await assert.rejects(r.t.monitor(),/stale sensor/);
 });
 
-test('local velocity gains are validated and configured after base profile before arm',async()=>{
+test('local velocity gains and gravity slew are part of each atomic configuration',async()=>{
   const r=rig('extension');
-  r.config.velocityFeedforward={1:{positiveGainQ8:100,negativeGainQ8:200,effortLimit:50}};
+  r.config.profiles[1]={...profile,velocityFeedforward:{positiveGainQ8:100,negativeGainQ8:200,effortLimit:50}};
   await r.t.preflight();await r.t.initialize();
   const calls=r.calls.filter(c=>c[2]===1);
-  assert(calls.findIndex(c=>c[1]==='configure')<calls.findIndex(c=>c[1]==='configureVelocityFeedforward'));
-  assert(calls.findIndex(c=>c[1]==='configureVelocityFeedforward')<calls.findIndex(c=>c[1]==='arm'));
-  const x=rig('extension');x.config.velocityFeedforward={1:{positiveGainQ8:1,negativeGainQ8:1,effortLimit:101}};
-  await assert.rejects(x.t.preflight(),/cap exceeds/);
+  assert(calls.findIndex(c=>c[1]==='configure')<calls.findIndex(c=>c[1]==='select'&&c[3]===true));
+  const configured=calls.find(c=>c[1]==='configure')[3];
+  assert.equal(configured.velocityFeedforward.effortLimit,50);
+  assert.equal(configured.gravitySlewEffortPerS,1000);
+  const x=rig('extension');x.config.profiles[1]={...profile,
+    velocityFeedforward:{positiveGainQ8:1,negativeGainQ8:1,effortLimit:101}};
+  await assert.rejects(x.t.preflight(),/effortLimit/);
 });
 
-test('v4 monitoring waits for the post-target capture without polling extra telemetry', async () => {
+test('v9 monitoring waits for the post-target capture without polling extra telemetry', async () => {
   const r=rig('extension'); await r.t.preflight(); r.t.enabled.add(1);
   const frame=await r.t.sample(); await r.t.send(frame);
   const read=r.follower.arm.feedback; let reads=0;
@@ -248,7 +263,7 @@ test('v4 monitoring waits for the post-target capture without polling extra tele
   assert.equal(r.calls.filter(c=>c[1]==='arm'&&c[3]===Instruction.ARM_TARGETS).length,1);
 });
 
-test('v4 rejected target remains a sequence failure after the publication interval', async () => {
+test('v9 rejected target remains a sequence failure after the publication interval', async () => {
   const r=rig('extension'); await r.t.preflight(); r.t.enabled.add(1);
   await r.t.send(await r.t.sample());
   const read=r.follower.arm.feedback;
@@ -268,10 +283,77 @@ test('generic extension waits for fresh ready output before its first target',as
   assert.equal(r.calls.filter(c=>c[1]==='arm'&&c[3]===Instruction.ARM_TARGETS).length,1);
 });
 
-test('output readiness timeout prevents all targets and still stops owned axes',async()=>{
+test('output readiness timeout prevents all targets and still turns off owned axes',async()=>{
   const r=rig('extension');await r.t.preflight();const read=r.follower.arm.feedback;
   r.follower.arm.feedback=async id=>({...await read(id),fresh:false,outputReady:false});
   await assert.rejects(r.t.run(),/output readiness timeout/);
   assert(!r.calls.some(c=>c[1]==='arm'&&c[3]===Instruction.ARM_TARGETS));
-  assert.equal(r.calls.filter(c=>c[1]==='stopPowered').length,2);
+  assert.equal(r.calls.filter(c=>c[1]==='write'&&c[3]===40&&c[4][0]===0).length,2);
+});
+
+test('normal extension exit retains the last target without cleanup commands',async()=>{
+  const r=rig('extension');await r.t.preflight();let frames=0,lastCommandCount=0;
+  await r.t.run({onFrame:()=>{frames++;lastCommandCount=r.calls.length;},shouldStop:()=>frames===1});
+  assert.equal(frames,1);
+  assert.equal(r.calls.length,lastCommandCount);
+  assert(!r.calls.some(c=>c[1]==='write'&&c[3]===40&&c[4][0]===0));
+  assert(!r.calls.some(c=>c[1]==='arm'&&[0x94,0x95].includes(c[3])));
+  assert.equal(r.t.enabled.size,2);
+});
+
+test('host temperature protection still removes output from all owned followers',async()=>{
+  const r=rig('extension');await r.t.preflight();
+  const read=r.follower.arm.feedback;
+  r.follower.arm.feedback=async id=>({...await read(id),temperatureValidated:r.t.clock()>250?60:30});
+  await assert.rejects(r.t.run(),/temperature/);
+  assert.deepEqual(r.calls.filter(c=>c[1]==='write'&&c[3]===40&&c[4][0]===0).map(c=>c[2]),[1,2]);
+});
+
+for (const interruptedDuring of ['sample', 'queued write']) {
+  test(`normal extension interruption during ${interruptedDuring} retains the previous target`,async()=>{
+    const r=rig('extension');await r.t.preflight();let frames=0;
+    const read=r.leader.protocol.syncRead;
+    r.leader.protocol.syncRead=async ids=>{
+      const result=await read(ids);
+      if(frames===1 && interruptedDuring==='sample') r.t.stopping=true;
+      return result;
+    };
+    r.follower.protocol.transaction=async fn=>{
+      if(frames===1 && interruptedDuring==='queued write') r.t.stopping=true;
+      return fn(r.follower.protocol);
+    };
+    await r.t.run({onFrame:()=>{frames++;}});
+    assert.equal(frames,1);
+    assert.equal(r.t.sequence,1);
+    assert.equal(r.calls.filter(c=>c[1]==='arm'&&c[3]===Instruction.ARM_TARGETS).length,1);
+    assert(!r.calls.some(c=>c[1]==='write'&&c[3]===40&&c[4][0]===0));
+  });
+}
+
+
+test('extension startup cannot override saved limits',async()=>{
+  const r=rig('extension');await r.t.preflight();
+  r.follower.protocol.syncRead=async ids=>({responses:new Map(ids.map(id=>[id,Buffer.from([0,0])]))});
+  await assert.rejects(r.t.initialize(),/outside saved position limits/);
+  assert(!r.calls.some(c=>c[1]==='write'&&c[3]===40&&c[4][0]===1));
+  assert.throws(()=>new Teleoperation({leader:r.leader,follower:r.follower,
+    config:{...r.config,startupBounds:{1:[0,4095]}}}),/startupBounds was removed/);
+});
+
+
+test('startup prepares all sessions before enabling and never calls a separate ARM',async()=>{
+  const r=rig('extension');await r.t.preflight();await r.t.initialize();
+  const setups=r.calls.filter(c=>c[1]==='select'&&c[3]===true);
+  assert.deepEqual(setups.map(c=>[c[2],c[4]]),[[1,1],[2,1]]);
+  const firstEnable=r.calls.findIndex(c=>c[1]==='write'&&c[3]===40&&c[4][0]===1);
+  assert(setups.every(c=>r.calls.indexOf(c)<firstEnable));
+  assert.equal(r.follower.arm.arm,undefined);
+});
+
+test('failed torque-enable startup is detected from feedback and cleared on every prepared axis',async()=>{
+  const r=rig('extension');await r.t.preflight();
+  const feedback=r.follower.arm.feedback;
+  r.follower.arm.feedback=async()=>({...await feedback(),armed:false,session:0,fresh:false});
+  await assert.rejects(r.t.run(),/startup ownership lost/);
+  assert.deepEqual(r.calls.filter(c=>c[1]==='write'&&c[3]===40&&c[4][0]===0).map(c=>c[2]),[1,2]);
 });

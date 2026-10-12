@@ -213,10 +213,10 @@ class StsProtocol extends EventEmitter {
   }
 
   async armCommand(id, instruction, parameters = Buffer.alloc(0), options = {}) {
-    assertId(id, instruction === Instruction.ARM_TARGETS ||
-                 instruction === Instruction.ARM_ABORT);
+    assertId(id, instruction === Instruction.ARM_TARGETS);
     if (!Number.isInteger(instruction) || instruction < Instruction.ARM_READ ||
-        instruction > Instruction.ARM_TARGETS || instruction === 0x92 || instruction === 0x96) {
+        instruction > Instruction.ARM_TARGETS || instruction === 0x92 ||
+        (instruction >= 0x93 && instruction <= 0x98)) {
       throw new InvalidPacketError('Invalid arm instruction');
     }
     if (!Buffer.isBuffer(parameters) || parameters.length > 80) {

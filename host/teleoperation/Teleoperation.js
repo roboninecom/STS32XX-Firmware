@@ -52,9 +52,11 @@ class Teleoperation {
       if ('braking' in config) throw new Error('braking is obsolete; use symmetric acceleration');
       integer(config.rampTimeMs, 1, 255, 'rampTimeMs');
     } else if (config.legacyAcceleration !== undefined) integer(config.legacyAcceleration, 0, 254, 'legacy acceleration');
+    if ('startupBounds' in config) throw new Error('startupBounds was removed; extension uses saved legacy position limits');
+    if ('velocityFeedforward' in config) throw new Error('Put velocityFeedforward inside each servo profile');
     this.lastFeedback = new Map();
     this.captureNotBefore = -Infinity;
-    this.sequence = 0; this.enabled = new Set(); this.armed = new Set(); this.stopping = false;
+    this.sequence = 0; this.enabled = new Set(); this.prepared = new Set(); this.stopping = false;
   }
 
   async inspect(servo, ids, role) {
@@ -83,25 +85,16 @@ class Teleoperation {
       const id = j.followerId, limits = this.limits.follower[id];
       mapPosition(this.limits.leader[j.leaderId].position, this.limits.leader[j.leaderId], limits, j);
       const caps = await this.follower.arm.capabilities(id, this.options);
-      if (caps?.major !== 4) throw new Error(`Follower ${id}: rewrite arm v4 required`);
+      if (caps?.major !== 9) throw new Error(`Follower ${id}: rewrite arm v9 required`);
       limits.feedback = await this.follower.arm.feedback(id, this.options);
       this.checkHealth(id, limits.feedback);
       if (this.config.protocol === 'extension') {
         const supplied = this.config.profiles?.[id];
         if (!supplied) throw new Error(`Missing explicit RAM gain/effort profile for follower ${id}`);
-        // Preserve the profile's qualified position envelope inside saved servo limits.
         const profile = { ...supplied, velocityLimit: 65535,
-          accelerationLimit: this.config.acceleration, rampTimeMs: this.config.rampTimeMs,
-          positionMinQ8: this.config.startupBounds?.[id] ? integer(this.config.startupBounds[id][0], 0, limits.min, "startup minimum") * 256 : Math.max(limits.min * 256, supplied.positionMinQ8 ?? limits.min * 256),
-          positionMaxQ8: this.config.startupBounds?.[id] ? integer(this.config.startupBounds[id][1], limits.max, 32767, "startup maximum") * 256 : Math.min(limits.max * 256, supplied.positionMaxQ8 ?? limits.max * 256) };
+          accelerationLimit: this.config.acceleration, rampTimeMs: this.config.rampTimeMs };
         ArmCodec.encodeConfig(profile);
-        if (profile.timeoutMs < Math.max(500, 2000 / this.hz)) throw new Error('Extension timeout too short for teleoperation');
-        const velocityFF = this.config.velocityFeedforward?.[id] ?? {
-          positiveGainQ8: 0, negativeGainQ8: 0, effortLimit: 0 };
-        ArmCodec.encodeVelocityFeedforward(velocityFF);
-        if (velocityFF.effortLimit > profile.effortLimit) throw new Error(`Follower ${id}: velocity FF cap exceeds profile`);
         this.profiles[id] = profile;
-        limits.velocityFeedforward = velocityFF;
       }
     }
     return this.limits;
@@ -121,8 +114,7 @@ class Teleoperation {
     const positions = await this.positions(this.leader, this.joints.map(j => j.leaderId));
     const targets = this.joints.map(j => {
       const target = mapPosition(positions[j.leaderId], this.limits.leader[j.leaderId], this.limits.follower[j.followerId], j);
-      const p = this.profiles[j.followerId];
-      return { id: j.followerId, position: p ? Math.max(Math.ceil(p.positionMinQ8/256), Math.min(Math.floor(p.positionMaxQ8/256), target)) : target };
+      return { id: j.followerId, position: target };
     });
     return { timestamp, positions, targets };
   }
@@ -159,9 +151,9 @@ class Teleoperation {
     this.fresh(frame);
     for (const t of frame.targets) {
       const id = t.id;
-      await this.operation(id, 'select legacy', () => this.follower.arm.select(id, false, this.options));
+      await this.operation(id, 'select legacy', () => this.follower.arm.select(id, false, 0, this.options));
       // A legacy goal write can auto-enable torque under saved factory flags.
-      // Extension arming captures measured position itself; never seed legacy goals here.
+      // Extension torque enable captures measured position itself; never seed legacy goals here.
       if (this.config.protocol === 'legacy') {
         const data = Buffer.alloc(6); word(q[id]).copy(data);
         this.enabled.add(id); // goal-write auto-enable can precede its acknowledgement
@@ -169,19 +161,18 @@ class Teleoperation {
       }
       if (this.config.protocol === 'extension') {
         const p = this.profiles[id];
-        if (q[id]*256 < p.positionMinQ8 || q[id]*256 > p.positionMaxQ8) throw new Error(`ID ${id}: outside profile envelope`);
+        const limits = this.limits.follower[id];
+        if (q[id] < limits.min || q[id] > limits.max) throw new Error(`ID ${id}: outside saved position limits`);
         await this.operation(id, 'configure', () => this.follower.arm.configure(id, p, this.options));
-        await this.operation(id, 'configure local velocity FF', () => this.follower.arm.configureVelocityFeedforward(id, this.limits.follower[id].velocityFeedforward, this.options));
-        await this.operation(id, 'select extension', () => this.follower.arm.select(id, true, this.options));
-        this.armed.add(id); // include uncertain ACK outcomes in powered-stop cleanup
-        await this.operation(id, 'arm', () => this.follower.arm.arm(id, this.session, this.options));
+        this.prepared.add(id); // include uncertain setup ACKs in torque-off cleanup
+        await this.operation(id, 'select extension', () => this.follower.arm.select(id, true, this.session, this.options));
       } else if (this.config.legacyAcceleration !== undefined) {
         await this.follower.protocol.write(id,41,Buffer.from([this.config.legacyAcceleration]),this.options);
       }
     }
     for (const t of frame.targets) {
       if (this.stopping) throw new Error('Startup cancelled');
-      // Track before write: response loss must still trigger a hold attempt.
+      // Track before write: response loss must still trigger torque-off cleanup.
       this.enabled.add(t.id);
       await this.follower.protocol.write(t.id,40,Buffer.from([1]),this.options);
       if (this.config.protocol === 'extension') await this.waitUntilOutputReady(t.id);
@@ -191,17 +182,17 @@ class Teleoperation {
   async waitUntilOutputReady(id) {
     const started = this.clock();
     while (true) {
-      for (const owned of this.armed) await this.follower.arm.heartbeat(owned, this.session, this.options);
       await this.sleep(5);
       const s = await this.follower.arm.feedback(id, this.options);
       this.checkHealth(id, s);
-      if (!s.armed || s.expired || s.session !== this.session) throw new Error(`Follower ${id}: startup ownership lost`);
+      if (!s.armed || s.session !== this.session) throw new Error(`Follower ${id}: startup ownership lost`);
       if (s.fresh && s.driveEnabled && s.outputReady) return;
       if (this.stopping || this.clock() - started >= 3000) throw new Error(`Follower ${id}: output readiness timeout`);
     }
   }
 
   async send(frame) {
+    if (this.stopping) return;
     this.fresh(frame);
     if (this.config.protocol === 'legacy') {
       const entries = frame.targets.map(t => {
@@ -210,16 +201,17 @@ class Teleoperation {
       });
       await this.follower.protocol.syncWrite(42, entries, this.options);
     } else {
-      if (this.sequence >= 65535) throw new Error('Sequence exhausted: powered stop; restart with a fresh session');
-      const sequence = this.sequence + 1;
+      const sequence = (this.sequence + 1) & 0xffff;
       const payload = ArmCodec.encodeTargets(frame.targets.map(t => ({ id: t.id, target: {
         sequence, positionQ8: t.position * 256, speedLimit: 65535,
-        acceleration: this.config.acceleration,
       } })), this.session);
-      await this.follower.protocol.transaction(async wire => {
+      const sent = await this.follower.protocol.transaction(async wire => {
+        if (this.stopping) return false;
         this.fresh(frame); // Recheck after acquiring the bus queue.
         await wire.armCommand(254, Instruction.ARM_TARGETS, payload, this.options);
+        return true;
       });
+      if (!sent) return;
       this.sequence = sequence;
       this.captureNotBefore = this.clock() + 3;
     }
@@ -248,7 +240,7 @@ class Teleoperation {
           telemetry.sampleMs === previous.sampleMs))
         throw new Error(`Follower ${id}: feedback sample did not advance`);
       if (this.config.protocol === 'extension' &&
-          (!telemetry.selected || !telemetry.armed || telemetry.expired ||
+          (!telemetry.selected || !telemetry.armed ||
            telemetry.session !== this.session || !telemetry.fresh || !telemetry.driveEnabled ||
            !telemetry.outputReady || telemetry.acceptedSequence !== this.sequence))
         throw new Error(`Follower ${id}: extension tracking/session fault`);
@@ -257,23 +249,31 @@ class Teleoperation {
     }
   }
 
-  async stopMotion() {
+  // Explicit failure cleanup; ordinary extension exit sends no motor command.
+  async disableTorque() {
     const failures = [];
-    for (const id of new Set([...this.enabled, ...this.armed])) {
+    for (const id of new Set([...this.enabled, ...this.prepared])) {
       try {
-        if (this.config.protocol === 'extension') await this.follower.arm.stopPowered(id,this.session,this.options);
-        else {
-          const q = signed(await this.follower.protocol.read(id,56,2,this.options));
-          const data = Buffer.alloc(6); word(q).copy(data);
-          await this.follower.protocol.write(id,42,data,this.options);
-        }
+        await this.follower.protocol.write(id,40,Buffer.from([0]),this.options);
+        if ((await this.follower.protocol.read(id,40,1,this.options))[0] !== 0)
+          throw new Error('Torque-off verification failed');
       } catch (error) { failures.push({id,error:error.message}); }
     }
     return failures;
   }
 
-  // Ordinary teleoperation keeps its existing powered-stop exit policy.
-  async shutdown() { return this.stopMotion(); }
+  async shutdown() {
+    if (this.config.protocol === 'extension') return [];
+    const failures = [];
+    for (const id of this.enabled) {
+      try {
+        const q = signed(await this.follower.protocol.read(id,56,2,this.options));
+        const data = Buffer.alloc(6); word(q).copy(data);
+        await this.follower.protocol.write(id,42,data,this.options);
+      } catch (error) { failures.push({id,error:error.message}); }
+    }
+    return failures;
+  }
 
   async run({ onFrame = () => {}, onTelemetry = () => {}, onCommand = () => {}, shouldStop = () => false } = {}) {
     let error;
@@ -284,9 +284,10 @@ class Teleoperation {
         const started = this.clock();
         if (this.beforeSample) await this.beforeSample();
         const acquired = this.clock(), frame = await this.sample(), sampled = this.clock();
-        if (shouldStop()) break;
-        onCommand({ ...frame, sequence:this.sequence+1 });
+        if (this.stopping || shouldStop()) break;
+        onCommand({ ...frame, sequence:(this.sequence+1)&0xffff });
         await this.send(frame);
+        if (this.stopping) break;
         const sent = this.clock();
         if (this.clock() - monitored >= 250) { await this.monitor(onTelemetry); monitored = this.clock(); }
         onFrame({ ...frame, sequence:this.sequence, elapsedMs:this.clock()-started, timing:{serviceMs:acquired-started, sampleMs:sampled-acquired, sendMs:sent-sampled, monitorMs:this.clock()-sent} });
@@ -301,7 +302,7 @@ class Teleoperation {
       }
     } catch (e) { error = e; }
     this.stopping = true;
-    const failures = await this.shutdown();
+    const failures = error ? await this.disableTorque() : await this.shutdown();
     if (error || failures.length) throw new Error(JSON.stringify({error:error?.message, cleanupFailures:failures}));
   }
 }

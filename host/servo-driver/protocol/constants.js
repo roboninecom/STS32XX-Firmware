@@ -18,11 +18,6 @@ const Instruction = Object.freeze({
   SYNC_WRITE: 0x83,
   ARM_READ: 0x90,
   ARM_WRITE: 0x91,
-  ARM_ABORT: 0x93,
-  ARM_HEARTBEAT: 0x94,
-  ARM_STOP: 0x95,
-  ARM_PROFILE_STAGE: 0x97,
-  ARM_PROFILE_COMMIT: 0x98,
   ARM_GRAVITY: 0x99,
   ARM_TARGETS: 0x9A,
 });
