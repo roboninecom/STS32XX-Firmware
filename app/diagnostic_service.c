@@ -1,9 +1,6 @@
 #include "diagnostic_service.h"
 
 #include "app_runtime.h"
-#ifdef FW_FLASH_DUMP
-#include "flash_dump_target.h"
-#endif
 #ifdef FW_TIMING_PROBE
 #include "diagnostics.h"
 #endif
@@ -32,15 +29,6 @@ void diagnostic_service_early_init(struct app_state *state)
 #endif
 }
 
-void diagnostic_service_device_init(struct app_state *state)
-{
-#ifdef FW_FLASH_DUMP
-    flash_dump_window(0u, state->device.registers.byte + 73);
-#else
-    (void)state;
-#endif
-}
-
 void diagnostic_service_write(struct app_state *state,
                               const register_write_result_t *write)
 {
@@ -54,11 +42,6 @@ void diagnostic_service_write(struct app_state *state,
         state->timing_arm_revocation = 0;
         state->bus.command_dispatch_max_cycles = 0;
     }
-#endif
-
-#ifdef FW_FLASH_DUMP
-    flash_dump_window(state->device.registers.byte[REG_UNDOCUMENTED_RUNTIME50],
-                      state->device.registers.byte + 73);
 #else
     (void)state;
 #endif

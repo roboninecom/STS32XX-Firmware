@@ -26,11 +26,10 @@ void arm_control_init(arm_control_t *state, int32_t position_counts,
                       uint32_t now_ms)
 {
     *state = (arm_control_t){0};
-    state->measured_position_q8 = position_counts * 256;
-    arm_motion_init(&state->motion, state->measured_position_q8);
-    state->last_reference_position_q8 = state->measured_position_q8;
+    int32_t position_q8 = position_counts * 256;
+    arm_motion_init(&state->motion, position_q8);
+    state->last_reference_position_q8 = position_q8;
     state->last_tick = now_ms;
-    state->last_command_tick = now_ms;
     state->initialized = true;
 }
 
@@ -40,79 +39,60 @@ bool arm_control_configure(arm_control_t *state, arm_config_t config)
         config.effort_limit > 1000u || config.integral_limit > config.effort_limit ||
         config.velocity_limit == 0u || config.acceleration_limit == 0u ||
         config.acceleration_limit > ARM_MAX_ACCELERATION_COUNTS_S2 ||
-        config.timeout_ms < 20u || config.timeout_ms > 2000u ||
         config.velocity_filter_q8 == 0u || config.ramp_time_ms == 0u ||
-        config.position_min_q8 < -32767 * 256 ||
-        config.position_max_q8 > 32767 * 256 ||
-        config.position_min_q8 >= config.position_max_q8) return false;
+        config.gravity_slew == 0u || config.gravity_slew > 10000u ||
+        config.velocity_ff.effort_limit > config.effort_limit ||
+        (config.velocity_ff.effort_limit == 0u &&
+         (config.velocity_ff.positive_gain_q8 != 0u ||
+          config.velocity_ff.negative_gain_q8 != 0u))) return false;
     state->config = config;
-    /* A new base configuration requires deliberate local FF reconfiguration. */
-    state->velocity_ff = (arm_velocity_ff_t){0};
-    state->profiles[0] = (arm_profile_t){
-        .kp_q8 = config.kp_q8,
-        .kd_q8 = config.kd_q8,
-        .ki_q8 = config.ki_q8,
-        .integral_limit = config.integral_limit,
-        .effort_limit = config.effort_limit,
-        .velocity_filter_q8 = config.velocity_filter_q8,
-    };
-    state->profile_generation[0] = 1;
-    state->profile_generation[1] = 0;
-    state->active_profile = 0;
-    state->transition_bias = 0;
-    return true;
-}
-
-bool arm_control_configure_velocity_ff(arm_control_t *state,
-                                        arm_velocity_ff_t config)
-{
-    if (state == 0 || !state->initialized || state->armed ||
-        state->config.effort_limit == 0u ||
-        config.effort_limit > state->config.effort_limit ||
-        (config.effort_limit == 0u &&
-         (config.positive_gain_q8 != 0u || config.negative_gain_q8 != 0u)))
-        return false;
-    state->velocity_ff = config;
     return true;
 }
 
 bool arm_control_arm(arm_control_t *state, uint16_t session,
-                     int32_t position_counts, uint32_t now_ms)
+                     int32_t position_counts, uint32_t now_ms,
+                     uint16_t minimum, uint16_t maximum)
 {
     if (state == 0 || !state->initialized || state->config.effort_limit == 0u ||
         session == 0u || state->armed ||
         position_counts < -32767 || position_counts > 32767) return false;
-    if ((int64_t)position_counts * 256 < state->config.position_min_q8 ||
-        (int64_t)position_counts * 256 > state->config.position_max_q8)
-        return false;
-    state->gravity_received = state->gravity_stale = false;
+    /* Legacy equal limits disable the travel clamp. The extension still has
+     * its supported signed position range. Reject unrepresentable enabled limits. */
+    int32_t lower = -32767, upper = 32767;
+    if (minimum != maximum) {
+        if (minimum > maximum || maximum > 32767u) return false;
+        lower = minimum;
+        upper = maximum;
+    }
+    if (position_counts < lower || position_counts > upper) return false;
+    state->lower_q8 = lower * 256;
+    state->upper_q8 = upper * 256;
+    state->gravity_received = false;
     state->gravity_sequence = 0;
     state->gravity_effort_q16 = 0;
     state->gravity_target = 0;
     state->session = session;
     state->armed = true;
-    state->expired = false;
     state->holding = true;
     state->target_active = false;
     state->accepted_sequence = 0;
-    state->measured_position_q8 = position_counts * 256;
-    arm_motion_init(&state->motion, state->measured_position_q8);
-    state->last_reference_position_q8 = state->measured_position_q8;
+    int32_t position_q8 = position_counts * 256;
+    arm_motion_init(&state->motion, position_q8);
+    state->last_reference_position_q8 = position_q8;
     state->last_reference_velocity_q8_s = 0;
     state->filtered_velocity_q8_s = 0;
     for (unsigned i = 0; i < ARM_VELOCITY_WINDOW; ++i) {
-        state->velocity_positions_q8[i] = state->measured_position_q8;
+        state->velocity_positions_q8[i] = position_q8;
         state->velocity_intervals_ms[i] = 1;
     }
     state->velocity_cursor = 0;
     state->stationary_ms = 0;
     state->velocity_window_ms = ARM_VELOCITY_WINDOW;
-    state->transition_bias = 0;
     state->last_feedforward = 0;
     state->last_requested_effort = 0;
     state->integral_pending = false;
     state->integral_effort_q16_ms = 0;
-    state->last_tick = state->last_command_tick = now_ms;
+    state->last_tick = now_ms;
     return true;
 }
 
@@ -121,7 +101,6 @@ void arm_control_disarm(arm_control_t *state)
     if (state == 0) return;
     state->armed = state->holding = false;
     state->target_active = false;
-    state->expired = false;
     state->integral_effort_q16_ms = 0;
     state->integral_pending = false;
     state->session = 0;
@@ -131,136 +110,55 @@ void arm_control_disarm(arm_control_t *state)
     state->gravity_sequence = 0;
 }
 
-bool arm_control_target(arm_control_t *state, uint16_t session,
-                        arm_target_t target, uint32_t now_ms)
+/* Serial-number arithmetic: gaps and wrap are valid, but equal, older and
+ * exactly half-range values are not. Senders keep the forward gap below 32768.
+ * Both counters start at zero when armed; the first command normally uses 1. */
+static bool sequence_newer(uint16_t incoming, uint16_t accepted)
 {
-    if (state == 0 || !state->armed || state->expired ||
+    uint16_t distance = (uint16_t)(incoming - accepted);
+    return distance != 0u && distance < 0x8000u;
+}
+
+bool arm_control_target(arm_control_t *state, uint16_t session,
+                        arm_target_t target)
+{
+    if (state == 0 || !state->armed ||
         state->session != session ||
-        target.sequence == 0u ||
-        target.sequence != (uint16_t)(state->accepted_sequence + 1u) ||
-        target.speed_limit == 0u || target.acceleration == 0u) return false;
+        !sequence_newer(target.sequence, state->accepted_sequence) ||
+        target.speed_limit == 0u) return false;
     /* Commands request motion; configuration owns its envelope. Clamp before
      * comparing active limits or planning, so repeated out-of-range targets
      * behave exactly like requests for the same reachable boundary. */
-    if (target.position_q8 < state->config.position_min_q8)
-        target.position_q8 = state->config.position_min_q8;
-    if (target.position_q8 > state->config.position_max_q8)
-        target.position_q8 = state->config.position_max_q8;
+    if (target.position_q8 < state->lower_q8)
+        target.position_q8 = state->lower_q8;
+    if (target.position_q8 > state->upper_q8)
+        target.position_q8 = state->upper_q8;
     if (target.speed_limit > state->config.velocity_limit)
         target.speed_limit = state->config.velocity_limit;
-    if (target.acceleration > state->config.acceleration_limit)
-        target.acceleration = state->config.acceleration_limit;
-    /* Limits are setup for each rest-to-rest move. Streaming retargets preserve
-     * them so the current acceleration and its stopping envelope remain valid. */
+    /* Preserve speed while moving so the planned stopping envelope stays valid.
+     * Acceleration and ramp time are fixed in the session configuration. */
     if (!arm_motion_idle(&state->motion) &&
-        (target.speed_limit != state->motion.speed_limit ||
-         target.acceleration != state->motion.acceleration_limit)) return false;
-    /* Plan atomically from the current reference. Failed commands neither
-     * consume a sequence nor extend the session lease. */
+        target.speed_limit != state->motion.speed_limit) return false;
+    /* Plan atomically from the current reference; rejection keeps the sequence. */
     if (!arm_motion_target(&state->motion, target.position_q8,
-        target.speed_limit, target.acceleration, state->config.ramp_time_ms,
-        state->config.position_min_q8, state->config.position_max_q8)) return false;
+        target.speed_limit, state->config.acceleration_limit, state->config.ramp_time_ms,
+        state->lower_q8, state->upper_q8)) return false;
     state->accepted_sequence = target.sequence;
     state->target_active = !arm_motion_idle(&state->motion);
     state->holding = !state->target_active;
-    state->last_command_tick = now_ms;
-    return true;
-}
-
-bool arm_control_stop(arm_control_t *state, uint16_t session, uint32_t now_ms)
-{
-    if (state == 0 || !state->armed || state->session != session ||
-        now_ms - state->last_tick > 2u) return false;
-    if (!arm_motion_stop(&state->motion, state->config.ramp_time_ms,
-        state->config.position_min_q8, state->config.position_max_q8)) return false;
-    state->target_active = !arm_motion_idle(&state->motion);
-    state->holding = !state->target_active;
-    if (!state->expired) state->last_command_tick = now_ms;
-    return true;
-}
-
-bool arm_control_stage_profile(arm_control_t *state, uint16_t session,
-    uint8_t slot, uint16_t generation, arm_profile_t profile)
-{
-    /* Recovery is the verified torque-off configuration; only candidate slot
-     * can be staged live, and never while that slot is active. */
-    if (!state || !state->armed || state->expired || state->session != session || slot != 1 ||
-        state->active_profile == slot || generation <= state->profile_generation[slot] ||
-        !profile.effort_limit || profile.effort_limit > 1000 ||
-        profile.integral_limit > profile.effort_limit || !profile.velocity_filter_q8) return false;
-    state->profiles[slot] = profile;
-    state->profile_generation[slot] = generation;
-    return true;
-}
-
-bool arm_control_commit_profile(arm_control_t *state, uint16_t session,
-    uint16_t sequence, uint8_t slot, uint16_t generation, uint32_t now_ms)
-{
-    if (!state || !state->armed || state->session != session || slot > 1 || !generation ||
-        state->profile_generation[slot] != generation || !sequence ||
-        !state->holding || state->target_active ||
-        !arm_motion_idle(&state->motion) || now_ms - state->last_tick > 2u)
-        return false;
-    if (sequence == state->accepted_sequence && state->active_profile == slot) return true;
-    if (state->accepted_sequence == 65535u || sequence != state->accepted_sequence + 1u) return false;
-    if (state->active_profile == slot) {
-        state->accepted_sequence = sequence;
-        return true;
-    }
-    arm_profile_t profile = state->profiles[slot];
-    if (state->gravity_received) {
-        int32_t target_magnitude = effort_magnitude(state->gravity_target);
-        int64_t active_magnitude =
-            (int64_t)effort_magnitude(state->gravity_effort_q16);
-        if (target_magnitude > profile.effort_limit ||
-            active_magnitude > (int64_t)profile.effort_limit * 65536)
-            return false;
-    }
-    if (state->last_requested_effort > profile.effort_limit ||
-        state->last_requested_effort < -(int32_t)profile.effort_limit) return false;
-    int64_t integral = state->integral_effort_q16_ms;
-    int64_t bound = (int64_t)profile.integral_limit * 65536000;
-    if (!profile.ki_q8) integral = 0;
-    if (integral > bound) integral = bound;
-    if (integral < -bound) integral = -bound;
-    int64_t nominal = (int64_t)profile.kp_q8 *
-        (state->last_reference_position_q8 - state->measured_position_q8) / 65536 -
-        (int64_t)profile.kd_q8 * state->filtered_velocity_q8_s / 65536 +
-        (int32_t)(integral / 65536) / 1000 + state->last_feedforward;
-    int64_t bias = state->last_requested_effort - nominal;
-    /* Reject unbounded cancellation rather than hiding a wildly wrong profile. */
-    if (bias < -2000 || bias > 2000) return false;
-    state->config.kp_q8 = profile.kp_q8;
-    state->config.kd_q8 = profile.kd_q8;
-    state->config.ki_q8 = profile.ki_q8;
-    state->config.integral_limit = profile.integral_limit;
-    state->config.effort_limit = profile.effort_limit;
-    state->config.velocity_filter_q8 = profile.velocity_filter_q8;
-    state->integral_effort_q16_ms = integral;
-    state->integral_pending = false;
-    state->transition_bias = (int32_t)bias;
-    state->active_profile = slot;
-    state->accepted_sequence = sequence;
-    if (!state->expired) state->last_command_tick = now_ms;
     return true;
 }
 
 bool arm_control_gravity(arm_control_t *state, uint16_t session,
-    uint16_t sequence, int16_t gravity,
-    uint16_t slew_effort_s, uint16_t ttl_ms, uint32_t now_ms)
+    uint16_t sequence, int16_t gravity, uint32_t now_ms)
 {
-    if (!state || !state->armed || state->expired || session != state->session ||
+    if (!state || !state->armed || session != state->session ||
         now_ms - state->last_tick > 2u ||
-        !sequence || sequence != (uint16_t)(state->gravity_sequence + 1u) ||
-        !slew_effort_s || slew_effort_s > 10000u || ttl_ms < 20u || ttl_ms > 500u ||
+        !sequence_newer(sequence, state->gravity_sequence) ||
         effort_magnitude(gravity) > state->config.effort_limit) return false;
     state->gravity_received = true;
-    state->gravity_stale = false;
     state->gravity_sequence = sequence;
     state->gravity_target = gravity;
-    state->gravity_slew = slew_effort_s;
-    state->gravity_ttl_ms = ttl_ms;
-    state->gravity_tick = now_ms;
     return true;
 }
 
@@ -274,30 +172,20 @@ static int32_t slew_effort(int32_t current, int16_t target,
     return current - goal < change ? goal : current - change;
 }
 
-static int16_t step_gravity(arm_control_t *state, uint32_t now_ms, uint32_t dt)
-{
-    if (state->expired || now_ms - state->gravity_tick > state->gravity_ttl_ms)
-        state->gravity_stale = true;
-    if (!state->gravity_stale)
-        state->gravity_effort_q16 = slew_effort(state->gravity_effort_q16,
-            state->gravity_target, state->gravity_slew, dt);
-    return (int16_t)(state->gravity_effort_q16 / 65536);
-}
-
 static int16_t velocity_feedforward(const arm_control_t *state, int32_t velocity_q8_s)
 {
-    uint16_t limit = state->velocity_ff.effort_limit;
+    /* Configuration bounds this cap by the motor limit; neither changes armed. */
+    uint16_t limit = state->config.velocity_ff.effort_limit;
     if (limit == 0u) return 0;
-    if (limit > state->config.effort_limit) limit = state->config.effort_limit;
-    uint16_t gain = velocity_q8_s >= 0 ? state->velocity_ff.positive_gain_q8 :
-        state->velocity_ff.negative_gain_q8;
+    uint16_t gain = velocity_q8_s >= 0 ? state->config.velocity_ff.positive_gain_q8 :
+        state->config.velocity_ff.negative_gain_q8;
     /* Q8 gain times Q8 reference velocity yields Q16 effort. Keep the signed
      * division: both directions truncate toward zero. Maximum product fits
-     * int64_t. Stop/expiry follow the bounded braking reference to zero. */
+     * int64_t. Compensation reaches zero when the planned movement finishes. */
     return clamp_effort((int64_t)gain * velocity_q8_s / 65536, limit);
 }
 
-/* Measurement history is updated before command expiry and reference motion. */
+/* Measurement history is updated before reference motion. */
 static void update_velocity(arm_control_t *state, int32_t measured, uint32_t dt)
 {
     /* Eight acquisition intervals suppress single-count derivative spikes.
@@ -316,7 +204,6 @@ static void update_velocity(arm_control_t *state, int32_t measured, uint32_t dt)
     state->velocity_positions_q8[slot] = measured;
     state->velocity_intervals_ms[slot] = (uint8_t)dt;
     state->velocity_cursor = (uint8_t)((slot + 1u) % ARM_VELOCITY_WINDOW);
-    state->measured_position_q8 = measured;
     /* Repeat the blend at most twice to preserve its per-ms time scale. */
     for (unsigned i = 0; i < dt; ++i) {
         int64_t difference = (int64_t)raw_velocity - state->filtered_velocity_q8_s;
@@ -336,31 +223,23 @@ static void update_velocity(arm_control_t *state, int32_t measured, uint32_t dt)
     } else state->stationary_ms = 0;
 }
 
-/* Stop/expiry keep the load-support bias while bringing reference velocity
- * to zero. Disarm, in contrast, clears the powered session and its bias. */
-static bool advance_reference(arm_control_t *state, uint32_t now_ms,
-                              uint32_t dt, arm_result_t *result)
+/* Accepted targets and gravity remain active until replaced or disarmed. */
+static void advance_reference(arm_control_t *state, uint32_t dt,
+                              arm_result_t *result)
 {
-    if (!state->expired &&
-        now_ms - state->last_command_tick > state->config.timeout_ms) {
-        state->expired = true;
-        if (!arm_motion_stop(&state->motion, state->config.ramp_time_ms,
-            state->config.position_min_q8, state->config.position_max_q8)) {
-            arm_control_disarm(state);
-            return false;
-        }
-    }
     arm_motion_step(&state->motion, dt);
     state->target_active = !arm_motion_idle(&state->motion);
     state->holding = !state->target_active;
     result->reference_position_q8 = arm_motion_position(&state->motion);
     result->reference_velocity_q8_s = arm_motion_velocity(&state->motion);
-    if (state->gravity_received)
-        result->gravity_feedforward = step_gravity(state, now_ms, dt);
+    if (state->gravity_received) {
+        state->gravity_effort_q16 = slew_effort(state->gravity_effort_q16,
+            state->gravity_target, state->config.gravity_slew, dt);
+        result->gravity_feedforward = (int16_t)(state->gravity_effort_q16 / 65536);
+    }
     result->velocity_feedforward = velocity_feedforward(
         state, result->reference_velocity_q8_s);
     result->feedforward = result->gravity_feedforward + result->velocity_feedforward;
-    return true;
 }
 
 /* Gain Q8 times position/velocity Q8 produces effort Q16. The integral also
@@ -395,17 +274,10 @@ static void step_feedback(arm_control_t *state, int32_t measured,
     /* Sequential truncation by positive integer factors is exact; after the
      * Q16 shift the clamped integral fits i32, avoiding a software wide divide. */
     int32_t i = (int32_t)(state->integral_effort_q16_ms / 65536) / 1000;
-    int64_t raw = p + d + i + result->feedforward + state->transition_bias;
-    result->transition_bias = (int16_t)state->transition_bias;
+    int64_t raw = p + d + i + result->feedforward;
     result->advanced = true;
     result->session = state->session;
     result->gravity_sequence = state->gravity_sequence;
-    /* Hold one sample at the matched effort, then remove the handover offset.
-     * Feedback still responds normally to subsequent measured disturbances. */
-    if (state->transition_bias > 0)
-        state->transition_bias -= state->transition_bias > (int32_t)dt ? (int32_t)dt : state->transition_bias;
-    else if (state->transition_bias < 0)
-        state->transition_bias += -state->transition_bias > (int32_t)dt ? (int32_t)dt : -state->transition_bias;
     result->p_term = clamp_effort(p, 32767);
     result->d_term = clamp_effort(d, 32767);
     result->i_term = (int16_t)i;
@@ -459,7 +331,7 @@ __attribute__((noinline)) arm_result_t arm_control_step(arm_control_t *state, in
     int32_t measured = position_counts * 256;
     update_velocity(state, measured, dt);
     result.measured_velocity_q8_s = state->filtered_velocity_q8_s;
-    if (!advance_reference(state, now_ms, dt, &result)) return (arm_result_t){0};
+    advance_reference(state, dt, &result);
     step_feedback(state, measured, dt, current_limit_active, &result);
     return result;
 }

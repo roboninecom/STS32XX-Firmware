@@ -2,7 +2,7 @@
 #include "command_service.h"
 #include "app_runtime.h"
 #include "board.h"
-#if defined(FW_TIMING_PROBE) || defined(FW_FLASH_DUMP)
+#ifdef FW_TIMING_PROBE
 #include "diagnostic_service.h"
 #endif
 
@@ -12,11 +12,9 @@
 static void calibrate_position(app_state_t *state, int16_t target)
 {
     register_table_t *registers = &state->device.registers;
+    arm_extension_end_session(state);
     registers->byte[REG_TORQUE_ENABLE] = 0u;
     app_runtime_revoke_output(state);
-#ifdef FW_MOTOR_TEST
-    state->drive_lease_valid = false;
-#endif
     if (!state->control_initialized ||
         (uint32_t)(sensor_driver_ticks(&state->sensors) - state->last_good_tick) > 2u ||
         !sensor_service_calibrate(&state->sensor_service, registers, target)) return;
@@ -26,7 +24,6 @@ static void calibrate_position(app_state_t *state, int16_t target)
         (void)app_runtime_commit_storage(state);
 }
 
-#ifndef FW_MOTOR_TEST
 static bool continuous_goal_write(const protocol_result_t *result)
 {
     const register_write_result_t *write = &result->write;
@@ -34,22 +31,18 @@ static bool continuous_goal_write(const protocol_result_t *result)
            write->accepted_count != 0u && write->start >= 41u &&
            (unsigned)write->start + write->accepted_count <= 48u;
 }
-#endif
 
 void command_service_apply(const protocol_result_t *result, void *context)
 {
     app_state_t *state = context;
     register_table_t *registers = &state->device.registers;
-#ifdef FW_MOTOR_TEST
-    bool lease_heartbeat = result->effect == PROTOCOL_EFFECT_WRITE &&
-        result->write.start == 40u && result->write.accepted_count == 1u &&
-        !result->write.any_changed && registers->byte[REG_TORQUE_ENABLE] == 1u &&
-        state->drive_lease_valid;
-    if (result->effect != PROTOCOL_EFFECT_NONE && !lease_heartbeat) {
-        app_runtime_revoke_output(state);
-        state->drive_lease_valid = false;
-    }
-#else
+    /* An idempotent enable must not interrupt an active extension move. Mixed
+     * register writes still take the normal output-requalification path. */
+    if (state->arm_selected && state->arm.armed &&
+        registers->byte[REG_TORQUE_ENABLE] == 1u &&
+        result->effect == PROTOCOL_EFFECT_WRITE &&
+        result->write.start == REG_TORQUE_ENABLE && result->write.accepted_count == 1u)
+        return;
     /* Motion requests can include acceleration at 41. Requalifying the
      * bridge for each such packet interrupts a continuous goal stream.
      * Torque, mode and configuration writes still revoke output. */
@@ -57,26 +50,22 @@ void command_service_apply(const protocol_result_t *result, void *context)
         !continuous_goal_write(result)) {
         app_runtime_revoke_output(state);
     }
-#endif
     switch (result->effect) {
     case PROTOCOL_EFFECT_WRITE:
+        /* Starting control caches legacy travel limits. End the session before changing
+         * that envelope, even if storage is unavailable and the write is RAM-only. */
+        if (state->arm_selected && registers_write_touches(&result->write,
+                REG_MIN_ANGLE_LIMIT, REG_MAX_ANGLE_LIMIT + 1u))
+            arm_extension_end_session(state);
         if (state->arm_selected &&
             (registers_write_touches(&result->write, 33u, 33u) ||
              registers_write_touches(&result->write, 41u, 47u))) {
-            arm_control_disarm(&state->arm);
+            arm_extension_end_session(state);
             state->arm_selected = false;
             registers->byte[REG_TORQUE_ENABLE] = 0;
             app_runtime_revoke_output(state);
         }
-        if (state->arm_selected && registers->byte[REG_TORQUE_ENABLE] != 1u)
-            arm_control_disarm(&state->arm);
-#ifdef FW_MOTOR_TEST
-        if (lease_heartbeat) {
-            state->drive_lease_deadline = sensor_driver_ticks(&state->sensors) + 200u;
-            break;
-        }
-#endif
-#if defined(FW_TIMING_PROBE) || defined(FW_FLASH_DUMP)
+#ifdef FW_TIMING_PROBE
         diagnostic_service_write(state, &result->write);
 #endif
         if (registers->byte[REG_LOCK] == 0u &&
@@ -98,6 +87,7 @@ void command_service_apply(const protocol_result_t *result, void *context)
         if (registers_write_touches(&result->write, 31u, 32u)) {
             /* The corrected encoder position anchors a new active profile.
              * The commanded goal register remains untouched. */
+            arm_extension_end_session(state);
             sensor_service_offset_written(&state->sensor_service, registers);
             state->control_initialized = false;
             app_runtime_queue_motion(state, false, false);
@@ -107,6 +97,8 @@ void command_service_apply(const protocol_result_t *result, void *context)
             calibrate_position(state, 2048);
             break;
         }
+        if (registers_write_touches(&result->write, REG_TORQUE_ENABLE, REG_TORQUE_ENABLE))
+            arm_extension_torque_written(state);
         bool position_goal = registers_write_touches(&result->write, 42u, 43u);
         bool auto_torque =
             (position_goal && (registers->byte[REG_OPERATION_MODE] == MOTION_MODE_POSITION ||
@@ -122,14 +114,6 @@ void command_service_apply(const protocol_result_t *result, void *context)
             if (position_goal) diagnostic_service_goal_queued(state);
 #endif
         }
-#ifdef FW_MOTOR_TEST
-        if (state->motion.auto_torque ||
-            (registers_write_touches(&result->write, 40u, 40u) &&
-             (registers->byte[REG_TORQUE_ENABLE] == 1u || registers->byte[REG_TORQUE_ENABLE] == 2u))) {
-            state->drive_lease_deadline = sensor_driver_ticks(&state->sensors) + 200u;
-            state->drive_lease_valid = true;
-        }
-#endif
         break;
     case PROTOCOL_EFFECT_SYSTEM_RESET:
         board_system_reset();
@@ -155,6 +139,7 @@ void command_service_apply(const protocol_result_t *result, void *context)
         }
         break;
     case PROTOCOL_EFFECT_ENCODER_HOME:
+        arm_extension_end_session(state);
         registers->byte[REG_TORQUE_ENABLE] = 0;
         app_runtime_queue_motion(state, false, false);
         break;

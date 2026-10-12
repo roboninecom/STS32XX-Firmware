@@ -2,7 +2,7 @@
 #include "app_runtime.h"
 #include "command_service.h"
 #include "board.h"
-#if defined(FW_TIMING_PROBE) || defined(FW_FLASH_DUMP)
+#ifdef FW_TIMING_PROBE
 #include "diagnostic_service.h"
 #endif
 #include "storage_service.h"
@@ -22,7 +22,7 @@ static __attribute__((noinline)) void initialize(void)
 {
     if (!board_init_safe()) board_halt_safe();
     status_led_driver_init();
-#if defined(FW_TIMING_PROBE) || defined(FW_FLASH_DUMP)
+#ifdef FW_TIMING_PROBE
     diagnostic_service_early_init(&app);
 #endif
 
@@ -61,9 +61,6 @@ static __attribute__((noinline)) void initialize(void)
     initial.byte[REG_LOCK] = 1;
     registers_set_u16(&initial, REG_TORQUE_LIMIT, registers_u16(&initial, REG_MAX_TORQUE));
     device_init(&app.device, &initial);
-#if defined(FW_TIMING_PROBE) || defined(FW_FLASH_DUMP)
-    diagnostic_service_device_init(&app);
-#endif
     bus_service_init(&app.bus, &app.device, command_service_apply, &app, initial.byte[REG_BAUD_RATE]);
     arm_control_init(&app.arm, 0, 0);
     protocol_service_bind_extension(&app.bus.protocol,

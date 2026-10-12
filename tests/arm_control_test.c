@@ -10,8 +10,7 @@ static arm_config_t config(void)
         .kp_q8=256, .kd_q8=64, .ki_q8=8,
         .integral_limit=100, .effort_limit=700,
         .velocity_limit=5000, .acceleration_limit=30000,
-        .timeout_ms=500, .velocity_filter_q8=64, .ramp_time_ms=30,
-        .position_min_q8=-4096*256, .position_max_q8=4096*256,
+        .gravity_slew=1000,.velocity_filter_q8=64, .ramp_time_ms=30,
     };
 }
 
@@ -25,19 +24,17 @@ static void provisional_acceleration_cap(void)
     assert(state.config.acceleration_limit == 0);
     limits.acceleration_limit = ARM_MAX_ACCELERATION_COUNTS_S2;
     assert(arm_control_configure(&state, limits));
-    assert(arm_control_arm(&state, 1, 0, 0));
+    assert(arm_control_arm(&state, 1, 0, 0,0,0));
     arm_target_t target = {.sequence=1, .position_q8=100*256,
-        .speed_limit=100, .acceleration=30000};
-    assert(arm_control_target(&state, 1, target, 0));
+        .speed_limit=100, };
+    assert(arm_control_target(&state, 1, target));
 
     target.sequence=2;
-    target.acceleration=30001;
-    assert(arm_control_target(&state, 1, target, 0));
+    assert(arm_control_target(&state, 1, target));
     assert(state.motion.acceleration_limit == 30000);
     target.sequence=3;
-    target.acceleration=30000;
     target.speed_limit=101;
-    assert(!arm_control_target(&state, 1, target, 0));
+    assert(!arm_control_target(&state, 1, target));
     assert(state.accepted_sequence == 2);
 }
 
@@ -47,49 +44,46 @@ static void clipped_targets(void)
 {
     for (int direction = -1; direction <= 1; direction += 2) {
         arm_control_t clipped, explicit;
-        arm_control_init(&clipped, 0, 0);
+        arm_control_init(&clipped, 200, 0);
         arm_config_t limits = config();
-        limits.position_min_q8 = -100 * 256;
-        limits.position_max_q8 = 100 * 256;
+
+
         limits.velocity_limit = 500;
         limits.acceleration_limit = 1000;
         assert(arm_control_configure(&clipped, limits));
-        assert(arm_control_arm(&clipped, 9, 0, 0));
+        assert(arm_control_arm(&clipped, 9, 200, 0,100,300));
         explicit = clipped;
         arm_target_t request = {.sequence=1,
             .position_q8=direction < 0 ? INT32_MIN : INT32_MAX,
-            .speed_limit=UINT16_MAX, .acceleration=UINT16_MAX};
-        arm_target_t boundary = {.sequence=1, .position_q8=direction * 100 * 256,
-            .speed_limit=500, .acceleration=1000};
-        assert(arm_control_target(&clipped, 9, request, 1));
-        assert(arm_control_target(&explicit, 9, boundary, 1));
+            .speed_limit=UINT16_MAX, };
+        arm_target_t boundary = {.sequence=1, .position_q8=(200 + direction * 100) * 256,
+            .speed_limit=500, };
+        assert(arm_control_target(&clipped, 9, request));
+        assert(arm_control_target(&explicit, 9, boundary));
         assert(memcmp(&clipped, &explicit, sizeof clipped) == 0);
-        assert(clipped.accepted_sequence == 1 && clipped.last_command_tick == 1);
+        assert(clipped.accepted_sequence == 1);
         for (unsigned tick = 1; !arm_motion_idle(&clipped.motion); ++tick) {
             assert(tick < 2000);
             arm_motion_step(&clipped.motion, 1);
             arm_motion_step(&explicit.motion, 1);
             if (tick == 50) {
                 request.sequence = boundary.sequence = 2;
-                assert(arm_control_target(&clipped, 9, request, tick));
-                assert(arm_control_target(&explicit, 9, boundary, tick));
+                assert(arm_control_target(&clipped, 9, request));
+                assert(arm_control_target(&explicit, 9, boundary));
             }
             assert(memcmp(&clipped, &explicit, sizeof clipped) == 0);
             int32_t q = arm_motion_position(&clipped.motion);
-            assert(q >= limits.position_min_q8 && q <= limits.position_max_q8);
+            assert(q >= clipped.lower_q8 && q <= clipped.upper_q8);
         }
         assert(arm_motion_position(&clipped.motion) == boundary.position_q8);
         arm_control_t before = clipped;
         request.sequence = 3;
         request.speed_limit = 0;
-        assert(!arm_control_target(&clipped, 9, request, 2000));
+        assert(!arm_control_target(&clipped, 9, request));
         request.speed_limit = UINT16_MAX;
-        request.acceleration = 0;
-        assert(!arm_control_target(&clipped, 9, request, 2000));
-        request.acceleration = UINT16_MAX;
-        assert(!arm_control_target(&clipped, 10, request, 2000));
+        assert(!arm_control_target(&clipped, 10, request));
         request.sequence = 2;
-        assert(!arm_control_target(&clipped, 9, request, 2000));
+        assert(!arm_control_target(&clipped, 9, request));
         assert(memcmp(&before, &clipped, sizeof clipped) == 0);
     }
 }
@@ -99,12 +93,12 @@ static void trajectory_and_session(void)
     arm_control_t state;
     arm_control_init(&state, 0, 0);
     assert(arm_control_configure(&state, config()));
-    assert(arm_control_arm(&state, 7, 0, 0));
+    assert(arm_control_arm(&state, 7, 0, 0,0,0));
     arm_target_t target = {.position_q8=100*256, .speed_limit=1000,
-        .acceleration=30000, .sequence=1};
-    assert(!arm_control_target(&state, 8, target, 0));
-    assert(arm_control_target(&state, 7, target, 0));
-    assert(!arm_control_target(&state, 7, target, 0));
+         .sequence=1};
+    assert(!arm_control_target(&state, 8, target));
+    assert(arm_control_target(&state, 7, target));
+    assert(!arm_control_target(&state, 7, target));
 
     int32_t previous = 0;
     for (uint32_t tick=1; tick<=300; ++tick) {
@@ -119,12 +113,12 @@ static void trajectory_and_session(void)
     assert(arm_control_step(&state, 0, 301, true, false).holding);
     assert(arm_control_step(&state, 0, 304, true, false).active == false);
     arm_control_disarm(&state);
-    assert(!arm_control_target(&state, 7, target, 305));
-    assert(arm_control_arm(&state, 8, 0, 305));
-    assert(!arm_control_target(&state, 7, target, 305));
+    assert(!arm_control_target(&state, 7, target));
+    assert(arm_control_arm(&state, 8, 0, 305,0,0));
+    assert(!arm_control_target(&state, 7, target));
 }
 
-static void final_output_and_expiry(void)
+static void final_output_and_sensor_deadline(void)
 {
     arm_control_t state;
     arm_control_init(&state, 0, 0);
@@ -133,10 +127,10 @@ static void final_output_and_expiry(void)
     gains.kd_q8 = 0;
     gains.ki_q8 = 256;
     assert(arm_control_configure(&state, gains));
-    assert(arm_control_arm(&state, 1, 0, 0));
+    assert(arm_control_arm(&state, 1, 0, 0,0,0));
     arm_target_t target = {.position_q8=50*256, .speed_limit=500,
-        .acceleration=1000, .sequence=1};
-    assert(arm_control_target(&state, 1, target, 0));
+         .sequence=1};
+    assert(arm_control_target(&state, 1, target));
 
     for (uint32_t tick=1; tick<50; ++tick) {
         arm_result_t r = arm_control_step(&state, 0, tick, true, false);
@@ -147,7 +141,7 @@ static void final_output_and_expiry(void)
     arm_result_t lost = arm_control_step(&state, 0, 501, true, false);
     assert(!lost.active);
     assert(!lost.fresh);
-    assert(!arm_control_target(&state, 2, target, 501));
+    assert(!arm_control_target(&state, 2, target));
 }
 
 static void sparse_host_target_planning(void)
@@ -155,15 +149,15 @@ static void sparse_host_target_planning(void)
     arm_control_t state;
     arm_control_init(&state, 0, 0);
     arm_config_t limits = config();
-    limits.timeout_ms = 1000;
+    limits.acceleration_limit = 2000;
     assert(arm_control_configure(&state, limits));
-    assert(arm_control_arm(&state, 9, 0, 0));
+    assert(arm_control_arm(&state, 9, 0, 0,0,0));
     arm_target_t target = {.position_q8=100*256, .speed_limit=1000,
-        .acceleration=2000, .sequence=1};
-    assert(arm_control_target(&state, 9, target, 0));
-    assert(!arm_control_target(&state, 9, target, 0));
+         .sequence=1};
+    assert(arm_control_target(&state, 9, target));
+    assert(!arm_control_target(&state, 9, target));
 
-    assert(arm_control_gravity(&state, 9, 1, 70, 10000, 500, 0));
+    assert(arm_control_gravity(&state, 9, 1, 70, 0));
     int32_t previous_position = 0, previous_speed = 0;
     bool saw_braking = false;
     bool reached = false;
@@ -173,7 +167,7 @@ static void sparse_host_target_planning(void)
             int32_t speed = arm_motion_velocity(&state.motion);
             target.position_q8 = 150*256;
             target.sequence = 2;
-            assert(arm_control_target(&state, 9, target, tick-1));
+            assert(arm_control_target(&state, 9, target));
 
             assert(arm_motion_position(&state.motion) == before);
             assert(arm_motion_velocity(&state.motion) == speed);
@@ -204,43 +198,43 @@ static void sparse_host_target_planning(void)
 
 }
 
-static void target_reversal_and_timeout(void)
+static void target_reversal_and_persistent_hold(void)
 {
     arm_control_t state;
     arm_control_init(&state, 0, 0);
     arm_config_t limits = config();
-    limits.timeout_ms = 300;
+    limits.acceleration_limit = 2000;
     assert(arm_control_configure(&state, limits));
-    assert(arm_control_arm(&state, 12, 0, 0));
+    assert(arm_control_arm(&state, 12, 0, 0,0,0));
     arm_target_t target = {.position_q8=100*256, .speed_limit=500,
-        .acceleration=2000, .sequence=1};
-    assert(arm_control_target(&state, 12, target, 0));
+         .sequence=1};
+    assert(arm_control_target(&state, 12, target));
 
     int32_t previous_velocity = 0;
     for (uint32_t tick=1; tick<300; ++tick) {
         if (tick == 70) {
             target.position_q8 = -20*256;
             target.sequence = 2;
-            assert(arm_control_target(&state, 12, target, tick-1));
+            assert(arm_control_target(&state, 12, target));
         }
         arm_result_t r = arm_control_step(&state, 0, tick, true, false);
         assert(r.active && r.fresh);
-        assert(r.reference_position_q8 >= limits.position_min_q8);
-        assert(r.reference_position_q8 <= limits.position_max_q8);
+        assert(r.reference_position_q8 >= state.lower_q8);
+        assert(r.reference_position_q8 <= state.upper_q8);
         assert(r.reference_velocity_q8_s - previous_velocity <= 2000*256/1000);
         assert(previous_velocity - r.reference_velocity_q8_s <= 2000*256/1000);
         previous_velocity = r.reference_velocity_q8_s;
     }
-    for (uint32_t tick=300; tick<372; ++tick) {
-        arm_result_t r = arm_control_step(&state, 0, tick, true, false);
-        assert(r.active && r.fresh);
+    arm_result_t held={0};
+    for (uint32_t tick=300; tick<=10000; ++tick) {
+        held=arm_control_step(&state, -20, tick, true, false);
+        assert(held.active && held.fresh);
     }
-    assert(state.expired);
-    for (uint32_t tick=372; tick<600; ++tick)
-        (void)arm_control_step(&state, 0, tick, true, false);
-    arm_result_t held = arm_control_step(&state, 0, 600, true, false);
-    assert(state.armed && held.active && held.holding && held.fresh);
-    assert(!arm_control_target(&state, 12, target, 372));
+    assert(state.armed && held.holding && held.reference_position_q8==-20*256);
+    assert(!arm_control_target(&state,12,target)); /* Duplicate remains rejected. */
+    target.sequence++;
+    target.position_q8=40*256;
+    assert(arm_control_target(&state,12,target)); /* No rearm after silence. */
 }
 
 static void target_updates_at_sixty_frames(void)
@@ -248,19 +242,19 @@ static void target_updates_at_sixty_frames(void)
     arm_control_t state;
     arm_control_init(&state, 0, 0);
     arm_config_t limits = config();
-    limits.timeout_ms = 1000;
+    limits.acceleration_limit = 1800;
     assert(arm_control_configure(&state, limits));
-    assert(arm_control_arm(&state, 19, 0, 0));
-    arm_target_t target = {.speed_limit=400, .acceleration=1800};
+    assert(arm_control_arm(&state, 19, 0, 0,0,0));
+    arm_target_t target = {.speed_limit=400, };
     int32_t previous_velocity = 0;
     for (uint32_t tick=1; tick<=510; ++tick) {
         if (tick == 1 || tick % 17 == 0) {
             target.sequence++;
             target.position_q8 = (int32_t)((tick/17+1)*8*256);
-            assert(arm_control_target(&state, 19, target, tick-1));
+            assert(arm_control_target(&state, 19, target));
         }
         arm_result_t r = arm_control_step(&state, 0, tick, true, false);
-        assert(r.active && r.fresh && !state.expired);
+        assert(r.active && r.fresh);
         assert(r.reference_velocity_q8_s <= 400*256);
         assert(r.reference_velocity_q8_s - previous_velocity <= 1800*256/1000+1);
         assert(previous_velocity - r.reference_velocity_q8_s <= 1800*256/1000+1);
@@ -274,7 +268,7 @@ static void same_tick_fresh_pair_does_not_revoke_control(void)
     arm_control_t state;
     arm_control_init(&state, 20, 100);
     assert(arm_control_configure(&state, config()));
-    assert(arm_control_arm(&state, 23, 20, 100));
+    assert(arm_control_arm(&state, 23, 20, 100,0,0));
     arm_result_t first = arm_control_step(&state, 20, 100, true, false);
     assert(first.fresh && first.active && first.holding);
     assert(first.reference_position_q8 == 20*256);
@@ -307,21 +301,25 @@ static void high_speed_sweep_reference_stays_bounded(void)
     limits.effort_limit = 1000;
     limits.velocity_limit = 6000;
     limits.acceleration_limit = 30000;
-    limits.timeout_ms = 2000;
-    limits.position_min_q8 = 480*256;
-    limits.position_max_q8 = 3616*256;
+
+
     assert(arm_control_configure(&state, limits));
-    assert(arm_control_arm(&state, 31, 512, 0));
+    assert(arm_control_arm(&state, 31, 512, 0,480,3616));
     uint32_t tick = 0;
     int32_t measured = 512;
     uint16_t sequence = 0;
     for (unsigned profile=0; profile<4; ++profile) {
+        arm_control_disarm(&state);
+        limits.acceleration_limit=acceleration[profile];
+        assert(arm_control_configure(&state,limits));
+        assert(arm_control_arm(&state,31,measured,tick,480,3616));
+        sequence=0;
         for (unsigned direction=0; direction<2; ++direction) {
             const int32_t destination = direction == 0 ? 3584 : 512;
             arm_target_t target = {.sequence=++sequence,
                 .position_q8=destination*256, .speed_limit=speed[profile],
-                .acceleration=acceleration[profile]};
-            assert(arm_control_target(&state, 31, target, tick));
+                };
+            assert(arm_control_target(&state, 31, target));
 
             int32_t previous_speed = 0;
             bool reached = false;
@@ -354,16 +352,17 @@ static void target_rejection_preserves_motion_and_sequence(void)
     arm_control_t state;
     arm_control_init(&state, 0, 0);
     arm_config_t limits=config();
-    limits.position_max_q8=100*256;
+    limits.acceleration_limit = 1000;
+
     assert(arm_control_configure(&state, limits));
-    assert(arm_control_arm(&state, 1, 0, 0));
+    assert(arm_control_arm(&state, 1, 0, 0,0,100));
     /* Feasibility includes travel needed to remove the current acceleration. */
     state.motion.position=99LL*((int64_t)1<<36);
     state.motion.velocity=((int64_t)1<<36)/10; /* 100 counts/s */
     arm_motion_t before=state.motion;
     assert(!arm_control_target(&state, 1, (arm_target_t){.sequence=1,
-        .position_q8=100*256,.speed_limit=1000,.acceleration=1000},1));
-    assert(state.accepted_sequence==0 && state.last_command_tick==0);
+        .position_q8=100*256,.speed_limit=1000}));
+    assert(state.accepted_sequence==0);
     assert(memcmp(&before,&state.motion,sizeof before)==0);
 }
 
@@ -372,11 +371,11 @@ static void velocity_arithmetic_extremes(void)
     arm_control_t state;
     arm_control_init(&state, -32767, 0);
     arm_config_t limits = config();
-    limits.position_min_q8 = -32767 * 256;
-    limits.position_max_q8 = 32767 * 256;
+
+
     limits.velocity_filter_q8 = 255;
     assert(arm_control_configure(&state, limits));
-    assert(arm_control_arm(&state, 1, -32767, 0));
+    assert(arm_control_arm(&state, 1, -32767, 0,0,0));
     uint32_t tick = 0;
     for (unsigned n = 0; n < 32; ++n) {
         uint32_t dt = 1 + (n % 2);
@@ -395,16 +394,93 @@ static void velocity_arithmetic_extremes(void)
     }
 }
 
+static void sequence_gaps_wrap_and_sessions(void)
+{
+    arm_control_t state;
+    arm_control_init(&state,0,0);
+    assert(arm_control_configure(&state,config()));
+    assert(arm_control_arm(&state,7,0,0,0,0));
+    arm_target_t target={.position_q8=0,.speed_limit=100};
+    /* Explicit boundary cases, including the ambiguous half-range jump. */
+    const struct {uint16_t sequence;bool accepted;} cases[]={
+        {0,false},{1,true},{1,false},{4,true},{3,false},
+        {32771,true}, /* maximum forward gap: 32767 */
+        {3,false},    /* exactly 32768 ahead */
+        {4,false},    /* older across the modular boundary */
+        {65534,true},{65535,true},{0,true},{1,true},{65535,false},
+    };
+    for(unsigned i=0;i<sizeof cases/sizeof cases[0];i++) {
+        target.sequence=cases[i].sequence;
+        arm_control_t before=state;
+        assert(arm_control_target(&state,7,target)==cases[i].accepted);
+        if(!cases[i].accepted) assert(memcmp(&before,&state,sizeof state)==0);
+        assert(arm_control_gravity(&state,7,target.sequence,40,0)==cases[i].accepted);
+        if(!cases[i].accepted) assert(memcmp(&before,&state,sizeof state)==0);
+        else assert(state.accepted_sequence==target.sequence && state.gravity_sequence==target.sequence);
+    }
+    /* A rejected command consumes nothing; a later valid command may skip it. */
+    target.sequence=5;target.speed_limit=0;
+    assert(!arm_control_target(&state,7,target));
+    assert(!arm_control_gravity(&state,7,5,701,0));
+    target.sequence=6;target.speed_limit=100;
+    assert(arm_control_target(&state,7,target));
+    assert(arm_control_gravity(&state,7,6,0,0));
+    /* More than two full counter cycles without any rearming. */
+    for(unsigned i=7;i<=131073;i++) {
+        target.sequence=(uint16_t)i;
+        assert(arm_control_target(&state,7,target));
+        assert(arm_control_gravity(&state,7,(uint16_t)i,0,0));
+    }
+    assert(state.armed && state.session==7);
+    arm_control_disarm(&state);
+    assert(arm_control_arm(&state,8,0,0,0,0));
+    target.sequence=1;
+    assert(!arm_control_target(&state,7,target));
+    assert(!arm_control_gravity(&state,7,1,0,0));
+    assert(arm_control_target(&state,8,target));
+    assert(arm_control_gravity(&state,8,1,0,0));
+}
+
+static void legacy_limits_are_captured_at_arming(void)
+{
+    const struct {uint16_t minimum,maximum;int32_t position;bool valid;} cases[]={
+        {500,3500,500,true},{500,3500,3500,true},
+        {500,3500,499,false},{500,3500,3501,false},
+        {3500,500,1000,false},{0,32768,1000,false},{32768,65535,1000,false},
+        {0,0,-32767,true},{0,0,32767,true},{1000,1000,-1,true},
+        {65535,65535,32767,true},{0,0,32768,false},
+    };
+    for(unsigned i=0;i<sizeof cases/sizeof cases[0];i++) {
+        arm_control_t state;
+        arm_control_init(&state,1000,0);
+        assert(arm_control_configure(&state,config()));
+        arm_control_t before=state;
+        bool valid=arm_control_arm(&state,1,cases[i].position,0,
+            cases[i].minimum,cases[i].maximum);
+        assert(valid==cases[i].valid);
+        if(!valid) {
+            assert(memcmp(&state,&before,sizeof state)==0);
+            continue;
+        }
+        bool disabled=cases[i].minimum==cases[i].maximum;
+        assert(state.lower_q8==(disabled?-32767:(int32_t)cases[i].minimum)*256);
+        assert(state.upper_q8==(disabled?32767:(int32_t)cases[i].maximum)*256);
+        assert(state.last_reference_position_q8==cases[i].position*256);
+    }
+}
+
 int main(void)
 {
+    legacy_limits_are_captured_at_arming();
+    sequence_gaps_wrap_and_sessions();
     velocity_arithmetic_extremes();
     target_rejection_preserves_motion_and_sequence();
     provisional_acceleration_cap();
     clipped_targets();
     trajectory_and_session();
-    final_output_and_expiry();
+    final_output_and_sensor_deadline();
     sparse_host_target_planning();
-    target_reversal_and_timeout();
+    target_reversal_and_persistent_hold();
     target_updates_at_sixty_frames();
     same_tick_fresh_pair_does_not_revoke_control();
     bridge_effort_matches_encoder_direction();

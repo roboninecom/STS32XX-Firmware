@@ -154,11 +154,30 @@ static void inject_sync_read(void)
     uart_driver_poll(NULL);
 }
 
+static void write_torque(app_state_t *state, uint8_t torque)
+{
+    state->device.registers.byte[REG_TORQUE_ENABLE] = torque;
+    protocol_result_t write = {.effect=PROTOCOL_EFFECT_WRITE,
+        .write={.start=REG_TORQUE_ENABLE,.accepted_count=1}};
+    command_service_apply(&write,state);
+}
+
+static void select_extension(app_state_t *state, uint16_t session)
+{
+    protocol_packet_t packet={.id=2,.instruction=0x91,.param_count=4,
+        .params={0xB8,1,(uint8_t)session,(uint8_t)(session>>8)}};
+    protocol_result_t reply={0};
+    arm_extension_process(&packet,&state->device.registers,&reply,state);
+    assert(reply.response[5]==0 && state->arm_selected && !state->arm.armed);
+    assert(state->arm_pending_session==session);
+}
+
 static void arm_extension_transaction_test(void)
 {
     app_state_t arm_state = {0};
     registers_factory_defaults(&arm_state.device.registers);
     arm_state.device.registers.byte[5] = 2;
+    registers_set_u16(&arm_state.device.registers, REG_MAX_ANGLE_LIMIT, 4095);
     arm_state.control_initialized = true;
     arm_state.sensors.ticks = 12;
     arm_state.last_good_tick = 12;
@@ -166,39 +185,37 @@ static void arm_extension_transaction_test(void)
     arm_state.sensor_service.measurement.arm_position = 100;
     arm_control_init(&arm_state.arm, 100, 12);
     protocol_result_t reply = {0};
-    protocol_packet_t packet = {.id=2, .instruction=0x91, .param_count=27};
-    uint8_t config[26] = {0};
+    protocol_packet_t packet = {.id=2, .instruction=0x91, .param_count=25};
+    uint8_t config[24] = {0};
     config[0]=0;
     config[1]=1; /* Kp 256 */
     config[8]=0xbc; config[9]=2; /* effort 700 */
     config[10]=0x88; config[11]=0x13; /* velocity 5000 */
     config[12]=0x30; config[13]=0x75; /* acceleration 30000 */
-    config[14]=0xf4; config[15]=1; /* timeout 500 ms */
-    config[16]=64; config[17]=30;
-    /* Shared little-endian vector in StsServoDriver/test/arm-extension.test.js. */
-    const uint8_t range_bytes[8] = {0, 0, 0xf0, 0xff, 0, 0, 0x10, 0};
-    memcpy(config+18, range_bytes, sizeof range_bytes);
+    config[14]=64; config[15]=30;
+    config[22]=0xe8;config[23]=3; /* gravity slew 1000 */
+    /* Shared little-endian configuration vector in the host codec tests. */
     packet.params[0] = 0xA0;
-    memcpy(packet.params+1, config, 26);
+    memcpy(packet.params+1, config, 24);
     arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
     assert(reply.response_size == 7 && reply.response[5] == 0);
+    arm_config_t accepted_config=arm_state.arm.config;
+    for(unsigned count=27;count<=33;count+=6) { /* Old 26/32-byte configuration. */
+        packet.param_count=(uint8_t)count;
+        arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
+        assert(reply.response[5]==1);
+        assert(memcmp(&accepted_config,&arm_state.arm.config,sizeof accepted_config)==0);
+    }
+    packet.param_count=25;
     config[12]=0x31; /* 30001 is rejected without changing the RAM profile. */
-    memcpy(packet.params+1, config, 26);
+    memcpy(packet.params+1, config, 24);
     arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
     assert(reply.response[5] == 1 && arm_state.arm.config.acceleration_limit == 30000);
     config[12]=0x30;
-    packet.param_count = 2;
-    packet.params[0] = 0xB8;
-    packet.params[1] = 1;
-    arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
-    assert(reply.response[5] == 0 && arm_state.arm_selected);
-    packet.param_count = 3;
-    packet.params[0] = 0xBA;
-    packet.params[1] = 7;
-    packet.params[2] = 0;
+    select_extension(&arm_state,7);
     arm_state.arm_feedback[12] = 1;
-    arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
-    assert(reply.response[5] == 0 && arm_state.arm.armed);
+    write_torque(&arm_state,1);
+    assert(arm_state.arm.armed && arm_state.arm.session==7);
     assert(!(arm_state.arm_feedback[12]&1u));
     arm_state.sensors.ticks = 13;
     arm_state.sensor_service.measurement.voltage = 60;
@@ -209,11 +226,11 @@ static void arm_extension_transaction_test(void)
     arm_state.sensor_service.temperature_candidate_count = 1u;
     packet.instruction = 0x91;
     app_runtime_service_control_pair(&arm_state, arm_state.sensors.ticks);
-    assert(arm_state.arm.armed); /* Torque-off preparation must survive a pair. */
+    assert(arm_state.arm.armed); /* Enabled control must survive a fresh pair. */
     arm_state.sensors.ticks = 14;
-    assert(arm_control_gravity(&arm_state.arm, 7, 1, 10, 100, 100, 14));
+    assert(arm_control_gravity(&arm_state.arm, 7, 1, 10, 14));
     app_runtime_service_control_pair(&arm_state, 13);
-    assert(arm_state.arm.last_tick == 14 && !arm_state.arm.gravity_stale);
+    assert(arm_state.arm.last_tick == 14 && arm_state.arm.gravity_received);
     assert(arm_state.arm_sample_tick == 13 && arm_state.last_good_tick == 13);
 
     arm_state.sensors.ticks = 14;
@@ -241,10 +258,9 @@ static void arm_extension_transaction_test(void)
     assert(reply.response[5] == 1 && reply.response_size == 7);
     assert(memcmp(&before_retired, &arm_state.arm, sizeof before_retired) == 0);
     packet.params[0] = 0x90;
-    packet.params[1] = 16;
+    packet.params[1] = 8;
     arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
-    const uint8_t expected_caps[16] = {'A','R','M','C',4,0,0,1,
-        0x90,0xA0,0xA1,0xA3,0,0xC1,0xC2,0};
+    const uint8_t expected_caps[8] = {'A','R','M','C',9,0,0,1};
     assert(reply.response[5] == 0);
     assert(memcmp(reply.response+6, expected_caps, sizeof expected_caps) == 0);
     arm_state.device.registers.byte[40] = 1;
@@ -256,13 +272,10 @@ static void arm_extension_transaction_test(void)
 
     arm_control_disarm(&arm_state.arm);
     arm_state.device.registers.byte[40] = 0;
+    select_extension(&arm_state,9);
+    write_torque(&arm_state,1);
+    assert(arm_state.arm.armed);
     packet.instruction = 0x91;
-    packet.param_count = 3;
-    packet.params[0] = 0xBA;
-    packet.params[1] = 9;
-    packet.params[2] = 0;
-    arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
-    assert(reply.response[5] == 0);
     packet.param_count = 13;
     packet.params[0] = 0xF0;
     memset(packet.params + 1, 0, 12);
@@ -277,28 +290,27 @@ static void arm_extension_transaction_test(void)
     arm_state.arm_drive_enabled = true;
     arm_state.arm.last_tick = arm_state.last_good_tick = arm_state.sensors.ticks;
     packet.instruction = 0x9A;
-    /* Shared Node/C vector: session9, ID2, seq1, q=-25, V1200, A3000. */
-    const uint8_t target_bytes[13] = {9,0,2,1,0, 0,0xe7,0xff,0xff,
-                                      0xb0,4, 0xb8,0x0b};
+    /* Shared Node/C vector: session9, ID2, seq1, q=-25, V1200. */
+    const uint8_t target_bytes[11] = {9,0,2,1,0, 0,0xe7,0xff,0xff,
+                                      0xb0,4};
     memcpy(packet.params, target_bytes, sizeof target_bytes);
     before_retired = arm_state.arm;
     /* Validate the entire group first, including entries after our own. */
-    packet.param_count = 24;
-    memcpy(packet.params + 13, target_bytes + 2, 11);
+    packet.param_count = 20;
+    memcpy(packet.params + 11, target_bytes + 2, 9);
     for (unsigned invalid = 0; invalid < 3; ++invalid) {
-        packet.params[13] = invalid == 0 ? 2 : 3;
-        packet.params[14] = invalid == 1 ? 0 : 1;
-        packet.params[22] = invalid == 2 ? 0 : 0xb8;
-        packet.params[23] = invalid == 2 ? 0 : 0x0b;
+        packet.params[11] = invalid == 0 ? 2 : invalid == 1 ? 254 : 3;
+        packet.params[18] = invalid == 2 ? 0 : 0xb0;
+        packet.params[19] = invalid == 2 ? 0 : 4;
         arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
         assert(reply.response[5] == 1);
         assert(memcmp(&before_retired, &arm_state.arm, sizeof before_retired) == 0);
     }
-    packet.param_count = 12; /* Truncated entry. */
+    packet.param_count = 10; /* Truncated entry. */
     arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
     assert(reply.response[5] == 1);
-    packet.param_count = 13;
-    packet.params[2] = 3; /* Unlisted axis has no effect, including on lease. */
+    packet.param_count = 11;
+    packet.params[2] = 3; /* Unlisted axis has no effect, including its session. */
     arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
     assert(reply.response[5] == 0);
     assert(memcmp(&before_retired, &arm_state.arm, sizeof before_retired) == 0);
@@ -319,31 +331,31 @@ static void arm_extension_transaction_test(void)
      * servo clips to its own configuration; structural validation stays atomic. */
     app_state_t clipped = arm_state;
     arm_control_disarm(&clipped.arm);
-    assert(arm_control_arm(&clipped.arm, 9, 0, clipped.sensors.ticks));
-    packet.param_count = 24;
+    assert(arm_control_arm(&clipped.arm, 9, 0, clipped.sensors.ticks,0,4095));
+    packet.param_count = 20;
     memcpy(packet.params, target_bytes, sizeof target_bytes);
-    memcpy(packet.params + 13, target_bytes + 2, 11);
-    packet.params[13] = 3;
-    for (unsigned offset = 2; offset < 24; offset += 11) {
-        memset(packet.params + offset + 3, 0xff, 8);
-        packet.params[offset + 6] = 0x7f; /* INT32_MAX, V/A=UINT16_MAX. */
+    memcpy(packet.params + 11, target_bytes + 2, 9);
+    packet.params[11] = 3;
+    for (unsigned offset = 2; offset < 20; offset += 9) {
+        memset(packet.params + offset + 3, 0xff, 6);
+        packet.params[offset + 6] = 0x7f; /* INT32_MAX, V=UINT16_MAX. */
     }
     arm_extension_process(&packet, &clipped.device.registers, &reply, &clipped);
     assert(reply.response[5] == 0 && clipped.arm.accepted_sequence == 1);
-    assert(clipped.arm.motion.goal == (int64_t)clipped.arm.config.position_max_q8 * (1LL << 28));
+    assert(clipped.arm.motion.goal == (int64_t)clipped.arm.upper_q8 * (1LL << 28));
     assert(clipped.arm.motion.speed_limit == clipped.arm.config.velocity_limit);
     assert(clipped.arm.motion.acceleration_limit == clipped.arm.config.acceleration_limit);
 
     /* All six entries fit one broadcast; seven and partial entries do not. */
-    packet.param_count = 79;
+    packet.param_count = 65;
     arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
     assert(reply.response[5] == 1);
     assert(memcmp(&before_retired, &arm_state.arm, sizeof before_retired) == 0);
-    packet.param_count = 68;
+    packet.param_count = 56;
     for (unsigned i = 0; i < 6; ++i) {
-        memcpy(packet.params + 2 + 11 * i, target_bytes + 2, 11);
-        packet.params[2 + 11 * i] = (uint8_t)(i + 1);
-        packet.params[3 + 11 * i] = 2;
+        memcpy(packet.params + 2 + 9 * i, target_bytes + 2, 9);
+        packet.params[2 + 9 * i] = (uint8_t)(i + 1);
+        packet.params[3 + 9 * i] = 2;
     }
     packet.id = PROTOCOL_BROADCAST;
     arm_extension_process(&packet, &arm_state.device.registers, &reply, &arm_state);
@@ -351,18 +363,27 @@ static void arm_extension_transaction_test(void)
     assert(arm_state.arm.target_active);
     packet.id = 2;
 
-    /* v1.4 operations keep the original abort/arm contract. */
+    /* Removed keepalive and stop commands cannot change a powered session. */
     arm_state.arm.session=0x1234;
     arm_state.arm.accepted_sequence=0x2a;
     arm_state.output.phase=OUTPUT_READY;
     arm_state.arm_drive_enabled=true;
     arm_state.device.registers.byte[65]=0;
     arm_state.arm.last_tick=arm_state.last_good_tick=arm_state.sensors.ticks;
-    packet.instruction=0x95;packet.param_count=2;
-    packet.params[0]=0x34;packet.params[1]=0x12;
-    arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(reply.response[5]==0 && arm_state.device.registers.byte[40]==1);
-    assert(!arm_state.arm.target_active && arm_state.arm.holding);
+    before_retired=arm_state.arm;
+    for (uint8_t instruction=0x93;instruction<=0x95;instruction++) {
+        packet.instruction=instruction;packet.param_count=2;
+        packet.params[0]=0x34;packet.params[1]=0x12;
+        for (unsigned broadcast=0;broadcast<2;broadcast++) {
+            packet.id=broadcast?PROTOCOL_BROADCAST:2;
+            arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
+            if (broadcast) assert(reply.response_size==0);
+            else assert(reply.response[5]==5);
+            assert(memcmp(&before_retired,&arm_state.arm,sizeof before_retired)==0);
+            assert(arm_state.device.registers.byte[40]==1 && arm_state.arm_drive_enabled);
+        }
+    }
+    packet.id=2;
     packet.instruction=0x96;packet.param_count=6;
     const uint8_t takeover_vector[6]={0x34,0x12,0x2a,0,0x35,0x12};
     memcpy(packet.params,takeover_vector,6);
@@ -379,44 +400,39 @@ static void arm_extension_transaction_test(void)
     /* New powered sessions now require the ordinary torque-off rearm path. */
     arm_state.device.registers.byte[40] = 0;
     arm_control_disarm(&arm_state.arm);
-    assert(arm_control_arm(&arm_state.arm,0x1235,0,arm_state.sensors.ticks));
+    assert(arm_control_arm(&arm_state.arm,0x1235,0,arm_state.sensors.ticks,0,4095));
     arm_state.device.registers.byte[40] = 1;
     packet.id = 2;
-    /* v1.5 stage vector shared with the Node driver. */
-    packet.instruction=0x97;packet.param_count=17;
-    const uint8_t profile_vector[17]={0x35,0x12,1,1,0,0,1,0,0,0,1,100,0,0x2c,1,64,0};
-    memcpy(packet.params,profile_vector,17);
-    packet.params[16]=1;
-    arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(reply.response[5]==1 && !arm_state.arm.profile_generation[1]);
-    packet.params[16]=0;packet.param_count=16;
-    arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(reply.response[5]==1 && !arm_state.arm.profile_generation[1]);
-    packet.param_count=17;packet.id=PROTOCOL_BROADCAST;
-    arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(!arm_state.arm.profile_generation[1]);
+    /* Removed profile commands and reads never change a powered session. */
+    before_retired=arm_state.arm;
+    for (unsigned operation=0;operation<3;operation++) {
+        packet.instruction=operation==2?0x90:(uint8_t)(0x97+operation);
+        packet.param_count=operation==2?2:operation==0?17:7;
+        memset(packet.params,0,sizeof packet.params);
+        packet.params[0]=operation==2?0xA1:0x35;
+        packet.params[1]=operation==2?32:0x12;
+        for (unsigned broadcast=0;broadcast<2;broadcast++) {
+            packet.id=broadcast?PROTOCOL_BROADCAST:2;
+            arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
+            if (broadcast) assert(reply.response_size==0);
+            else assert(reply.response[5]==(operation==2?1:5));
+            assert(memcmp(&before_retired,&arm_state.arm,sizeof before_retired)==0);
+            assert(arm_state.device.registers.byte[40]==1 && arm_state.arm_drive_enabled);
+        }
+    }
     packet.id=2;
-    arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(reply.response[5]==0 && arm_state.arm.profile_generation[1]==1);
-    packet.instruction=0x98;packet.param_count=7;
-    const uint8_t commit_vector[7]={0x35,0x12,1,0,1,1,0};
-    memcpy(packet.params,commit_vector,7);
-    arm_state.arm.last_requested_effort=0;
-    arm_state.arm.filtered_velocity_q8_s=0;
-    arm_state.arm.last_reference_position_q8=arm_state.arm.measured_position_q8;
-    arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(reply.response[5]==0 && arm_state.arm.active_profile==1);
-    assert(arm_state.device.registers.byte[40]==1);
 
-    /* v2 gravity vector; no planner sequence consumption. */
-    packet.instruction=0x99;packet.param_count=10;
-    const uint8_t ff_vector[10]={0x35,0x12,1,0,0xba,0xff,0xe8,3,100,0};
-    memcpy(packet.params,ff_vector,10);
+    /* Gravity has its own sequence and no expiry field. */
+    packet.instruction=0x99;packet.param_count=6;
+    const uint8_t ff_vector[6]={0x35,0x12,1,0,0xba,0xff};
+    memcpy(packet.params,ff_vector,6);
     arm_state.arm.last_feedforward=0;
-    packet.param_count=12; /* Old gravity+dynamic packet must be rejected. */
-    arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
-    assert(reply.response[5]==1 && !arm_state.arm.gravity_received);
-    packet.param_count=10;packet.id=PROTOCOL_BROADCAST;
+    for(unsigned count=8;count<=10;count+=2) { /* Old slew/TTL packets. */
+        packet.param_count=(uint8_t)count;
+        arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
+        assert(reply.response[5]==1 && !arm_state.arm.gravity_received);
+    }
+    packet.param_count=6;packet.id=PROTOCOL_BROADCAST;
     arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
     assert(!arm_state.arm.gravity_received);
     packet.id=2;arm_state.device.registers.byte[65]=4;
@@ -425,12 +441,43 @@ static void arm_extension_transaction_test(void)
     arm_state.device.registers.byte[65]=0;
     arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
     assert(reply.response[5]==0 && arm_state.arm.gravity_target==-70);
-    assert(arm_state.arm.gravity_sequence==1 && arm_state.arm.accepted_sequence==1);
+    assert(arm_state.arm.gravity_sequence==1 && arm_state.arm.accepted_sequence==0);
     arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
     assert(reply.response[5]==2); /* replay */
     packet.instruction=0x90;packet.param_count=2;packet.params[0]=0xA2;packet.params[1]=20;
     arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
     assert(reply.response[5]==1); /* Retired overlapping FF telemetry. */
+
+    /* The wire decoder accepts zero on wrap and forward gaps for both streams. */
+    const uint16_t sequence[]={5,32770,65535,0,1};
+    for(unsigned i=0;i<sizeof sequence/sizeof sequence[0];i++) {
+        packet.instruction=0x9A;packet.param_count=11;
+        const uint8_t target[11]={0x35,0x12,2,0,0,0,0,0,0,0xb0,4};
+        memcpy(packet.params,target,sizeof target);
+        packet.params[3]=(uint8_t)sequence[i];packet.params[4]=(uint8_t)(sequence[i]>>8);
+        arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
+        assert(reply.response[5]==0 && arm_state.arm.accepted_sequence==sequence[i]);
+        packet.instruction=0x99;packet.param_count=6;
+        memcpy(packet.params,ff_vector,sizeof ff_vector);
+        packet.params[2]=(uint8_t)sequence[i];packet.params[3]=(uint8_t)(sequence[i]>>8);
+        arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
+        assert(reply.response[5]==0 && arm_state.arm.gravity_sequence==sequence[i]);
+    }
+    /* Torque-off is the sole shutdown command and preserves mode selection. */
+    arm_state.device.registers.byte[40]=0;
+    protocol_result_t torque_off={.effect=PROTOCOL_EFFECT_WRITE,
+        .write={.start=40,.accepted_count=1}};
+    command_service_apply(&torque_off,&arm_state);
+    assert(arm_state.arm_selected && !arm_state.arm.armed && !arm_state.arm.session);
+    assert(!arm_state.arm.gravity_received && arm_state.arm.gravity_effort_q16==0);
+    assert(arm_state.output.phase!=OUTPUT_READY);
+    arm_extension_process(&packet,&arm_state.device.registers,&reply,&arm_state);
+    assert(reply.response[5]==2); /* No old-session gravity after shutdown. */
+    select_extension(&arm_state,0x1236);
+    assert(arm_state.device.registers.byte[40]==0); /* Setup never enables torque. */
+    write_torque(&arm_state,1);
+    assert(arm_state.arm.session==0x1236);
+
 
 }
 
@@ -530,7 +577,7 @@ static void sensor_only_feedback_test(void)
         const uint8_t *data=reply.response+6;
         assert(reply.response[5]==0 && !(data[12]&1u));
         assert(wire_u16(data+12)&(1u<<10));
-        assert(wire_u16(data+12)&(1u<<11));
+        assert(!(wire_u16(data+12)&((1u<<2)|(1u<<11))));
         assert(data[27]==29 && data[26]==120 && wire_u16(data+24)==12);
         assert(wire_u16(data+30)==0 && data[15]==100);
         for(unsigned i=32;i<ARM_TUNING_BYTES;i++) assert(data[i]==0);
@@ -545,10 +592,14 @@ static void coherent_feedback_test(const app_state_t *source, int direction)
     app_state_t state=*source;
     protocol_result_t normal=read_arm(&state,0xC1,ARM_FEEDBACK_BYTES);
     protocol_result_t detail=read_arm(&state,0xC2,ARM_TUNING_BYTES);
-    assert(normal.response_size==39 && detail.response_size==63);
+    assert(normal.response_size==39 && detail.response_size==61);
     assert(normal.response[5]==0 && detail.response[5]==0);
     assert(memcmp(normal.response+6,detail.response+6,ARM_FEEDBACK_BYTES)==0);
     const uint8_t *payload=detail.response+6;
+    assert(payload[29]==0 && !(wire_u16(payload+12)&0x0240));
+    assert(wire_u16(payload+52)==state.arm.overrun_count);
+    protocol_result_t obsolete=read_arm(&state,0xC2,56);
+    assert(obsolete.response[5]==1 && obsolete.response_size==7);
     assert(payload[0]==1 && wire_u16(payload+4)==1);
     assert(wire_u16(payload+6)==1 && wire_u16(payload+8)==0);
     assert(wire_u16(payload+12)&1u);
@@ -602,36 +653,245 @@ static void coherent_feedback_test(const app_state_t *source, int direction)
     assert(read_arm(&state,0xC1,ARM_FEEDBACK_BYTES-1).response[5]==1);
 }
 
-static void velocity_configuration_test(void)
+static void consolidated_configuration_test(void)
 {
     app_state_t state={0};
     registers_factory_defaults(&state.device.registers);
     arm_control_init(&state.arm,100,0);
-    protocol_packet_t packet={.id=2,.instruction=0x91,.param_count=7,
-        .params={0xA3,0,1,0,2,120,0}};
+    protocol_packet_t packet={.id=2,.instruction=0x91,.param_count=25,.params={0xA0}};
+    uint8_t *config=packet.params+1;
+    config[8]=0x2c;config[9]=1; /* effort 300 */
+    config[10]=config[12]=config[22]=0xe8;
+    config[11]=config[13]=config[23]=3; /* speed, acceleration, slew 1000 */
+    config[14]=64;config[15]=30;
+    config[17]=1;config[19]=2;config[20]=120; /* directional FF */
     protocol_result_t reply={0};
+    state.device.registers.byte[40]=1;
     arm_extension_process(&packet,&state.device.registers,&reply,&state);
-    assert(reply.response[5]==1); /* Base limits must be configured first. */
-    assert(arm_control_configure(&state.arm,(arm_config_t){
+    assert(reply.response[5]==2 && !state.arm.config.effort_limit);
+    state.device.registers.byte[40]=0;
+    arm_extension_process(&packet,&state.device.registers,&reply,&state);
+    assert(reply.response[5]==0);
+    reply=read_arm(&state,0xA0,24);
+    assert(memcmp(reply.response+6,config,24)==0);
+    arm_config_t accepted=state.arm.config;
+    const unsigned offsets[]={20,22};
+    for(unsigned i=0;i<2;i++) {
+        unsigned offset=offsets[i];uint8_t low=config[offset],high=config[offset+1];
+        config[offset]=config[offset+1]=0; /* noncanonical FF or zero slew */
+        arm_extension_process(&packet,&state.device.registers,&reply,&state);
+        assert(reply.response[5]==1);
+        assert(memcmp(&accepted,&state.arm.config,sizeof accepted)==0);
+        config[offset]=low;config[offset+1]=high;
+    }
+    assert(arm_control_arm(&state.arm,1,100,0,0,4095));
+    arm_extension_process(&packet,&state.device.registers,&reply,&state);
+    assert(reply.response[5]==1 && state.arm.armed);
+    packet.params[0]=0xA3;packet.param_count=7;
+    arm_extension_process(&packet,&state.device.registers,&reply,&state);
+    assert(reply.response[5]==1);
+    assert(read_arm(&state,0xA3,6).response[5]==1);
+    assert(read_arm(&state,0x90,16).response[5]==1);
+    reply=read_arm(&state,0x90,8);
+    assert(reply.response[10]==9 && reply.response[11]==0);
+}
+
+static void saved_limits_define_extension_envelope(void)
+{
+    app_state_t initial={0};
+    registers_factory_defaults(&initial.device.registers);
+    register_table_t *registers=&initial.device.registers;
+    registers->byte[REG_ID]=2;
+    registers_set_u16(registers,REG_MIN_ANGLE_LIMIT,500);
+    registers_set_u16(registers,REG_MAX_ANGLE_LIMIT,3500);
+    initial.control_initialized=true;
+    initial.arm_selected=true;
+    initial.sensors.ticks=initial.last_good_tick=5;
+    initial.sensor_service.measurement.arm_position=1000;
+    arm_control_init(&initial.arm,1000,5);
+    assert(arm_control_configure(&initial.arm,(arm_config_t){
         .effort_limit=300,.velocity_limit=1000,.acceleration_limit=1000,
-        .timeout_ms=1000,.velocity_filter_q8=64, .ramp_time_ms=30,.position_max_q8=4095*256}));
-    state.device.registers.byte[REG_TORQUE_ENABLE]=1;
-    arm_extension_process(&packet,&state.device.registers,&reply,&state);
-    assert(reply.response[5]==2 && !state.arm.velocity_ff.effort_limit);
-    state.device.registers.byte[REG_TORQUE_ENABLE]=0;
-    arm_extension_process(&packet,&state.device.registers,&reply,&state);
-    assert(reply.response[5]==0 && state.arm.velocity_ff.effort_limit==120);
-    reply=read_arm(&state,0xA3,6);
-    assert(memcmp(reply.response+6,packet.params+1,6)==0);
-    packet.params[5]=0; /* Nonzero gains with zero cap are not canonical. */
-    arm_extension_process(&packet,&state.device.registers,&reply,&state);
-    assert(reply.response[5]==1 && state.arm.velocity_ff.effort_limit==120);
-    assert(arm_control_arm(&state.arm,1,100,0));
-    packet.params[5]=120;
-    arm_extension_process(&packet,&state.device.registers,&reply,&state);
-    assert(reply.response[5]==2);
-    reply=read_arm(&state,0x90,16);
-    assert(reply.response[10]==4 && reply.response[11]==0); /* Version 3.0. */
+        .gravity_slew=1000,.velocity_filter_q8=64,.ramp_time_ms=30}));
+    select_extension(&initial,7);
+    write_torque(&initial,1);
+    protocol_packet_t packet={0};
+    protocol_result_t reply={0};
+    assert(initial.arm.armed && initial.arm.lower_q8==500*256 && initial.arm.upper_q8==3500*256);
+    assert(initial.arm.last_reference_position_q8==1000*256);
+    registers->byte[REG_TORQUE_ENABLE]=1;
+    initial.arm_drive_enabled=true;
+    initial.output.phase=OUTPUT_READY;
+    /* Both out-of-range targets are capped, using bounds read from the legacy table. */
+    for(unsigned high=0;high<2;high++) {
+        app_state_t state=initial;
+        packet=(protocol_packet_t){.id=2,.instruction=0x9A,.param_count=11,
+            .params={7,0,2,1,0,0,0,0,0,0xe8,3}};
+        packet.params[8]=high?0x7f:0x80;
+        arm_extension_process(&packet,&state.device.registers,&reply,&state);
+        assert(reply.response[5]==0);
+        assert(state.arm.motion.goal==(int64_t)(high?3500:500)*(1LL<<36));
+    }
+    /* Each accepted byte of either legacy limit invalidates a cached envelope,
+     * including RAM-only writes where there is no storage commit to end control. */
+    for(unsigned address=9;address<=12;address++) {
+        app_state_t state=initial;
+        state.device.registers.byte[address]^=1;
+        protocol_result_t changed={.effect=PROTOCOL_EFFECT_WRITE,
+            .write={.start=(uint8_t)address,.accepted_count=1}};
+        command_service_apply(&changed,&state);
+        assert(!state.arm.armed && state.arm.session==0);
+        assert(state.device.registers.byte[REG_TORQUE_ENABLE]==0);
+        assert(state.output.phase!=OUTPUT_READY);
+    }
+    /* Enable reads the latest values, after both configuration and setup. */
+    app_state_t state=initial;
+    write_torque(&state,0);
+    select_extension(&state,8);
+    registers_set_u16(&state.device.registers,REG_MIN_ANGLE_LIMIT,1200);
+    write_torque(&state,1);
+    assert(!state.arm.armed && state.device.registers.byte[40]==0);
+    assert(state.arm_pending_session==0); /* Failed starts consume setup. */
+    registers_set_u16(&state.device.registers,REG_MIN_ANGLE_LIMIT,800);
+    write_torque(&state,1);
+    assert(!state.arm.armed && state.device.registers.byte[40]==0);
+    select_extension(&state,9);
+    write_torque(&state,1);
+    assert(state.arm.armed && state.arm.lower_q8==800*256);
+
+}
+
+static void torque_enable_starts_extension_session(void)
+{
+    app_state_t initial={0};
+    registers_factory_defaults(&initial.device.registers);
+    initial.device.registers.byte[REG_ID]=2;
+    registers_set_u16(&initial.device.registers,REG_MIN_ANGLE_LIMIT,500);
+    registers_set_u16(&initial.device.registers,REG_MAX_ANGLE_LIMIT,3500);
+    initial.control_initialized=true;
+    initial.sensors.ticks=initial.last_good_tick=5;
+    initial.sensor_service.measurement.arm_position=1000;
+    initial.sensor_service.measurement.voltage=60;
+    initial.sensor_service.measurement.temperature=20;
+    arm_control_init(&initial.arm,1000,5);
+    assert(arm_control_configure(&initial.arm,(arm_config_t){
+        .kp_q8=256,.effort_limit=300,.velocity_limit=1000,.acceleration_limit=1000,
+        .gravity_slew=1000,.velocity_filter_q8=64,.ramp_time_ms=30}));
+    select_extension(&initial,7);
+    assert(initial.device.registers.byte[40]==0 && initial.arm.session==0);
+    assert(!arm_control_target(&initial.arm,7,(arm_target_t){.sequence=1,.position_q8=1200*256,.speed_limit=1000}));
+    assert(!arm_control_gravity(&initial.arm,7,1,20,5));
+
+    /* Retired ARM, old selection layout and malformed setup are atomic failures. */
+    const protocol_packet_t bad[]={
+        {.id=2,.instruction=0x91,.param_count=3,.params={0xBA,7,0}},
+        {.id=2,.instruction=0x91,.param_count=2,.params={0xB8,1}},
+        {.id=2,.instruction=0x91,.param_count=4,.params={0xB8,1,0,0}},
+        {.id=2,.instruction=0x91,.param_count=4,.params={0xB8,0,7,0}},
+        {.id=2,.instruction=0x91,.param_count=4,.params={0xB8,2,7,0}},
+        {.id=2,.instruction=0x91,.param_count=5,.params={0xB8,1,7,0,0}},
+    };
+    for(unsigned i=0;i<sizeof bad/sizeof bad[0];i++) {
+        app_state_t state=initial;
+        protocol_result_t reply={0};
+        arm_extension_process(&bad[i],&state.device.registers,&reply,&state);
+        assert(reply.response[5]==1);
+        assert(state.arm_pending_session==7 && state.arm_selected && !state.arm.armed);
+    }
+
+    /* All start gates are checked at torque enable, after successful setup. */
+    for(unsigned failure=0;failure<9;failure++) {
+        app_state_t state=initial;
+        switch(failure) {
+        case 0: state.control_initialized=false; break;
+        case 1: state.sensors.ticks+=3; break;
+        case 2:
+            state.device.registers.byte[REG_PROTECTION_SHUTDOWN_MASK]=4;
+            state.device.registers.byte[REG_SERVO_STATUS]=4; break;
+        case 3: state.arm.config.effort_limit=0; break;
+        case 4: state.sensor_service.measurement.arm_position=499; break;
+        case 5: registers_set_u16(&state.device.registers,REG_MIN_ANGLE_LIMIT,3600); break;
+        case 6: state.arm_pending_session=0; break;
+        case 7: state.output.phase=OUTPUT_FAILED; break;
+        case 8: state.output.phase=OUTPUT_MAINTENANCE; break;
+        }
+        write_torque(&state,1);
+        assert(state.device.registers.byte[40]==0 && !state.arm.armed);
+        assert(state.arm_pending_session==0 && state.output.phase!=OUTPUT_READY);
+        state.control_initialized=true;state.sensors.ticks=state.last_good_tick;
+        state.output.phase=OUTPUT_REQUALIFYING;
+        state.device.registers.byte[REG_SERVO_STATUS]=0;
+        state.arm.config=initial.arm.config;
+        state.sensor_service.measurement.arm_position=1000;
+        registers_set_u16(&state.device.registers,REG_MIN_ANGLE_LIMIT,500);
+        write_torque(&state,1);
+        assert(state.device.registers.byte[40]==0 && !state.arm.armed);
+        select_extension(&state,8);
+        write_torque(&state,1);
+        assert(state.arm.armed && state.arm.session==8);
+    }
+
+    app_state_t state=initial;
+    state.sensor_service.measurement.arm_position=1100; /* Moved after setup. */
+    write_torque(&state,1);
+    assert(state.arm.last_reference_position_q8==1100*256);
+    assert(state.arm_pending_session==0 && state.device.registers.byte[40]==1);
+    assert(arm_control_target(&state.arm,7,(arm_target_t){.sequence=1,.position_q8=1500*256,.speed_limit=1000}));
+    assert(arm_control_gravity(&state.arm,7,1,20,5));
+    (void)arm_control_step(&state.arm,1100,6,true,false);
+    state.output.phase=OUTPUT_READY;
+    arm_control_t moving=state.arm;
+    write_torque(&state,1);
+    assert(memcmp(&moving,&state.arm,sizeof moving)==0);
+    assert(state.output.phase==OUTPUT_READY); /* No bridge interruption either. */
+    protocol_packet_t setup={.id=2,.instruction=0x91,.param_count=4,.params={0xB8,1,8,0}};
+    protocol_result_t reply={0};
+    arm_extension_process(&setup,&state.device.registers,&reply,&state);
+    assert(reply.response[5]==2 && state.arm.session==7); /* Setup requires off. */
+
+    /* Torque-off clears running control and unused setup alike. */
+    write_torque(&state,0);
+    assert(!state.arm.armed && !state.arm.session && !state.arm.gravity_received);
+    write_torque(&state,1);
+    assert(!state.arm.armed && state.device.registers.byte[40]==0);
+    select_extension(&state,8);
+    write_torque(&state,0);
+    assert(state.arm_pending_session==0);
+    write_torque(&state,1);
+    assert(!state.arm.armed && state.device.registers.byte[40]==0);
+
+    /* A protection shutdown cannot resume with torque enable alone. */
+    state=initial;
+    write_torque(&state,1);
+    state.sensors.ticks=6;
+    state.device.registers.byte[REG_PROTECTION_SHUTDOWN_MASK]=1;
+    state.sensor_service.measurement.voltage=0;
+    app_runtime_service_control_pair(&state,6);
+    assert(!state.arm.armed && state.device.registers.byte[40]==0);
+    state.device.registers.byte[REG_SERVO_STATUS]=0;
+    state.sensor_service.measurement.voltage=60;
+    write_torque(&state,1);
+    assert(!state.arm.armed && state.device.registers.byte[40]==0);
+    select_extension(&state,8);
+    write_torque(&state,1);
+    assert(state.arm.armed && state.arm.session==8 && state.arm.accepted_sequence==0);
+    assert(!arm_control_target(&state.arm,7,(arm_target_t){.sequence=2,.position_q8=1500*256,.speed_limit=1000}));
+    assert(!arm_control_gravity(&state.arm,7,2,20,6));
+
+    /* Sensor failure also consumes a prepared, not-yet-started session. */
+    state=initial;state.sensor_active=true;state.sensors.ticks=8;
+    bus_service_init(&state.bus,&state.device,command_service_apply,&state,0);
+    app_runtime_service_sensors(&state);
+    assert(!state.arm_pending_session && state.device.registers.byte[40]==0);
+    state.device.registers.byte[REG_SERVO_STATUS]=0;state.last_good_tick=8;
+    write_torque(&state,1);
+    assert(!state.arm.armed && state.device.registers.byte[40]==0);
+
+    /* Returning to legacy cancels setup and preserves ordinary torque enable. */
+    state=initial;setup.params[1]=setup.params[2]=setup.params[3]=0;
+    arm_extension_process(&setup,&state.device.registers,&reply,&state);
+    assert(reply.response[5]==0 && !state.arm_selected && !state.arm_pending_session);
+    write_torque(&state,1);
+    assert(state.device.registers.byte[40]==1 && !state.arm.armed);
 }
 
 static void final_effort_feedback_test(void)
@@ -651,20 +911,15 @@ static void final_effort_feedback_test(void)
                 .initialized = true, .previous_torque = 1, .previous_permit = true};
             sample.sensor_service.measurement = (sensor_measurement_t){
                 .position = 100, .arm_position = 100, .voltage = 120, .temperature = 30};
-#ifdef FW_MOTOR_TEST
-            sample.drive_lease_valid = true;
-            sample.drive_lease_deadline = 100;
-#endif
             arm_control_init(&sample.arm, 100, 0);
             arm_config_t config = {
                 .kp_q8 = 2560, .ki_q8 = 256, .integral_limit = 500,
                 .effort_limit = 1000, .velocity_limit = 1000,
-                .acceleration_limit = 1000, .timeout_ms = 1000,
-                .velocity_filter_q8 = 64, .ramp_time_ms=30,
-                .position_min_q8 = 0, .position_max_q8 = 4095 * 256};
+                .acceleration_limit = 1000, .gravity_slew = 10000, .velocity_filter_q8 = 64, .ramp_time_ms=30,
+                 };
             assert(arm_control_configure(&sample.arm, config));
-            assert(arm_control_arm(&sample.arm, 1, 100, 0));
-            assert(arm_control_gravity(&sample.arm,1,1,(int16_t)(direction*50),10000,100,0));
+            assert(arm_control_arm(&sample.arm, 1, 100, 0,0,4095));
+            assert(arm_control_gravity(&sample.arm,1,1,(int16_t)(direction*50),0));
             arm_motion_init(&sample.arm.motion, (100 + direction * 100) * 256);
             sample.sensors.ticks = 1;
             app_runtime_service_control_pair(&sample, sample.sensors.ticks);
@@ -694,7 +949,9 @@ static void final_effort_feedback_test(void)
 int main(void)
 {
     sensor_only_feedback_test();
-    velocity_configuration_test();
+    consolidated_configuration_test();
+    saved_limits_define_extension_envelope();
+    torque_enable_starts_extension_session();
     snapshot_publication_test();
     acquisition_deadline_test();
     final_effort_feedback_test();
@@ -875,7 +1132,6 @@ int main(void)
     assert(state.control.limits.rate == 50);
     assert(state.control.limits.maximum_velocity == 150);
 
-#ifndef FW_MOTOR_TEST
     /* Motion-only writes, including the common acceleration/goal/speed
      * block, keep the bridge qualified. Adjacent torque/configuration
      * writes still start safety requalification. */
@@ -908,45 +1164,6 @@ int main(void)
         command_service_apply(&mixed_write, &goal_state);
         assert(goal_state.output.phase == OUTPUT_REQUALIFYING);
     }
-#endif
-#ifdef FW_MOTOR_TEST
-    app_state_t lease = state;
-    lease.device.registers.byte[55] = 1;
-    lease.device.registers.byte[40] = 1;
-    lease.sensors.ticks = 100;
-    protocol_result_t torque_on = { .effect = PROTOCOL_EFFECT_WRITE,
-        .write = { .start = 40, .accepted_count = 1, .any_changed = true } };
-    command_service_apply(&torque_on, &lease);
-    assert(lease.drive_lease_valid && lease.drive_lease_deadline == 300);
-    lease.output.phase = OUTPUT_READY;
-    lease.sensors.ticks = 200;
-    torque_on.write.any_changed = false;
-    command_service_apply(&torque_on, &lease);
-    assert(lease.drive_lease_valid && lease.drive_lease_deadline == 400);
-    assert(lease.output.phase == OUTPUT_READY); /* Heartbeat does not revoke. */
-    lease.sensors.ticks = 400;
-    app_runtime_service_control_pair(&lease, lease.sensors.ticks);
-    assert(!lease.drive_lease_valid && lease.device.registers.byte[40] == 0);
-    assert(lease.output.phase == OUTPUT_REQUALIFYING);
-    lease.device.registers.byte[40] = 1;
-    torque_on.write.any_changed = true;
-    command_service_apply(&torque_on, &lease);
-    assert(lease.drive_lease_valid);
-    protocol_result_t calibrate = { .effect = PROTOCOL_EFFECT_CALIBRATE,
-        .calibration_target = 2048 };
-    lease.control_initialized = false;
-    command_service_apply(&calibrate, &lease);
-    assert(!lease.drive_lease_valid && lease.device.registers.byte[40] == 0);
-    lease.device.registers.byte[40] = 1;
-    command_service_apply(&torque_on, &lease);
-    protocol_result_t maintenance = { .effect = PROTOCOL_EFFECT_WRITE,
-        .write = { .start = 21, .accepted_count = 1, .any_changed = true } };
-    lease.device.registers.byte[55] = 0;
-    lease.device.registers.byte[21] ^= 1;
-    event_count = 0;
-    command_service_apply(&maintenance, &lease);
-    assert(!lease.drive_lease_valid);
-#endif
     /* A failed target application latches board capability off until reset.
      * An expected coast result is successful and must not take this path. */
     state.output.phase = OUTPUT_READY;

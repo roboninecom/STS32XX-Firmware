@@ -43,9 +43,8 @@ void output_safety_fail(output_safety_t *state)
 }
 
 bool output_safety_permit(const output_safety_t *state, bool motion_valid,
-                          bool configuration_stable, bool encoder_healthy,
-                          bool lease_valid)
+                          bool configuration_stable, bool encoder_healthy)
 {
     return state->phase == OUTPUT_READY && motion_valid &&
-           configuration_stable && encoder_healthy && lease_valid;
+           configuration_stable && encoder_healthy;
 }

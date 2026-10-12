@@ -33,6 +33,7 @@ typedef struct app_state {
     arm_control_t arm;
     arm_result_t arm_result;
     bool arm_selected;
+    uint16_t arm_pending_session; /* Consumed by the next torque-enable attempt. */
     int16_t arm_applied_effort;
     uint32_t arm_sample_tick;
     bool arm_drive_enabled;
@@ -46,10 +47,6 @@ typedef struct app_state {
     status_led_t status_led;
     output_safety_t output;
     uint8_t bridge_config;
-#ifdef FW_MOTOR_TEST
-    uint32_t drive_lease_deadline;
-    bool drive_lease_valid;
-#endif
     storage_mirror_t storage_mirror;
     storage_source_t storage_source;
 #ifdef FW_TIMING_PROBE

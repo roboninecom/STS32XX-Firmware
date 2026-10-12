@@ -492,27 +492,6 @@ bool arm_motion_target(arm_motion_t *motion, int32_t target_q8,
     return true;
 }
 
-bool arm_motion_stop(arm_motion_t *motion, uint8_t ramp_ms,
-    int32_t lower_q8, int32_t upper_q8)
-{
-    if (!ramp_ms || lower_q8 >= upper_q8) return false;
-    if (arm_motion_idle(motion)) return true;
-    if (motion->velocity == 0 && motion->acceleration == 0) {
-        motion->goal = motion->position;
-        motion->cursor = ARM_MOTION_PHASES;
-        return true;
-    }
-    arm_motion_t plan = *motion;
-    endpoint_state_t ends[ARM_MOTION_PHASES];
-    int32_t a = (int32_t)divide_u64_u32((uint64_t)plan.acceleration_limit * (1u << 30), 15625);
-    plan.goal = construct(&plan, ends, (state_t){plan.position, plan.velocity, plan.acceleration},
-                           0, a, a / ramp_ms);
-    plan.cursor = 0;
-    if (!valid(&plan, ends, lower_q8, upper_q8)) return false;
-    *motion = plan;
-    return true;
-}
-
 void arm_motion_step(arm_motion_t *motion, uint32_t milliseconds)
 {
 #ifdef FW_ARM_TIMING_PROBE

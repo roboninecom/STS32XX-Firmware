@@ -23,7 +23,6 @@ void output_safety_end_maintenance(output_safety_t *state, bool sensors_active);
 void output_safety_pair_accepted(output_safety_t *state);
 void output_safety_fail(output_safety_t *state);
 bool output_safety_permit(const output_safety_t *state, bool motion_valid,
-                          bool configuration_stable, bool encoder_healthy,
-                          bool lease_valid);
+                          bool configuration_stable, bool encoder_healthy);
 
 #endif

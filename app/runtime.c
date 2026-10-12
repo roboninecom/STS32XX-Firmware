@@ -21,7 +21,7 @@ void app_runtime_revoke_output(app_state_t *state)
 bool app_runtime_commit_storage(app_state_t *state)
 {
     app_runtime_revoke_output(state);
-    arm_control_disarm(&state->arm);
+    arm_extension_end_session(state);
     state->arm_selected = false;
     if (state->storage_source == STORAGE_SOURCE_NONE) return false;
     output_safety_begin_maintenance(&state->output);
@@ -53,7 +53,7 @@ void app_runtime_queue_motion(app_state_t *state, bool position_goal, bool auto_
 void app_runtime_reanchor(app_state_t *state, int32_t position)
 {
     control_pipeline_reanchor(&state->control, position);
-    arm_control_disarm(&state->arm);
+    arm_extension_end_session(state);
     state->arm_selected = false;
     state->motion = (pending_motion_t){0};
 #if defined(FW_TIMING_PROBE) && !defined(FW_ARM_TIMING_PROBE)
@@ -70,9 +70,8 @@ static control_result_t run_control_step(app_state_t *state,
     protection_settings_decode(registers, &protection);
     control_result_t result;
     if (state->arm_selected) {
-        /* Controller deadlines use current time. Acquisition may have started
-         * before a just-accepted gravity/heartbeat command; rewinding this
-         * clock would falsely expire it through unsigned age arithmetic. */
+        /* Step using current time so delayed acquisition cannot hide a missed
+         * controller deadline. Sensor freshness is checked separately. */
         uint32_t tick = sensor_driver_ticks(&state->sensors);
         state->arm_result = arm_control_step(&state->arm,
             state->sensor_service.measurement.arm_position,
@@ -81,7 +80,7 @@ static control_result_t run_control_step(app_state_t *state,
 #ifdef FW_ARM_TIMING_PROBE
             state->timing_arm_revocation = 1; /* Controller freshness / elapsed dt. */
 #endif
-            arm_control_disarm(&state->arm);
+            arm_extension_end_session(state);
         }
         result = (control_result_t){
             .requested_output = arm_control_flip_effort_polarity(
@@ -97,8 +96,9 @@ static control_result_t run_control_step(app_state_t *state,
 #ifdef FW_ARM_TIMING_PROBE
             if (state->arm.armed) state->timing_arm_revocation = 2;
 #endif
-            arm_control_disarm(&state->arm);
+            arm_extension_end_session(state);
         }
+        if (!state->arm.armed) result.torque = 0;
         state->arm_sample_tick = sample_tick;
     } else {
         controller_settings_t controllers;
@@ -158,23 +158,10 @@ __attribute__((noinline)) void app_runtime_service_control_pair(app_state_t *sta
         .current_limit_active = measurement->moving,
     };
     output_safety_pair_accepted(&state->output);
-#ifdef FW_MOTOR_TEST
-    if (state->drive_lease_valid &&
-        (int32_t)(sensor_driver_ticks(&state->sensors) - state->drive_lease_deadline) >= 0) {
-        state->drive_lease_valid = false;
-        registers->byte[REG_TORQUE_ENABLE] = 0u;
-        app_runtime_revoke_output(state);
-    }
-#endif
     bool permit = output_safety_permit(
         &state->output, !state->motion_rejected,
         (registers->byte[REG_CONFIGURATION_FLAGS] & 0x20u) == (state->bridge_config & 0x20u),
-        (registers->byte[REG_SERVO_STATUS] & 0x02u) == 0u,
-#ifdef FW_MOTOR_TEST
-        state->drive_lease_valid);
-#else
-        true);
-#endif
+        (registers->byte[REG_SERVO_STATUS] & 0x02u) == 0u);
 #ifdef FW_ARM_TIMING_PROBE
     uint32_t control_started = diagnostics_probe_cycles();
 #endif
@@ -205,7 +192,7 @@ __attribute__((noinline)) void app_runtime_service_control_pair(app_state_t *sta
     if (!bridge_ok) {
         bridge_driver_disarm();
         output_safety_fail(&state->output);
-        arm_control_disarm(&state->arm);
+        arm_extension_end_session(state);
     }
 #if defined(FW_TIMING_PROBE) && !defined(FW_ARM_TIMING_PROBE)
     if (timed_goal) diagnostic_service_goal_applied(state, goal_control_started);
@@ -260,7 +247,7 @@ __attribute__((noinline)) void app_runtime_service_sensors(app_state_t *state)
             diagnostic_service_pair_rejected(state);
 #endif
             app_runtime_revoke_output(state);
-            arm_control_disarm(&state->arm);
+            arm_extension_end_session(state);
             state->device.registers.byte[REG_SERVO_STATUS] |= 0x02u;
         }
     }
@@ -271,7 +258,7 @@ __attribute__((noinline)) void app_runtime_service_sensors(app_state_t *state)
         if (state->arm.armed) state->timing_arm_revocation = 4;
 #endif
         app_runtime_revoke_output(state);
-        arm_control_disarm(&state->arm);
+        arm_extension_end_session(state);
         control_sample_t stale = {
             .position = state->sensor_service.measurement.position,
             .voltage = state->sensor_service.measurement.voltage,

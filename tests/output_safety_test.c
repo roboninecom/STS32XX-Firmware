@@ -5,7 +5,7 @@
 
 static bool permit(output_safety_t *state)
 {
-    return output_safety_permit(state, true, true, true, true);
+    return output_safety_permit(state, true, true, true);
 }
 
 int main(void)
@@ -23,10 +23,9 @@ int main(void)
     }
     output_safety_pair_accepted(&state);
     assert(permit(&state));
-    assert(!output_safety_permit(&state, false, true, true, true));
-    assert(!output_safety_permit(&state, true, false, true, true));
-    assert(!output_safety_permit(&state, true, true, false, true));
-    assert(!output_safety_permit(&state, true, true, true, false));
+    assert(!output_safety_permit(&state, false, true, true));
+    assert(!output_safety_permit(&state, true, false, true));
+    assert(!output_safety_permit(&state, true, true, false));
 
     output_safety_revoke(&state);
     assert(state.phase == OUTPUT_REQUALIFYING && !permit(&state));

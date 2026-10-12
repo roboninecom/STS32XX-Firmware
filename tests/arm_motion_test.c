@@ -53,7 +53,7 @@ static void analytic_rest_move(void)
     assert(arm_motion_idle(&m) && arm_motion_position(&m)==1000*256);
 }
 
-static void random_targets_and_stops(void)
+static void random_targets(void)
 {
     unsigned accepted=0;
     for(unsigned trial=0;trial<1200;trial++) {
@@ -63,11 +63,6 @@ static void random_targets_and_stops(void)
         int32_t goal=(int32_t)random_n(60001)*256+low;
         assert(arm_motion_target(&m,goal,v,a,ramp,low,high));
         for(unsigned step=0;step<160;step++) {
-            if(step%7==0) {
-                arm_motion_t stop=m;
-                assert(arm_motion_stop(&stop,ramp,low,high));
-                finish(&stop,ramp,low,high);
-            }
             if(step%13==0) {
                 arm_motion_t before=m;
                 int32_t replacement=(int32_t)random_n(60001)*256+low;
@@ -95,23 +90,19 @@ static void boundaries_short_moves_and_refresh(void)
             assert(memcmp(&m,&before,sizeof m)==0);
             assert(!arm_motion_target(&m,0,500,30000,ramp,-(int32_t)distance,(int32_t)distance));
             assert(memcmp(&m,&before,sizeof m)==0);
-            arm_motion_t stop=m;
-            assert(arm_motion_stop(&stop,ramp,-(int32_t)distance,(int32_t)distance));
-            finish(&stop,ramp,-(int32_t)distance,(int32_t)distance);
             check_step(&m,1,ramp);
         }
         assert(arm_motion_idle(&m) && arm_motion_position(&m)==sign*(int32_t)distance);
     }
     arm_motion_t m;arm_motion_init(&m,0);
     assert(!arm_motion_target(&m,256,100,100,0,0,256));
-    assert(!arm_motion_stop(&m,0,0,256));
     assert(arm_motion_target(&m,256,1,1,255,0,256));
     finish(&m,255,0,256);
 }
 
 /* Sample each phase in long and short moves, including deceleration, and
  * independently integrate the initial seven-phase schedule in floating point. */
-static void phase_oracle_and_stops(void)
+static void phase_oracle_and_reversals(void)
 {
     const unsigned accelerations[] = {1, 100, 10000, 30000};
     for (unsigned c=0;c<4;c++) for (unsigned ramp=1;ramp<=255;ramp+=127) {
@@ -134,10 +125,6 @@ static void phase_oracle_and_stops(void)
                 assert(ok);
                 assert(m.position==before.position && m.velocity==before.velocity && m.acceleration==before.acceleration);
                 finish(&m,ramp,-1000*256,1000*256);
-                bool stopped=arm_motion_stop(&before,ramp,-1000*256,1000*256);
-                if(!stopped) fprintf(stderr,"stop A%u T%u phase%u sample%u q%.9f v%.9f a%.9f\n",accelerations[c],ramp,phase,sample,before.position/UNIT,before.velocity/UNIT*1000,before.acceleration/UNIT*1e6);
-                assert(stopped);
-                finish(&before,ramp,-1000*256,1000*256);
             }
             /* The evaluator pins phase endpoints within integer-jerk/time
              * quantization. Bound those corrections before applying them. */
@@ -185,8 +172,8 @@ int main(void)
 {
     same_direction_search_regressions();
     analytic_rest_move();
-    phase_oracle_and_stops();
+    phase_oracle_and_reversals();
     boundaries_short_moves_and_refresh();
-    random_targets_and_stops();
-    puts("arm S-curve: analytic, bounds, refresh, retarget and STOP checks OK");
+    random_targets();
+    puts("arm S-curve: analytic, bounds, refresh and retarget checks OK");
 }
