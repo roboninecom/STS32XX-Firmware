@@ -149,6 +149,11 @@ void sensor_driver_stop(sensor_driver_t *driver)
     uint32_t mask = lock_sensors();
     driver->enabled = false;
     SysTick->CTRL = 0;
+    /* A command may stop acquisition midway through an ADC scan. Stopping
+     * DMA alone leaves the ADC producing results: the pending request can
+     * become slot zero of the next scan and rotate all three measurements.
+     * Power down the converter and its request source before disabling DMA. */
+    ADC_CTL1 = 0;
     dma_stop();
     I2C_CTL0(I2C0) = 0;
     sensor_irqs_enable(false);
@@ -207,10 +212,16 @@ bool sensor_driver_restart(sensor_driver_t *driver, bool complementary_output)
         ADC_RSQ2 = 1u | (3u << 5) | (4u << 10);
     }
     ADC_RSQ0 = 2u << 20;
-    ADC_CTL0 |= 1u << 8;
-    ADC_CTL1 |= ADC_CTL1_ETSRC | ADC_CTL1_ETERC |
+    ADC_CTL0 = 1u << 8; /* One software-triggered scan; no inherited modes. */
+    ADC_CTL1 = ADC_CTL1_ADCON;
+    /* Calibration requires at least 14 ADC clocks after power-on. At the
+     * board's 48 MHz CPU / 14 MHz ADC clocks, 64 NOPs exceed that interval. */
+    for (unsigned i = 0; i < 64u; ++i) __NOP();
+    /* Power-off already reset calibration; only the calibration itself is
+     * needed here (the separate RSTCLB step is optional in the ADC manual). */
+    if (!adc_calibrate(1u << 2)) return false;
+    ADC_CTL1 = ADC_CTL1_ETSRC | ADC_CTL1_ETERC |
         ADC_CTL1_DMA | ADC_CTL1_ADCON;
-    if (!adc_calibrate(1u << 3) || !adc_calibrate(1u << 2)) return false;
 
     DMA_CH0PADDR = (uintptr_t)&ADC_RDATA;
     DMA_CH0MADDR = (uintptr_t)driver->adc_dma;

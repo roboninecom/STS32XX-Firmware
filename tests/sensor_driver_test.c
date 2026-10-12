@@ -55,6 +55,9 @@ int main(void)
     sensor_driver_t s;
     sensor_pair_t p;
     assert(sensor_driver_init(&s,false));
+    const uint32_t adc_run = ADC_CTL1_ETSRC | ADC_CTL1_ETERC |
+        ADC_CTL1_DMA | ADC_CTL1_ADCON;
+    assert(ADC_CTL1 == adc_run);
     assert(ADC_RSQ2 == (1u | (3u << 5) | (4u << 10)));
     assert(sensor_driver_restart(&s, true));
     assert(ADC_RSQ2 == (5u | (4u << 5) | (3u << 10)));
@@ -102,7 +105,18 @@ int main(void)
 
     /* Flash cancellation cannot leave a late DMA completion to re-enable data.
      * Restart extends elapsed time, including a wrapped cycle counter. */
-    restart(&s); tick(); adc(&s); sensor_driver_stop(&s);
+    /* Persistent writes can arrive before the ADC completion IRQ. Cancelling
+     * only DMA would leave the converter/request alive across restart and
+     * shift voltage into temperature, temperature into current, etc. */
+    restart(&s); tick(); sensor_driver_stop(&s);
+    assert(ADC_CTL1 == 0);
+    assert(!s.in_flight && !s.ready);
+    DMA_INTF=DMA_INTF_FTFIF; DMA_Channel0_IRQHandler(); DMA_INTF=0;
+    assert(!s.ready);
+    /* Restart must not inherit a prior continuous conversion mode. */
+    ADC_CTL1 = adc_run | (1u << 1);
+    restart(&s); assert(ADC_CTL1 == adc_run);
+    tick(); adc(&s); sensor_driver_stop(&s);
     assert(SysTick->CTRL==0 && DMA_CH0CTL==0 && DMA_CH2CTL==0);
     DMA_INTF=DMA_INTF_FTFIF<<8; DMA_Channel1_2_IRQHandler();
     tick(); assert(!sensor_driver_take_pair(&s,&p));
