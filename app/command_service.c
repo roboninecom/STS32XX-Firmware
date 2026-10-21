@@ -52,6 +52,11 @@ void command_service_apply(const protocol_result_t *result, void *context)
     }
     switch (result->effect) {
     case PROTOCOL_EFFECT_WRITE:
+        /* A goal can queue automatic torque enable until the next sensor pair.
+         * An explicit torque write received later must win, even when the
+         * torque byte was already zero. Goals in this packet are handled below. */
+        if (registers_write_touches(&result->write, REG_TORQUE_ENABLE, REG_TORQUE_ENABLE))
+            state->motion.auto_torque = false;
         /* Starting control caches legacy travel limits. End the session before changing
          * that envelope, even if storage is unavailable and the write is RAM-only. */
         if (state->arm_selected && registers_write_touches(&result->write,

@@ -1080,6 +1080,32 @@ int main(void)
         .write = { .start = 41, .accepted_count = 1, .any_changed = true } };
     command_service_apply(&acceleration, &pending);
     assert(pending.motion.position_goal && pending.motion.auto_torque);
+    /* Commands can arrive before the next sensor pair. A later explicit
+     * torque write overrides the goal's queued auto-enable, including when
+     * torque was already zero and the write does not change its byte. */
+    const uint8_t torque_states[] = {0, 2};
+    for (unsigned i = 0; i < sizeof torque_states; ++i) {
+        app_state_t stopped = pending;
+        registers_factory_defaults(&stopped.device.registers);
+        stopped.device.registers.byte[REG_OPERATION_MODE] = MOTION_MODE_POSITION;
+        stopped.device.registers.byte[REG_TORQUE_ENABLE] = torque_states[i];
+        stopped.device.registers.byte[REG_LOCK] = 1;
+        stopped.control_initialized = true;
+        stopped.sensor_service.measurement.position = 1000;
+        stopped.sensor_service.measurement.voltage = 120;
+        stopped.sensor_service.measurement.temperature = 25;
+        control_pipeline_reanchor(&stopped.control, 1000);
+        protocol_result_t torque_write = {.effect = PROTOCOL_EFFECT_WRITE,
+            .write = {.start = REG_TORQUE_ENABLE, .accepted_count = 1}};
+        command_service_apply(&torque_write, &stopped);
+        assert(!stopped.motion.auto_torque);
+        app_runtime_service_control_pair(&stopped, 1);
+        assert(stopped.device.registers.byte[REG_TORQUE_ENABLE] == torque_states[i]);
+        assert(!stopped.motion.pending && stopped.control.relative_origin == 1000);
+        /* A new goal after the explicit torque write can still auto-enable. */
+        command_service_apply(&repeat_goal, &stopped);
+        assert(stopped.motion.auto_torque);
+    }
     app_runtime_reanchor(&pending, 321);
     assert(!pending.motion.pending && !pending.motion.position_goal && !pending.motion.auto_torque);
     protocol_result_t empty_goal = { .effect = PROTOCOL_EFFECT_WRITE,

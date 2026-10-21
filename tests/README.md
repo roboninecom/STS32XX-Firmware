@@ -15,6 +15,9 @@ disabled/invalid limits, and session invalidation after either limit changes.
 Runtime tests also cover setup without power, position capture on enable,
 repeated enable during motion, consumed setup after a failed start, protection
 shutdown/restart, and rejection of the retired ARM selector.
+Legacy command-order regressions verify that an explicit torque write cancels
+automatic enable queued by an earlier goal before the next sensor pair. A new
+goal received afterward can still enable torque normally.
 
 The three October 10 fixes ported from the separate `rewrite` repository retain
 their regressions here:
