@@ -36,3 +36,19 @@ failed-enable cleanup, normal-exit target retention, and torque-off cleanup on e
 These tools require explicit device selection and, for timing measurements,
 a firmware build with `TIMING_PROBE=1` or `TIMING_PROBE=arm`.
 They are not invoked by offline verification.
+
+## Hardware differential tests
+
+The [servo comparison suite](hardware/servo-diff/README.md) compares factory
+firmware with a candidate on a dedicated bench. It includes communication,
+registers, motion, protection, persistence, calibration and LeRobot regressions.
+It uses this repository's shared host driver; no sibling checkout is required.
+
+Run `npm run test:diff` for its offline tests, or `npm run diff -- --list` to list
+hardware scenarios without opening a serial port. `npm test` includes the offline
+suite. Hardware execution requires an explicit port and separate opt-ins for
+motion, persistent writes, template writes and driven current protection.
+
+Read the suite manual before connecting hardware: the full run replaces live
+settings with a test configuration and finishes at saved reset-template defaults,
+not the user's starting settings. It is not an assembled-arm smoke test.
