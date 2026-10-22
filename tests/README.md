@@ -63,5 +63,7 @@ offline suite: `make flash-verify`, after installing its requirements in an
 active virtual environment. It checks release validation before serial access,
 factory block framing, fragmented responses, bounded retries, model/torque checks,
 settings preservation, application verification and recovery reporting using fake
-serial devices. It never flashes hardware. These checks are separate from `npm test`
+serial devices. Settings-recovery checks cover backup validation, configuration
+readback, ID/baud changes, template repair ordering, restart verification and
+relocking after failure. It never flashes hardware. These checks are separate from `npm test`
 and `make verify` because the uploader has an optional Python serial dependency.

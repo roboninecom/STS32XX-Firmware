@@ -79,6 +79,16 @@ current model or back up settings before uploading, so confirm hardware
 compatibility yourself. Check calibration and position limits before enabling
 torque afterward.
 
+## Returning to factory firmware
+
+We have an encoded **SCServo21-GD32-TTL factory 3.10** recovery image. The current
+public uploader verifies custom extension v9 firmware only; factory-image support
+is not yet included.
+
+Flashing factory firmware may require a separate settings repair, even if the
+manufacturer's tool initially displays correct values. Use the separate `settings.py` tool to back up, restore and verify settings.
+See [factory settings recovery](FACTORY_RECOVERY.md) for commands.
+
 ## Results and options
 
 Each run saves a report and available settings snapshots under `backups/flash/`.
