@@ -634,7 +634,9 @@ which is excluded from Git. Verification builds and
 tests offline; it does not flash a servo or open a serial port. See
 [tests/README.md](tests/README.md) for the available regression coverage.
 
-**Flashing tools may be published separately in a future update.**
+An [encoded-firmware upload and recovery tool](tools/flash/README.md) is included.
+It accepts publisher-supplied encoded releases and contains no firmware encoder
+or encryption key. Follow its setup and verification guide before using hardware.
 
 ## Repository layout
 

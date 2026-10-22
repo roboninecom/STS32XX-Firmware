@@ -1,5 +1,7 @@
 /build/
 /node_modules/
+**/.venv/
+/tools/flash/releases/
 __pycache__/
 *.pyc
 .DS_Store

@@ -1,0 +1,10 @@
+{
+  "format": "sts-gd32-encoded-v1",
+  "release": "EXAMPLE-ONLY-replace-with-published-release",
+  "image": "firmware.enc",
+  "size": 25744,
+  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "target": "gd32f130-sts-ttl",
+  "model_bytes": [[9, 8]],
+  "extension": {"major": 9, "minor": 0}
+}

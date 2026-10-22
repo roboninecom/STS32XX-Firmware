@@ -1,6 +1,7 @@
 ARM_PREFIX ?= arm-none-eabi-
 ARM_CC := $(ARM_PREFIX)gcc
 HOST_CC ?= cc
+PYTHON ?= python3
 ARM_OBJCOPY := $(ARM_PREFIX)objcopy
 ARM_OBJDUMP := $(ARM_PREFIX)objdump
 ARM_SIZE := $(ARM_PREFIX)size
@@ -48,7 +49,7 @@ SOURCES += platform/gd32f130/diagnostics.c app/diagnostic_service.c
 endif
 OBJECTS := $(patsubst %.c,$(FIRMWARE_DIR)/%.o,$(SOURCES))
 
-.PHONY: all firmware verify host-verify arm-host-verify teleop-host-verify clean FORCE
+.PHONY: all firmware verify host-verify arm-host-verify teleop-host-verify flash-verify clean FORCE
 all: firmware
 firmware: $(FIRMWARE_DIR)/firmware.elf $(FIRMWARE_DIR)/firmware.bin $(FIRMWARE_DIR)/firmware.hex $(FIRMWARE_DIR)/firmware.size $(FIRMWARE_DIR)/manifest.txt
 verify: firmware build/host/sensor_driver_test build/host/memory_test build/host/arm_motion_arithmetic_test build/host/arm_motion_test build/host/arm_plant_test build/host/arm_feedback_test build/host/arm_control_test build/host/uart_driver_test build/host/protocol_test build/host/service_test build/host/sensing_test build/host/sensor_service_test build/host/storage_test build/host/storage_service_test build/host/journal_plan_test build/host/motion_request_test build/host/trajectory_test build/host/controller_test build/host/protection_test build/host/bridge_policy_test build/host/control_pipeline_test build/host/telemetry_test build/host/status_led_test build/host/output_safety_test build/host/runtime_test
@@ -214,3 +215,6 @@ arm-host-verify:
 
 teleop-host-verify:
 	node --test host/teleoperation/*.test.js
+
+flash-verify:
+	$(PYTHON) -m unittest discover -s tools/flash/tests -v

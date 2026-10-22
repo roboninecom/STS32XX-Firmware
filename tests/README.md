@@ -55,3 +55,13 @@ motion, persistent writes, template writes and driven current protection.
 Read the suite manual before connecting hardware: the full run replaces live
 settings with a test configuration and finishes at saved reset-template defaults,
 not the user's starting settings. It is not an assembled-arm smoke test.
+
+## Encoded firmware uploader
+
+The [upload and recovery tool](../tools/flash/README.md) has a separate Python
+offline suite: `make flash-verify`, after installing its requirements in an
+active virtual environment. It checks release validation before serial access,
+factory block framing, fragmented responses, bounded retries, model/torque checks,
+settings preservation, application verification and recovery reporting using fake
+serial devices. It never flashes hardware. These checks are separate from `npm test`
+and `make verify` because the uploader has an optional Python serial dependency.
