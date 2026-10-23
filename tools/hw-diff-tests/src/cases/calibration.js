@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
-const { Instruction, PacketEncoder } = require('../../../../../host/servo-driver');
+const { Instruction, PacketEncoder } = require('../../../../host/servo-driver');
 const { sample } = require('../motion');
 const { encodeSign15, decodeOffset, calibrationExpectation, circularError } = require('../position');
 const { CleanupError } = require('../errors');

@@ -42,7 +42,7 @@ They are not invoked by offline verification.
 
 ## Hardware differential tests
 
-The [servo comparison suite](hardware/servo-diff/README.md) compares factory
+The [servo comparison suite](../tools/hw-diff-tests/README.md) compares factory
 firmware with a candidate on a dedicated bench. It includes communication,
 registers, motion, protection, persistence, calibration and LeRobot regressions.
 It uses this repository's shared host driver; no sibling checkout is required.

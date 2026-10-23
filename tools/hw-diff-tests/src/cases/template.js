@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
-const { Instruction } = require('../../../../../host/servo-driver');
+const { Instruction } = require('../../../../host/servo-driver');
 const { CleanupError } = require('../errors');
 const { persistentBytes } = require('../register-image');
 

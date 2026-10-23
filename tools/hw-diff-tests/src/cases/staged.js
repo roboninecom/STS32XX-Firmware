@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const { Instruction } = require('../../../../../host/servo-driver');
+const { Instruction } = require('../../../../host/servo-driver');
 const { CleanupError } = require('../errors');
 const { persistentBytes } = require('../register-image');
 

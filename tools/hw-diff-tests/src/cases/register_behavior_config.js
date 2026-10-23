@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
-const { Instruction } = require('../../../../../host/servo-driver');
+const { Instruction } = require('../../../../host/servo-driver');
 const { positionDelta } = require('../position');
 const { sample, trace, pacedWrite, exercise } = require('../motion');
 

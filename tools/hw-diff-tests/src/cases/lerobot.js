@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const { PacketEncoder, Instruction } = require('../../../../../host/servo-driver');
+const { PacketEncoder, Instruction } = require('../../../../host/servo-driver');
 const { CleanupError } = require('../errors');
 const { persistentBytes } = require('../register-image');
 const { decodeOffset, circularError } = require('../position');

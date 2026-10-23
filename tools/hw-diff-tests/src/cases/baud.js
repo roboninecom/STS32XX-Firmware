@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
-const { BAUD_RATES, BROADCAST_ID, Instruction, PacketEncoder } = require('../../../../../host/servo-driver');
+const { BAUD_RATES, BROADCAST_ID, Instruction, PacketEncoder } = require('../../../../host/servo-driver');
 const { CleanupError } = require('../errors');
 const { persistentBytes } = require('../register-image');
 

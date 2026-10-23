@@ -2,7 +2,7 @@
 
 const {
   StsServo, SerialTransport, PacketEncoder, Instruction, BROADCAST_ID,
-} = require('../../../../host/servo-driver');
+} = require('../../../host/servo-driver');
 const { setTimeout: delay } = require('node:timers/promises');
 
 const now = () => process.hrtime.bigint();

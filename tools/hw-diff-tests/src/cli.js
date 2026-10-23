@@ -27,7 +27,7 @@ Compare factory and candidate STS servos on a dedicated bench.
 
 The safe stage includes an attempted read-only-register WRITE, not just reads.
 Full-suite setup (--stage all) replaces settings; cleanup loads saved defaults.
-Read tests/hardware/servo-diff/README.md before hardware execution.
+Read tools/hw-diff-tests/README.md before hardware execution.
 Offline checks: npm run test:diff`;
 
 function formatCase(item, progress) {

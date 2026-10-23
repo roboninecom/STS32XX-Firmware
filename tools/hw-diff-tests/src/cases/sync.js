@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
 const { CleanupError } = require('../errors');
-const { PacketEncoder, Instruction, BROADCAST_ID } = require('../../../../../host/servo-driver');
+const { PacketEncoder, Instruction, BROADCAST_ID } = require('../../../../host/servo-driver');
 const { persistentBytes } = require('../register-image');
 
 function replyOrder(result) { return [...result.responses.keys()]; }

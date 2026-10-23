@@ -647,6 +647,8 @@ or encryption key. Follow its setup and verification guide before using hardware
 | `app/` | Main firmware loop and coordination between components |
 | `platform/gd32f130/` | Hardware drivers, startup code, and build support for the microcontroller |
 | `tests/` | Regression tests, required fixtures, and selected hardware diagnostics |
+| [`tools/hw-diff-tests/`](tools/hw-diff-tests/README.md) | Hardware comparison tests for factory and custom firmware |
+| [`tools/flash/`](tools/flash/README.md) | Encoded firmware flashing and settings recovery |
 
 For implementation details, see the
 [extension commands](app/arm_extension.c),

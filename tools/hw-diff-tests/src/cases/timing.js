@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const { withPersistedSettings } = require('../persistence');
 const { setTimeout: delay } = require('node:timers/promises');
-const { PacketEncoder, Instruction } = require('../../../../../host/servo-driver');
+const { PacketEncoder, Instruction } = require('../../../../host/servo-driver');
 const { CleanupError } = require('../errors');
 const { persistentBytes } = require('../register-image');
 

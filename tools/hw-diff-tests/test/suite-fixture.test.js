@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { SuiteFixture, suiteImage } = require('../src/suite-fixture');
 const { persistentBytes } = require('../src/register-image');
-const { Instruction } = require('../../../../host/servo-driver');
+const { Instruction } = require('../../../host/servo-driver');
 
 function fakeRig() {
   const images = new Map([1, 2].map(id => {
