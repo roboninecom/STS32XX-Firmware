@@ -33,14 +33,14 @@ function decodeTelemetry(bytes) {
   };
 }
 
-function anomalies(value, previous, baseline, beforePrevious) {
+function anomalies(value, previous, baseline, beforePrevious, { voltageMin = 8, voltageMax = 16 } = {}) {
   const found = [];
   if (value.status) found.push('status');
   if (value.moving > 1) found.push('moving-byte');
   if (value.pwm !== 0) found.push('pwm-while-torque-off');
   if (Math.abs(value.speed) > 500) found.push('speed-spike');
   if (Math.abs(value.current) > 300) found.push('current-spike');
-  if (value.voltage < 80 || value.voltage > 160) found.push('voltage-range');
+  if (value.voltage < voltageMin * 10 || value.voltage > voltageMax * 10) found.push('voltage-range');
   if (value.temperature < 5 || value.temperature > 90) found.push('temperature-range');
   if (Math.abs(value.voltage - baseline.voltage) > 10) found.push('voltage-baseline');
   if (Math.abs(value.temperature - baseline.temperature) > 5) found.push('temperature-baseline');
@@ -56,16 +56,18 @@ function anomalies(value, previous, baseline, beforePrevious) {
 
 function parse(args) {
   const options = { ids: [1, 2], samples: 100000, baud: 1000000,
-    timeoutMs: 100, gapMs: 0, intervalMs: 0 };
+    timeoutMs: 100, gapMs: 0, intervalMs: 0, voltageMin: 8, voltageMax: 16 };
   const fields = { '--port': 'port', '--output': 'output', '--ids': 'ids',
     '--samples': 'samples', '--baud': 'baud', '--timeout-ms': 'timeoutMs',
-    '--gap-ms': 'gapMs', '--interval-ms': 'intervalMs' };
+    '--gap-ms': 'gapMs', '--interval-ms': 'intervalMs',
+    '--voltage-min': 'voltageMin', '--voltage-max': 'voltageMax' };
   for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--help') return { help: true };
     const key = fields[args[i]];
-    if (!key || !args[i + 1]) throw new Error(`Invalid argument ${args[i]}`);
+    if (!key || !args[i + 1] || args[i + 1].startsWith('--')) throw new Error(`Invalid argument ${args[i]}`);
     const value = args[++i];
     options[key] = key === 'ids' ? value.split(',').map(Number) :
-      ['samples', 'baud', 'timeoutMs', 'gapMs', 'intervalMs'].includes(key) ? Number(value) : value;
+      ['samples', 'baud', 'timeoutMs', 'gapMs', 'intervalMs', 'voltageMin', 'voltageMax'].includes(key) ? Number(value) : value;
   }
   if (!options.port || !options.output || !options.ids.length ||
       new Set(options.ids).size !== options.ids.length ||
@@ -75,53 +77,67 @@ function parse(args) {
       !Number.isInteger(options.timeoutMs) || options.timeoutMs < 1 || options.timeoutMs > 10000 ||
       !Number.isInteger(options.gapMs) || options.gapMs < 0 || options.gapMs > 10000 ||
       !Number.isInteger(options.intervalMs) || options.intervalMs < 0 || options.intervalMs > 10000 ||
+      !Number.isFinite(options.voltageMin) || !Number.isFinite(options.voltageMax) ||
+      options.voltageMin < 0 || options.voltageMax > 25.5 || options.voltageMin >= options.voltageMax ||
       (options.intervalMs && options.gapMs)) {
-    throw new Error('usage: node telemetry_soak.js --port PORT --output DIR [--ids 1,2] [--samples 100000 per ID] [--baud 1000000] [--timeout-ms 100] [--gap-ms 0 | --interval-ms 100]');
+    throw new Error(USAGE);
   }
   return options;
 }
 
-async function run(options, progress = console.log) {
+const USAGE = 'node tools/diagnostics/telemetry.js --port PORT --output DIR [--ids 1,2] [--samples 100000] [--baud 1000000] [--timeout-ms 100] [--gap-ms 0 | --interval-ms 100] [--voltage-min 8 --voltage-max 16]';
+
+// Skip expired slots instead of sending a burst of overdue requests. The next
+// round is scheduled from the actual start, so timer delays cannot accumulate.
+function nextRound(started, finished, intervalMs) {
+  const interval = BigInt(intervalMs) * 1000000n;
+  let due = started + interval;
+  const missed = finished > due ? Number((finished - due + interval - 1n) / interval) : 0;
+  due += BigInt(missed) * interval;
+  return { due, missed };
+}
+
+async function run(options, { transport, progress = console.log, stopped = () => false,
+  io = fs, clock = () => process.hrtime.bigint(), sleep = delay } = {}) {
   const output = path.resolve(options.output);
-  fs.mkdirSync(output, { recursive: true });
-  const csv = fs.openSync(path.join(output, 'samples.csv'), 'wx');
-  const anomalyFile = fs.openSync(path.join(output, 'anomalies.jsonl'), 'wx');
-  fs.writeSync(csv, 'id,index,elapsed_ms,latency_ms,position,speed,pwm,voltage,raw_temperature_diagnostic,status,moving,active_position,current,active_velocity,flags\n');
+  let csv, anomalyFile;
   const report = { startedAt: new Date().toISOString(), options,
     temperatureSource: 'raw-register-63-diagnostic-only',
     scope: 'stationary read-only; 17-byte READ from register 56; one sample per ID per round',
     limitations: 'Host timing includes USB/OS; thresholds flag candidates for inspection, not proof of sensor damage. No sequence number exists in telemetry.',
-    before: {}, after: {}, devices: {}, errors: [] };
-  const save = () => fs.writeFileSync(path.join(output, 'report.json'),
+    before: {}, after: {}, devices: {}, errors: [], missedDeadlines: 0 };
+  const save = () => io.writeFileSync(path.join(output, 'report.json'),
     JSON.stringify(report, (key, value) =>
       ['latency', 'cadence', 'previous', 'beforePrevious', 'baseline', 'lastReply', 'identicalReplyRun'].includes(key)
         ? undefined : value, 2) + '\n');
-  const transport = new MeasuredTransport({ path: options.port, baudRate: options.baud,
+  transport ??= new MeasuredTransport({ path: options.port, baudRate: options.baud,
     operationTimeoutMs: Math.max(1000, options.timeoutMs * 2) });
   const probe = new Probe(transport, options.timeoutMs);
   let opened = false;
-  let interrupted = false;
-  const stop = () => { interrupted = true; };
-  process.on('SIGINT', stop);
-  process.on('SIGTERM', stop);
-  const started = process.hrtime.bigint();
+  const started = clock();
   let measurementStarted;
   const read = (id, address, count) => probe.measure(id,
     PacketEncoder.frame(id, Instruction.READ, [address, count]), count);
   const observe = async (id, address, count) => {
     const result = await read(id, address, count);
+    if (result.outcome === 'timeout') await probe.recover();
     if (result.outcome !== 'ok' || result.diagnostics.length || result.unexpectedFrames || result.duplicateFrames)
       throw new Error(`ID ${id} preflight/final read: ${result.outcome}, diagnostics=${result.diagnostics.length}`);
     return Buffer.from(result.rxParameters, 'hex');
   };
   let csvBatch = [];
   const flush = () => {
-    if (csvBatch.length) fs.writeSync(csv, csvBatch.join(''));
+    if (csvBatch.length) io.writeSync(csv, csvBatch.join(''));
     csvBatch = [];
   };
+  const recordError = error => report.errors.push({ name: error.name, message: error.message });
   try {
+    io.mkdirSync(output, { recursive: true });
+    csv = io.openSync(path.join(output, 'samples.csv'), 'wx');
+    anomalyFile = io.openSync(path.join(output, 'anomalies.jsonl'), 'wx');
+    io.writeSync(csv, 'id,index,elapsed_ms,latency_ms,position,speed,pwm,voltage,raw_temperature_diagnostic,status,moving,active_position,current,active_velocity,flags\n');
     await transport.open(); opened = true;
-    await delay(100);
+    await sleep(100);
     for (const id of options.ids) {
       const before = await observe(id, 0, 87);
       assert.equal(before[5], id, `ID ${id} identity`);
@@ -139,16 +155,19 @@ async function run(options, progress = console.log) {
         beforePrevious: null, baseline: null };
     }
     save();
-    measurementStarted = process.hrtime.bigint();
+    measurementStarted = clock();
+    let due = measurementStarted;
     const progressEvery = options.intervalMs
       ? Math.max(1, Math.round(30000 / options.intervalMs)) : 10000;
-    for (let index = 0; index < options.samples && !interrupted; index++) {
+    for (let index = 0; index < options.samples && !stopped(); index++) {
       if (options.intervalMs) {
-        const due = measurementStarted + BigInt(index * options.intervalMs) * 1000000n;
-        const remainingMs = Number(due - process.hrtime.bigint()) / 1e6;
-        if (remainingMs > 0) await delay(remainingMs);
+        const remainingMs = Number(due - clock()) / 1e6;
+        if (remainingMs > 0) await sleep(Math.ceil(remainingMs));
       }
+      if (stopped()) break;
+      const roundStarted = clock();
       for (const id of options.ids) {
+        if (stopped()) break;
         const device = report.devices[id];
         const result = await read(id, 56, 17);
         ++device.attempts;
@@ -158,7 +177,8 @@ async function run(options, progress = console.log) {
         if (result.diagnostics.length) flags.push('decoder-diagnostic');
         if (result.unexpectedFrames) flags.push('unexpected-frame');
         if (result.duplicateFrames) flags.push('duplicate-frame');
-        let value;
+        let value, spikeAtIndex;
+        const valid = flags.length === 0;
         if (result.rxParameters) {
           value = decodeTelemetry(Buffer.from(result.rxParameters, 'hex'));
           ++device.responses;
@@ -167,22 +187,32 @@ async function run(options, progress = console.log) {
           device.maxIdenticalReplyRun = Math.max(
             device.maxIdenticalReplyRun, device.identicalReplyRun);
           device.lastReply = result.rxParameters;
-          device.baseline ??= value;
-          flags.push(...anomalies(value, device.previous, device.baseline,
-                                  device.beforePrevious));
+          if (valid) {
+            device.baseline ??= value;
+            flags.push(...anomalies(value, device.previous?.value, device.baseline,
+                                    device.beforePrevious?.value, options));
+            if (flags.includes('temperature-single-sample-spike')) spikeAtIndex = device.previous.index;
+          }
           for (const field of ['position', 'speed', 'pwm', 'voltage', 'temperature', 'current']) {
             const bounds = device.ranges[field] ??= { min: value[field], max: value[field] };
             bounds.min = Math.min(bounds.min, value[field]);
             bounds.max = Math.max(bounds.max, value[field]);
           }
-          device.beforePrevious = device.previous;
-          device.previous = value;
+          if (valid) {
+            device.beforePrevious = device.previous;
+            device.previous = { index, value };
+          }
+        }
+        if (!valid) {
+          device.previous = device.beforePrevious = null;
+          device.lastReply = null;
+          device.identicalReplyRun = 0;
         }
         if (Number.isFinite(result.latencyMs)) {
           device.latency.push(result.latencyMs);
           if (result.latencyMs > 10) ++device.hostLatencySpikesOver10Ms;
         }
-        const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+        const elapsedMs = Number(clock() - started) / 1e6;
         if (device.lastSampleMs != null) device.cadence.push(elapsedMs - device.lastSampleMs);
         device.lastSampleMs = elapsedMs;
         const cells = [id, index, elapsedMs.toFixed(3), result.latencyMs?.toFixed(3) ?? '',
@@ -193,29 +223,30 @@ async function run(options, progress = console.log) {
         if (csvBatch.length >= 256) flush();
         for (const flag of new Set(flags))
           device.anomalyCounts[flag] = (device.anomalyCounts[flag] ?? 0) + 1;
-        if (flags.length) fs.writeSync(anomalyFile, JSON.stringify({ id, index, elapsedMs,
-          spikeAtIndex: flags.includes('temperature-single-sample-spike') ? index - 1 : undefined,
+        if (flags.length) io.writeSync(anomalyFile, JSON.stringify({ id, index, elapsedMs,
+          spikeAtIndex,
           flags, value, trace: result }) + '\n');
         if (result.outcome === 'timeout') await probe.recover();
         if (result.outcome === 'transport-error') throw new Error(`ID ${id}: ${result.error?.message}`);
-        if (options.gapMs) await delay(options.gapMs);
+        if (options.gapMs) await sleep(options.gapMs);
+      }
+      if (options.intervalMs) {
+        const next = nextRound(roundStarted, clock(), options.intervalMs);
+        due = next.due;
+        report.missedDeadlines += next.missed;
       }
       if ((index + 1) % progressEvery === 0) {
         progress(`${index + 1}/${options.samples} samples per ID`);
         flush(); save();
       }
     }
-    if (options.intervalMs && !interrupted) {
-      const due = measurementStarted + BigInt(options.samples * options.intervalMs) * 1000000n;
-      const remainingMs = Number(due - process.hrtime.bigint()) / 1e6;
-      if (remainingMs > 0) await delay(remainingMs);
-    }
-    report.measurementDurationMs = Number(process.hrtime.bigint() - measurementStarted) / 1e6;
-    report.interrupted = interrupted;
+    report.measurementDurationMs = Number(clock() - measurementStarted) / 1e6;
+    report.interrupted = stopped();
   } catch (error) {
-    report.errors.push({ name: error.name, message: error.message });
+    recordError(error);
   } finally {
-    flush();
+    // Logging failures must not prevent final checks or closing the serial port.
+    try { flush(); } catch (error) { recordError(error); }
     if (opened) {
       for (const id of options.ids.filter(id => report.before[id])) {
         try {
@@ -227,10 +258,10 @@ async function run(options, progress = console.log) {
           assert.equal(after[40], 0, `ID ${id} torque changed`);
           assert.equal(after[55], 1, `ID ${id} lock changed`);
           assert.equal(after[65], 0, `ID ${id} alarm present after soak`);
-        } catch (error) { report.errors.push({ name: error.name, message: error.message }); }
+        } catch (error) { recordError(error); }
       }
     }
-    try { await transport.close(); } catch (error) { report.errors.push({ name: error.name, message: error.message }); }
+    try { await transport.close(); } catch (error) { recordError(error); }
     for (const id of options.ids) {
       const device = report.devices[id];
       if (!device) continue;
@@ -247,18 +278,30 @@ async function run(options, progress = console.log) {
     }
     report.idleFrames = probe.idleFrames;
     if (measurementStarted && report.measurementDurationMs == null) report.measurementDurationMs =
-      Number(process.hrtime.bigint() - measurementStarted) / 1e6;
+      Number(clock() - measurementStarted) / 1e6;
     report.finishedAt = new Date().toISOString();
-    save();
-    fs.closeSync(csv); fs.closeSync(anomalyFile);
-    process.off('SIGINT', stop); process.off('SIGTERM', stop);
+    for (const fd of [csv, anomalyFile]) {
+      if (fd !== undefined) try { io.closeSync(fd); } catch (error) { recordError(error); }
+    }
+    // Do not replace an existing report if exclusive creation failed at startup.
+    if (csv !== undefined && anomalyFile !== undefined) {
+      try { save(); } catch (error) { recordError(error); }
+    }
   }
   return { output, report };
 }
 
 async function main() {
   const options = parse(process.argv.slice(2));
-  const { output, report } = await run(options);
+  if (options.help) { console.log(USAGE); return; }
+  let interrupted = false;
+  const stop = () => { interrupted = true; };
+  process.on('SIGINT', stop); process.on('SIGTERM', stop);
+  let result;
+  try { result = await run(options, { stopped: () => interrupted }); }
+  finally { process.off('SIGINT', stop); process.off('SIGTERM', stop); }
+  const { output, report } = result;
+  for (const error of report.errors) console.error(`${error.name}: ${error.message}`);
   console.log(`Report: ${path.join(output, 'report.json')}`);
   for (const [id, device] of Object.entries(report.devices))
     console.log(`ID ${id}: ${device.responses}/${device.attempts} responses; anomalies ${JSON.stringify(device.anomalyCounts)}`);
@@ -267,4 +310,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch(error => { console.error(error.stack ?? error.message); process.exitCode = 1; });
-module.exports = { parse, decodeTelemetry, anomalies, run };
+module.exports = { parse, decodeTelemetry, anomalies, nextRound, run };

@@ -648,6 +648,7 @@ or encryption key. Follow its setup and verification guide before using hardware
 | `platform/gd32f130/` | Hardware drivers, startup code, and build support for the microcontroller |
 | `tests/` | Regression tests, required fixtures, and selected hardware diagnostics |
 | [`tools/hw-diff-tests/`](tools/hw-diff-tests/README.md) | Hardware comparison tests for factory and custom firmware |
+| [`tools/diagnostics/`](tools/diagnostics/README.md) | Bus latency benchmarks and stationary telemetry checks |
 | [`tools/flash/`](tools/flash/README.md) | Encoded firmware flashing and settings recovery |
 
 For implementation details, see the

@@ -35,10 +35,14 @@ their regressions here:
 v9 packet layouts, selection/session encoding and startup ordering,
 failed-enable cleanup, normal-exit target retention, and torque-off cleanup on errors.
 
-`hardware/` contains stationary telemetry and bus/stack timing diagnostics.
-These tools require explicit device selection and, for timing measurements,
-a firmware build with `TIMING_PROBE=1` or `TIMING_PROBE=arm`.
-They are not invoked by offline verification.
+`hardware/` contains development bus/stack timing probes. These require explicit
+device selection and, for timing measurements, a firmware build with
+`TIMING_PROBE=1` or `TIMING_PROBE=arm`. They are not invoked by offline verification.
+
+The public [diagnostics tools](../tools/diagnostics/README.md) provide bus
+benchmarks and stationary telemetry checks; their offline tests run with
+`npm run test:diagnostics` and are included in `make host-verify`.
+The public tools work with ordinary firmware; no timing build is needed.
 
 ## Hardware differential tests
 

@@ -8,9 +8,12 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test host/servo-driver/test/*.test.js host/teleoperation/*.test.js tests/hardware/telemetry_soak.test.js tools/hw-diff-tests/test/*.test.js",
+    "test": "node --test host/servo-driver/test/*.test.js host/teleoperation/*.test.js tools/diagnostics/test/*.test.js tools/hw-diff-tests/test/*.test.js",
     "test:diff": "node --test tools/hw-diff-tests/test/*.test.js",
-    "diff": "node tools/hw-diff-tests/src/cli.js"
+    "diff": "node tools/hw-diff-tests/src/cli.js",
+    "test:diagnostics": "node --test tools/diagnostics/test/*.test.js",
+    "bus-benchmark": "node tools/diagnostics/bus-benchmark.js",
+    "telemetry": "node tools/diagnostics/telemetry.js"
   },
   "dependencies": {
     "serialport": "^13.0.0"
