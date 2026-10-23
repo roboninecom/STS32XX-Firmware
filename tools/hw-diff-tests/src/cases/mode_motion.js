@@ -2,13 +2,13 @@
 
 const assert = require('node:assert/strict');
 const { positionDelta, nearbyLogicalPosition, encodeSign15 } = require('../position');
+const { withinTolerance } = require('../measurements');
 const { sample, trace, pacedWrite, exercise } = require('../motion');
 
 function compareMeasurements(measurements) {
   const checks = measurements.map(([name, factory, candidate, tolerance]) => ({
     name, factory, candidate, tolerance,
-    matched: Number.isFinite(factory) && Number.isFinite(candidate) &&
-      Math.abs(factory - candidate) <= tolerance,
+    matched: withinTolerance(factory, candidate, tolerance),
   }));
   return { matched: checks.every(check => check.matched), checks };
 }

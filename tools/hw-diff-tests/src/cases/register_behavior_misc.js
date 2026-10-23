@@ -3,18 +3,8 @@
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
 const { encodeSign15 } = require('../position');
+const { compareEvidence } = require('../measurements');
 const { sample, trace, pacedWrite, exercise } = require('../motion');
-
-function compareField(name, tolerance) {
-  return (factory, candidate) => {
-    const a = factory.evidence[name];
-    const b = candidate.evidence[name];
-    return { matched: Number.isFinite(a) && Number.isFinite(b) &&
-      Math.abs(a - b) <= tolerance,
-    checks: [{ name, factory: a, candidate: b, tolerance,
-      matched: Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= tolerance }] };
-  };
-}
 
 async function outputPunch(context) {
   return exercise(context, 1, async (rig, id, before) => {
@@ -175,10 +165,10 @@ async function negativePositionDisplayFormat(context) {
 module.exports = [
   { id: 'test_output_punch_contrast', scope: 'device', risk: 'motion',
     stages: ['register-behavior'], covers: { modes: [1], registers: [24, 37, 39] },
-    compare: compareField('effect', 20), run: outputPunch },
+    compare: compareEvidence([['effect', 20]]), run: outputPunch },
   { id: 'test_config_velocity_telemetry_scale', scope: 'device', risk: 'motion',
     stages: ['register-behavior'], covers: { modes: [1], registers: [18, 58, 59, 71, 72] },
-    compare: compareField('ratio', 5), run: telemetryScale },
+    compare: compareEvidence([['ratio', 5]]), run: telemetryScale },
   { id: 'test_config_position_display_wrap', scope: 'device', risk: 'motion',
     stages: ['register-behavior'], covers: { modes: [0], registers: [18, 56, 57, 67, 68] },
     compare: (factory, candidate) => {

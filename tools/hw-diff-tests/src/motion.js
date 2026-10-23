@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
 const { Instruction } = require('../../../host/servo-driver');
-const { CleanupError } = require('./errors');
+const { withCleanup } = require('./errors');
 const { persistentBytes } = require('./register-image');
 
 function signed15(low, high) {
@@ -78,33 +78,23 @@ async function prepare(rig, id, mode, before) {
   await delay(35);
 }
 
-async function cleanup(rig, id, before, operationError) {
-  try {
-    await rig.reset(id);
-    const after = await rig.read(id, 0, 87);
-    assert.deepEqual(persistentBytes(after), persistentBytes(before),
-      `servo ${id} persistent settings changed during driven mode test`);
-    assert.equal(after[40], 0, 'reset did not disable torque');
-    assert.equal(after[33], before[33], 'reset did not restore work mode');
-    assert.equal(after[55], 1, 'reset did not restore lock');
-  } catch (cleanupError) {
-    throw new CleanupError(`driven mode cleanup failed on ID ${id}`,
-      operationError, cleanupError);
-  }
+async function cleanup(rig, id, before) {
+  await rig.reset(id);
+  const after = await rig.read(id, 0, 87);
+  assert.deepEqual(persistentBytes(after), persistentBytes(before),
+    `servo ${id} persistent settings changed during driven mode test`);
+  assert.equal(after[40], 0, 'reset did not disable torque');
+  assert.equal(after[33], before[33], 'reset did not restore work mode');
+  assert.equal(after[55], 1, 'reset did not restore lock');
 }
 
 async function exercise(context, mode, body) {
   const { rig, id } = context;
   const before = await rig.read(id, 0, 87);
-  let operationError;
-  let result;
-  try {
+  return withCleanup(async () => {
     await prepare(rig, id, mode, before);
-    result = await body(rig, id, before);
-  } catch (error) { operationError = error; }
-  await cleanup(rig, id, before, operationError);
-  if (operationError) throw operationError;
-  return result;
+    return body(rig, id, before);
+  }, () => cleanup(rig, id, before), `driven mode cleanup failed on ID ${id}`);
 }
 
 module.exports = { sample, trace, pacedWrite, exercise, waitForDrive };

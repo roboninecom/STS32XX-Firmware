@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
-const { CleanupError } = require('./errors');
+const { withCleanup } = require('./errors');
 const { persistentBytes } = require('./register-image');
 
 async function persist(rig, id, address, values) {
@@ -23,9 +23,7 @@ async function withPersistedSettings(context, address, values, body) {
     kind: 'evidence', registerBytes: before.toString('hex') });
   const original = [...before.subarray(address, address + values.length)];
   assert.notDeepEqual(values, original, 'persistence marker must change a byte');
-  let operationError;
-  let result;
-  try {
+  const result = await withCleanup(async () => {
     await persist(rig, id, address, values);
     const changed = await rig.read(id, 0, 87);
     const expected = Buffer.from(before);
@@ -34,9 +32,8 @@ async function withPersistedSettings(context, address, values, body) {
       'persistent marker did not survive reset or altered other settings');
     assert.equal(changed[40], 0);
     assert.equal(changed[55], 1);
-    result = await body(rig, id, before, changed);
-  } catch (error) { operationError = error; }
-  try {
+    return body(rig, id, before, changed);
+  }, async () => {
     await rig.write(id, 40, [0]);
     await persist(rig, id, address, original);
     const after = await rig.read(id, 0, 87);
@@ -44,11 +41,7 @@ async function withPersistedSettings(context, address, values, body) {
       'original persistent settings were not restored');
     assert.equal(after[40], 0);
     assert.equal(after[55], 1);
-  } catch (cleanupError) {
-    throw new CleanupError(`persistence cleanup failed on ID ${id} at ${address}`,
-      operationError, cleanupError);
-  }
-  if (operationError) throw operationError;
+  }, `persistence cleanup failed on ID ${id} at ${address}`);
   return { before: before.toString('hex'), original, changed: values, result };
 }
 

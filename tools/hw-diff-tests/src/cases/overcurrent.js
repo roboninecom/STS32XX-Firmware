@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
 const { positionDelta, nearbyLogicalPosition, encodeSign15 } = require('../position');
+const { withinTolerance } = require('../measurements');
 const { sample, trace, pacedWrite, exercise } = require('../motion');
 
 const ALARM = 0x08;
@@ -52,8 +53,7 @@ function compare(factory, candidate) {
       b.unmaskedAlarm.torqueAtAlarm, 0],
   ].map(([name, factoryValue, candidateValue, tolerance]) => ({
     name, factory: factoryValue, candidate: candidateValue, tolerance,
-    matched: Number.isFinite(factoryValue) && Number.isFinite(candidateValue) &&
-      Math.abs(factoryValue - candidateValue) <= tolerance,
+    matched: withinTolerance(factoryValue, candidateValue, tolerance),
   }));
   return { matched: checks.every(check => check.matched), checks };
 }

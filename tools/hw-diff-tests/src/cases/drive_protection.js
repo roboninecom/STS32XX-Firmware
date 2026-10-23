@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
 const { encodeSign15 } = require('../position');
+const { withinTolerance } = require('../measurements');
 const { sample, trace, pacedWrite, exercise, waitForDrive } = require('../motion');
 
 function lastPwm(samples) { return Math.abs(samples.at(-1).pwm); }
@@ -45,8 +46,7 @@ function compare(factory, candidate) {
     ['resumed output', a.resumedPwm, b.resumedPwm, 80],
   ].map(([name, factoryValue, candidateValue, tolerance]) => ({
     name, factory: factoryValue, candidate: candidateValue, tolerance,
-    matched: Number.isFinite(factoryValue) && Number.isFinite(candidateValue) &&
-      Math.abs(factoryValue - candidateValue) <= tolerance,
+    matched: withinTolerance(factoryValue, candidateValue, tolerance),
   }));
   return { matched: checks.every(check => check.matched), checks };
 }

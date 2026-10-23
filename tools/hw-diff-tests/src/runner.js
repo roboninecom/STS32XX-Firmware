@@ -40,11 +40,7 @@ function skipRemaining(report, cases, start, reason, onCase) {
   }
 }
 
-async function run(config, options = {}) {
-  options = { ...options, mode: options.mode ?? config.mode ?? 'pair' };
-  const prepareSuite = options.prepareSuite ??
-    (options.stage === 'all' && !options.caseId && !options.cases);
-  const cases = selectCases(options.cases ?? loadCases(), options);
+function validatePermissions(cases, config, options, prepareSuite) {
   if (prepareSuite && (!options.allowPersistenceWrite || config.baudRate !== 1_000_000)) {
     throw new Error('Full-suite setup requires --allow-persistence-write and 1 Mbaud');
   }
@@ -60,6 +56,103 @@ async function run(config, options = {}) {
   if (cases.some(entry => entry.requiresPersistenceWrite) && !options.allowPersistenceWrite) {
     throw new Error('Persistent-register cases require --allow-persistence-write');
   }
+}
+
+async function loadReference(config, options, cases) {
+  if (!options.reference) return;
+  if (options.mode !== 'candidate') throw new Error('--reference requires --mode candidate');
+  const reference = JSON.parse(await fs.readFile(options.reference, 'utf8'));
+  if (reference.config?.factoryId !== config.factoryId ||
+      reference.config?.baudRate !== config.baudRate) {
+    throw new Error('reference factory ID or baud rate does not match this run');
+  }
+  const referenceCases = new Map();
+  for (const entry of cases.filter(item => item.scope === 'device')) {
+    const baseline = reference.cases?.find(item => item.id === entry.id);
+    const observation = baseline?.observations?.find(item => item.role === 'factory');
+    if (observation?.status !== 'passed' || !observation.result?.exact) {
+      throw new Error(`reference lacks a passing factory observation for ${entry.id}`);
+    }
+    referenceCases.set(entry.id, observation);
+  }
+  return {
+    cases: referenceCases,
+    summary: { runId: reference.runId, source: path.resolve(options.reference) },
+  };
+}
+
+async function observeTargets(entry, targets, rig, ids, config) {
+  const observations = [];
+  let hardStop;
+  for (const target of targets) {
+    const firstEvent = rig.events.length;
+    const started = process.hrtime.bigint();
+    try {
+      const result = await entry.run({ rig, ...target, ids, config });
+      observations.push({ role: target.role, status: 'passed', result,
+        elapsedMs: Number(process.hrtime.bigint() - started) / 1e6,
+        eventRange: [firstEvent, rig.events.length] });
+    } catch (error) {
+      observations.push({ role: target.role, status: 'failed',
+        error: errorSummary(error),
+        elapsedMs: Number(process.hrtime.bigint() - started) / 1e6,
+        eventRange: [firstEvent, rig.events.length] });
+      if (error instanceof CleanupError) hardStop = `cleanup failed in ${entry.id} on ${target.role}`;
+      else if (entry.prerequisite) hardStop = `prerequisite ${entry.id} failed on ${target.role}`;
+      else if (entry.stopOnFailure) hardStop = `safety case ${entry.id} failed on ${target.role}`;
+    }
+    if (!hardStop) {
+      try { await rig.health(target.ids ?? [target.id]); }
+      catch (error) {
+        const observation = observations.at(-1);
+        observation.status = 'failed';
+        observation.healthError = errorSummary(error);
+        hardStop = `communication health failed after ${entry.id} on ${target.role}`;
+      }
+    }
+    if (hardStop) break;
+  }
+  return { observations, hardStop };
+}
+
+function compareObservations(entry, observations, referenceFactory) {
+  const factory = observations.find(item => item.role === 'factory') ?? referenceFactory;
+  let factoryStimulus;
+  if (entry.requiresFactoryEffect && factory?.status === 'passed') {
+    factoryStimulus = typeof entry.validateFactoryStimulus === 'function'
+      ? entry.validateFactoryStimulus(factory.result)
+      : { valid: Boolean(factory.result.exact.profileStarted && factory.result.exact.shaftMoved),
+        reason: 'factory stimulus did not produce measurable motion' };
+  }
+  const factoryEffectMissing = factoryStimulus && !factoryStimulus.valid;
+  const candidate = observations.find(item => item.role === 'candidate');
+  let comparison;
+  if (entry.compare && factory?.status === 'passed' && candidate?.status === 'passed') {
+    try { comparison = entry.compare(factory.result, candidate.result); }
+    catch (error) { comparison = { matched: false, error: errorSummary(error) }; }
+  } else if (referenceFactory && factory?.status === 'passed' &&
+             candidate?.status === 'passed') {
+    comparison = { matched: JSON.stringify(factory.result.exact) ===
+      JSON.stringify(candidate.result.exact), method: 'exact' };
+  }
+  // A failed operation takes priority over a missing stimulus or comparison.
+  let status = 'passed';
+  if (observations.some(item => item.status === 'failed')) status = 'failed';
+  else if (factoryEffectMissing) status = 'inconclusive';
+  else if (comparison) status = comparison.matched ? 'passed' : 'mismatch';
+  else if (observations.length === 2 &&
+      JSON.stringify(observations[0].result.exact) !== JSON.stringify(observations[1].result.exact)) {
+    status = 'mismatch';
+  }
+  return { status, comparison, factoryEffectMissing, factoryStimulus };
+}
+
+async function run(config, options = {}) {
+  options = { ...options, mode: options.mode ?? config.mode ?? 'pair' };
+  const prepareSuite = options.prepareSuite ??
+    (options.stage === 'all' && !options.caseId && !options.cases);
+  const cases = selectCases(options.cases ?? loadCases(), options);
+  validatePermissions(cases, config, options, prepareSuite);
   const rig = options.rigFactory ? options.rigFactory(config) : new Rig(config);
   const runId = new Date().toISOString().replaceAll(':', '-');
   const directory = path.resolve(options.resultsDirectory ?? path.join(__dirname, '..', 'results'), runId);
@@ -74,36 +167,20 @@ async function run(config, options = {}) {
   let opened = false;
   let fixture;
   try {
-    let referenceCases;
-    if (options.reference) {
-      if (options.mode !== 'candidate') throw new Error('--reference requires --mode candidate');
-      const reference = JSON.parse(await fs.readFile(options.reference, 'utf8'));
-      if (reference.config?.factoryId !== config.factoryId ||
-          reference.config?.baudRate !== config.baudRate) {
-        throw new Error('reference factory ID or baud rate does not match this run');
-      }
-      referenceCases = new Map();
-      for (const entry of cases.filter(item => item.scope === 'device')) {
-        const baseline = reference.cases?.find(item => item.id === entry.id);
-        const observation = baseline?.observations?.find(item => item.role === 'factory');
-        if (observation?.status !== 'passed' || !observation.result?.exact) {
-          throw new Error(`reference lacks a passing factory observation for ${entry.id}`);
-        }
-        referenceCases.set(entry.id, observation);
-      }
-      report.reference = { runId: reference.runId, source: path.resolve(options.reference) };
-    }
+    const reference = await loadReference(config, options, cases);
+    const referenceCases = reference?.cases;
+    if (reference) report.reference = reference.summary;
     await rig.open();
     opened = true;
     const ids = [config.factoryId, config.candidateId];
-    await rig.health(options.mode === 'factory' ? [ids[0]] :
-      options.mode === 'candidate' ? [ids[1]] : ids);
+    const activeIds = options.mode === 'factory' ? [ids[0]] :
+      options.mode === 'candidate' ? [ids[1]] : ids;
+    await rig.health(activeIds);
     if (prepareSuite) {
-      fixture = new SuiteFixture(rig, options.mode === 'factory' ? [ids[0]] :
-        options.mode === 'candidate' ? [ids[1]] : ids, async () => {
-          await fs.writeFile(path.join(directory, 'report.json'),
-            JSON.stringify({ ...report, events: rig.events }, null, 2) + '\n');
-        });
+      fixture = new SuiteFixture(rig, activeIds, async () => {
+        await fs.writeFile(path.join(directory, 'report.json'),
+          JSON.stringify({ ...report, events: rig.events }, null, 2) + '\n');
+      });
       if (!cases.some(entry => entry.restoresDefaults)) await fixture.prepare();
     }
     for (let caseIndex = 0; caseIndex < cases.length; caseIndex++) {
@@ -119,62 +196,11 @@ async function run(config, options = {}) {
           reason: 'requires pair mode' }, options.onCase, cases.length);
         continue;
       }
-      const observations = [];
-      let hardStop;
-      for (const target of targets) {
-        const firstEvent = rig.events.length;
-        const started = process.hrtime.bigint();
-        try {
-          const result = await entry.run({ rig, ...target, ids, config });
-          observations.push({ role: target.role, status: 'passed', result,
-            elapsedMs: Number(process.hrtime.bigint() - started) / 1e6,
-            eventRange: [firstEvent, rig.events.length] });
-        } catch (error) {
-          observations.push({ role: target.role, status: 'failed',
-            error: errorSummary(error),
-            elapsedMs: Number(process.hrtime.bigint() - started) / 1e6,
-            eventRange: [firstEvent, rig.events.length] });
-          if (error instanceof CleanupError) hardStop = `cleanup failed in ${entry.id} on ${target.role}`;
-          else if (entry.prerequisite) hardStop = `prerequisite ${entry.id} failed on ${target.role}`;
-          else if (entry.stopOnFailure) hardStop = `safety case ${entry.id} failed on ${target.role}`;
-        }
-        if (!hardStop) {
-          try { await rig.health(target.ids ?? [target.id]); }
-          catch (error) {
-            const observation = observations.at(-1);
-            observation.status = 'failed';
-            observation.healthError = errorSummary(error);
-            hardStop = `communication health failed after ${entry.id} on ${target.role}`;
-          }
-        }
-        if (hardStop) break;
-      }
-      const factory = observations.find(item => item.role === 'factory') ??
-        referenceCases?.get(entry.id);
-      let factoryStimulus;
-      if (entry.requiresFactoryEffect && factory?.status === 'passed') {
-        factoryStimulus = typeof entry.validateFactoryStimulus === 'function'
-          ? entry.validateFactoryStimulus(factory.result)
-          : { valid: Boolean(factory.result.exact.profileStarted && factory.result.exact.shaftMoved),
-            reason: 'factory stimulus did not produce measurable motion' };
-      }
-      const factoryEffectMissing = factoryStimulus && !factoryStimulus.valid;
-      const candidate = observations.find(item => item.role === 'candidate');
-      let comparison;
-      if (entry.compare && factory?.status === 'passed' && candidate?.status === 'passed') {
-        try { comparison = entry.compare(factory.result, candidate.result); }
-        catch (error) { comparison = { matched: false, error: errorSummary(error) }; }
-      } else if (referenceCases?.has(entry.id) && factory?.status === 'passed' &&
-                 candidate?.status === 'passed') {
-        comparison = { matched: JSON.stringify(factory.result.exact) ===
-          JSON.stringify(candidate.result.exact), method: 'exact' };
-      }
-      const status = observations.some(item => item.status === 'failed') ? 'failed' :
-        factoryEffectMissing ? 'inconclusive' :
-          comparison ? (comparison.matched ? 'passed' : 'mismatch') :
-            observations.length === 2 &&
-            JSON.stringify(observations[0].result.exact) !== JSON.stringify(observations[1].result.exact)
-              ? 'mismatch' : 'passed';
+      const { observations, hardStop: observationStop } =
+        await observeTargets(entry, targets, rig, ids, config);
+      let hardStop = observationStop;
+      const { status, comparison, factoryEffectMissing, factoryStimulus } =
+        compareObservations(entry, observations, referenceCases?.get(entry.id));
       if (entry.prerequisite && status !== 'passed' && !hardStop) {
         hardStop = `prerequisite ${entry.id} ${status}`;
       }

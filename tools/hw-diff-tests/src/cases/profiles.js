@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { positionDelta, nearbyLogicalPosition, encodeSign15 } = require('../position');
+const { withinTolerance } = require('../measurements');
 const { sample, trace, pacedWrite, exercise } = require('../motion');
 
 const settings = [
@@ -44,8 +45,7 @@ function compare(factory, candidate) {
     ['final position error', a.finalError, b.finalError, 70],
   ].map(([name, factoryValue, candidateValue, tolerance]) => ({
     name, factory: factoryValue, candidate: candidateValue, tolerance,
-    matched: Number.isFinite(factoryValue) && Number.isFinite(candidateValue) &&
-      Math.abs(factoryValue - candidateValue) <= tolerance,
+    matched: withinTolerance(factoryValue, candidateValue, tolerance),
   }));
   return { matched: checks.every(check => check.matched), checks };
 }

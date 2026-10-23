@@ -2,16 +2,12 @@
 
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
+const { upperMedian } = require('../measurements');
 const { sample, pacedWrite, exercise } = require('../motion');
 const { encodeSign15 } = require('../position');
 
 const u16 = value => [value & 0xff, value >> 8];
 const nowMs = () => Number(process.hrtime.bigint()) / 1e6;
-
-function median(values) {
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)];
-}
 
 function mean(values) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -408,8 +404,8 @@ function compareBoundaries(factory, candidate, relative) {
 function plateau(samples) {
   const tail = samples.filter(value => value.elapsedMs >= 2500);
   return {
-    medianMeasuredSpeed: median(tail.map(value => Math.abs(value.speed))),
-    medianActiveSpeed: median(tail.map(value => Math.abs(value.activeVelocity))),
+    medianMeasuredSpeed: upperMedian(tail.map(value => Math.abs(value.speed))),
+    medianActiveSpeed: upperMedian(tail.map(value => Math.abs(value.activeVelocity))),
     peakMeasuredSpeed: Math.max(...samples.map(value => Math.abs(value.speed))),
     peakPwm: Math.max(...samples.map(value => Math.abs(value.pwm))),
     peakCurrent: Math.max(...samples.map(value => Math.abs(value.current))),

@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
 const { encodeSign15 } = require('../position');
+const { withinTolerance } = require('../measurements');
 const { sample, trace, pacedWrite, exercise } = require('../motion');
 
 function compare(factory, candidate) {
@@ -15,8 +16,7 @@ function compare(factory, candidate) {
     ['gain treatment effect', a.treatmentEffect, b.treatmentEffect, 40],
   ].map(([name, factoryValue, candidateValue, tolerance]) => ({
     name, factory: factoryValue, candidate: candidateValue, tolerance,
-    matched: Number.isFinite(factoryValue) && Number.isFinite(candidateValue) &&
-      Math.abs(factoryValue - candidateValue) <= tolerance,
+    matched: withinTolerance(factoryValue, candidateValue, tolerance),
   }));
   if (Number.isFinite(a.trackingEffect) && Number.isFinite(b.trackingEffect)) {
     checks.push({ name: 'tracking-error treatment effect', factory: a.trackingEffect,

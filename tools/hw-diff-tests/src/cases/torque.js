@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { withinTolerance } = require('../measurements');
 const { sample, trace, pacedWrite, exercise } = require('../motion');
 
 function compare(factory, candidate) {
@@ -15,8 +16,7 @@ function compare(factory, candidate) {
     candidate: candidate.evidence.gatedPwm,
     tolerance: 5 });
   for (const check of checks) {
-    check.matched = Number.isFinite(check.factory) && Number.isFinite(check.candidate) &&
-      Math.abs(check.factory - check.candidate) <= check.tolerance;
+    check.matched = withinTolerance(check.factory, check.candidate, check.tolerance);
   }
   return { matched: checks.every(check => check.matched), checks };
 }

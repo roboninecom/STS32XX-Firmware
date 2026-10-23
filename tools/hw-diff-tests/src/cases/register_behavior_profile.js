@@ -3,17 +3,13 @@
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
 const { encodeSign15, positionDelta } = require('../position');
+const { upperMedian, withinTolerance } = require('../measurements');
 const { sample, trace, pacedWrite, exercise } = require('../motion');
 
 const u16 = value => [value & 0xff, value >> 8];
 
 function timeTo(samples, origin, distance) {
   return samples.find(value => value.position - origin >= distance)?.elapsedMs;
-}
-
-function median(values) {
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)];
 }
 
 function compare(factory, candidate) {
@@ -26,8 +22,7 @@ function compare(factory, candidate) {
     ['default peak profile speed', a.defaultPeakSpeed, b.defaultPeakSpeed, 150],
   ].map(([name, factoryValue, candidateValue, tolerance]) => ({
     name, factory: factoryValue, candidate: candidateValue, tolerance,
-    matched: Number.isFinite(factoryValue) && Number.isFinite(candidateValue) &&
-      Math.abs(factoryValue - candidateValue) <= tolerance,
+    matched: withinTolerance(factoryValue, candidateValue, tolerance),
   }));
   return { matched: checks.every(check => check.matched), checks };
 }
@@ -145,7 +140,7 @@ async function liveRateTelemetry(context) {
     const metric = samples => {
       const moving = samples.filter(item => item.moving && Math.abs(item.speed) > 0);
       assert.ok(moving.length >= 5, 'rate telemetry trial lacked moving samples');
-      return { medianSpeed: median(moving.map(item => Math.abs(item.speed))),
+      return { medianSpeed: upperMedian(moving.map(item => Math.abs(item.speed))),
         movingSamples: moving.length, totalSamples: samples.length };
     };
     const metrics = { baseline: metric(baseline), changed: metric(changed),

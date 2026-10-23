@@ -306,3 +306,53 @@ test('default mode executes pair-only cases rather than silently skipping them',
     assert.deepEqual(report.cases[0].observations[0].result.exact.ids, [1,2]);
   });
 });
+
+test('health failure stops before the candidate and retains the completed observation range', async () => {
+  await withResults(async resultsDirectory => {
+    const rig = fakeRig();
+    let healthChecks = 0;
+    rig.health = async () => {
+      rig.events.push({ label: 'health' });
+      if (++healthChecks > 1) throw new Error('lost connection');
+    };
+    const entry = caseDef('test_health_loss', async ({ id }) => {
+      assert.equal(id, 1, 'candidate must not run after losing factory communication');
+      rig.events.push({ label: 'operation' });
+      return { exact: { okay: true } };
+    });
+    const { report } = await run(config, { cases: [entry, caseDef('test_later',
+      () => assert.fail('later case must not run'))], resultsDirectory, rigFactory: () => rig });
+    assert.deepEqual(report.cases.map(item => item.status), ['failed', 'skipped']);
+    const [observation] = report.cases[0].observations;
+    assert.deepEqual(observation.eventRange, [1, 2]);
+    assert.equal(observation.result.exact.okay, true);
+    assert.equal(observation.healthError.message, 'lost connection');
+  });
+});
+
+test('failed candidate takes priority over an inconclusive factory stimulus', async () => {
+  await withResults(async resultsDirectory => {
+    const entry = caseDef('test_verdict_precedence', async ({ id }) => {
+      if (id === 2) throw new Error('candidate failed');
+      return { exact: { profileStarted: false, shaftMoved: false } };
+    });
+    entry.requiresFactoryEffect = true;
+    const { report } = await run(config, { cases: [entry], resultsDirectory, rigFactory: fakeRig });
+    assert.equal(report.cases[0].status, 'failed');
+    assert.match(report.cases[0].reason, /factory stimulus/);
+  });
+});
+
+test('comparator errors are recorded as mismatches and the connection is closed', async () => {
+  await withResults(async resultsDirectory => {
+    const rig = fakeRig();
+    let closed = false;
+    rig.close = async () => { closed = true; };
+    const entry = caseDef('test_bad_comparison', async () => ({ exact: { okay: true } }));
+    entry.compare = () => { throw new Error('missing comparison data'); };
+    const { report } = await run(config, { cases: [entry], resultsDirectory, rigFactory: () => rig });
+    assert.equal(report.cases[0].status, 'mismatch');
+    assert.equal(report.cases[0].comparison.error.message, 'missing comparison data');
+    assert.equal(closed, true);
+  });
+});

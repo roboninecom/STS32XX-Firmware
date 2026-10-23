@@ -3,27 +3,10 @@
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
 const { encodeSign15 } = require('../position');
+const { upperMedian, compareEvidence, withinTolerance } = require('../measurements');
 const { sample, trace, pacedWrite, exercise } = require('../motion');
 
 function peakPwm(samples) { return Math.max(...samples.map(value => Math.abs(value.pwm))); }
-function median(values) {
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)];
-}
-
-function compareEffects(names) {
-  return (factory, candidate) => {
-    const checks = names.map(([name, tolerance]) => ({
-      name, factory: factory.evidence[name], candidate: candidate.evidence[name], tolerance,
-    }));
-    for (const check of checks) {
-      check.matched = Number.isFinite(check.factory) && Number.isFinite(check.candidate) &&
-        Math.abs(check.factory - check.candidate) <= check.tolerance;
-    }
-    return { matched: checks.every(check => check.matched), checks };
-  };
-}
-
 function compareDeadzones(factory, candidate) {
   const a = factory.evidence.trials;
   const b = candidate.evidence.trials;
@@ -34,8 +17,7 @@ function compareDeadzones(factory, candidate) {
       factory: trial.blocked.peakPwm, candidate: b[index].blocked.peakPwm, tolerance: 8 },
   ]);
   for (const check of checks) {
-    check.matched = Number.isFinite(check.factory) && Number.isFinite(check.candidate) &&
-      Math.abs(check.factory - check.candidate) <= check.tolerance;
+    check.matched = withinTolerance(check.factory, check.candidate, check.tolerance);
   }
   return { matched: checks.every(check => check.matched), checks };
 }
@@ -125,11 +107,11 @@ async function integral(context) {
         clampEffect: free.peakPwm - clamped.peakPwm,
         integralEffect: free.peakPwm - zero.peakPwm });
     }
-    const zeroPeak = median(trials.map(item => item.zero.peakPwm));
-    const clampedPeak = median(trials.map(item => item.clamped.peakPwm));
-    const freePeak = median(trials.map(item => item.free.peakPwm));
-    const clampEffect = median(trials.map(item => item.clampEffect));
-    const integralEffect = median(trials.map(item => item.integralEffect));
+    const zeroPeak = upperMedian(trials.map(item => item.zero.peakPwm));
+    const clampedPeak = upperMedian(trials.map(item => item.clamped.peakPwm));
+    const freePeak = upperMedian(trials.map(item => item.free.peakPwm));
+    const clampEffect = upperMedian(trials.map(item => item.clampEffect));
+    const integralEffect = upperMedian(trials.map(item => item.integralEffect));
     if (context.role === 'factory') {
       assert.ok(zeroPeak <= 5 && clampedPeak <= 25 && clampEffect >= 30,
         `factory I/clamp stimulus ineffective: ${zeroPeak}/${clampedPeak}/${freePeak}`);
@@ -174,11 +156,11 @@ module.exports = [
     compare: compareDeadzones, run: deadzones },
   { id: 'test_position_derivative_term', scope: 'device', risk: 'motion',
     stages: ['register-behavior'], covers: { modes: [0], registers: [22, 80, 81] },
-    compare: compareEffects([['effect', 50]]), run: derivative },
+    compare: compareEvidence([['effect', 50]]), run: derivative },
   { id: 'test_position_integral_clamp', scope: 'device', risk: 'motion',
     stages: ['register-behavior'], covers: { modes: [0], registers: [23, 25] },
-    compare: compareEffects([['clampEffect', 75], ['integralEffect', 75]]), run: integral },
+    compare: compareEvidence([['clampEffect', 75], ['integralEffect', 75]]), run: integral },
   { id: 'test_velocity_integral_term', scope: 'device', risk: 'motion',
     stages: ['register-behavior'], covers: { modes: [1], registers: [39] },
-    compare: compareEffects([['effect', 75]]), run: speedIntegral },
+    compare: compareEvidence([['effect', 75]]), run: speedIntegral },
 ];

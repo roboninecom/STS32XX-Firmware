@@ -2,25 +2,13 @@
 
 const assert = require('node:assert/strict');
 const { encodeSign15 } = require('../position');
+const { compareEvidence } = require('../measurements');
 const { sample, trace, pacedWrite, exercise } = require('../motion');
 
 const u16 = value => [value & 0xff, value >> 8];
 const near = (actual, expected, tolerance, label) =>
   assert.ok(Math.abs(actual - expected) <= tolerance,
     `${label}: expected ${expected} ±${tolerance}, got ${actual}`);
-
-function compareFields(names) {
-  return (factory, candidate) => {
-    const checks = names.map(([name, tolerance]) => ({
-      name, factory: factory.evidence[name], candidate: candidate.evidence[name], tolerance,
-    }));
-    for (const check of checks) {
-      check.matched = Number.isFinite(check.factory) && Number.isFinite(check.candidate) &&
-        Math.abs(check.factory - check.candidate) <= check.tolerance;
-    }
-    return { matched: checks.every(check => check.matched), checks };
-  };
-}
 
 async function limits(context) {
   return exercise(context, 0, async (rig, id, before) => {
@@ -90,10 +78,10 @@ async function divisor(context) {
 module.exports = [
   { id: 'test_position_angle_limits', scope: 'device', risk: 'motion',
     stages: ['register-behavior'], covers: { modes: [0], registers: [9, 10, 11, 12, 42, 43] },
-    compare: compareFields([['upperError', 35], ['lowerError', 35], ['unrestrictedError', 35]]),
+    compare: compareEvidence([['upperError', 35], ['lowerError', 35], ['unrestrictedError', 35]]),
     run: limits },
   { id: 'test_position_scaling_divisor', scope: 'device', risk: 'motion',
     stages: ['register-behavior'], covers: { modes: [0], registers: [30, 42, 43, 56, 57, 67, 68] },
-    compare: compareFields([['halfError', 3], ['finalError', 20]]),
+    compare: compareEvidence([['halfError', 3], ['finalError', 20]]),
     run: divisor },
 ];

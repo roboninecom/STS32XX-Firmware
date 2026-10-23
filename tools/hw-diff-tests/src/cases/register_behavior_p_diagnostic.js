@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
 const { encodeSign15 } = require('../position');
+const { upperMedian, withinTolerance } = require('../measurements');
 const { sample, trace, pacedWrite, exercise } = require('../motion');
 
 const SETTINGS = [
@@ -11,12 +12,6 @@ const SETTINGS = [
   40, 41, 46, 47, 48, 49, 55,
   ...Array.from({ length: 9 }, (_, index) => index + 78),
 ];
-
-function median(values) {
-  if (!values.length) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)];
-}
 
 function metrics(samples, origin, direction, gain) {
   // Restrict the transfer-function check to active, non-saturated samples.
@@ -27,7 +22,7 @@ function metrics(samples, origin, direction, gain) {
     Math.trunc(gain * (value.position - value.activePosition) / 4)));
   return {
     activeSamples: active.length,
-    medianPwmResidual: median(residuals),
+    medianPwmResidual: upperMedian(residuals) ?? null,
     p90PwmResidual: residuals.length ?
       [...residuals].sort((a, b) => a - b)[Math.floor(0.9 * (residuals.length - 1))] : null,
     peakPwm: Math.max(...samples.map(value => Math.abs(value.pwm))),
@@ -101,8 +96,7 @@ function compare(factory, candidate) {
       ['travel', 120], ['peakSpeed', 450],
     ]) {
       checks.push({ name: `${label} ${name}`, factory: a[name], candidate: b[name],
-        tolerance, matched: Number.isFinite(a[name]) && Number.isFinite(b[name]) &&
-          Math.abs(a[name] - b[name]) <= tolerance });
+        tolerance, matched: withinTolerance(a[name], b[name], tolerance) });
     }
   }
   return { matched: checks.every(check => check.matched), checks };
