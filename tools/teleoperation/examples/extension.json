@@ -1,0 +1,31 @@
+{
+  "leaderPort": "/dev/ttyUSB0",
+  "followerPort": "/dev/ttyUSB1",
+  "baudRate": 1000000,
+  "protocol": "extension",
+  "hz": 30,
+  "maxAgeMs": 100,
+  "durationMs": 10000,
+  "acceleration": 1000,
+  "rampTimeMs": 50,
+  "joints": [
+    { "leaderId": 1, "followerId": 1, "mapping": "angle", "direction": 1 }
+  ],
+  "profiles": {
+    "1": {
+      "kpQ8": 256,
+      "kdQ8": 32,
+      "kiQ8": 0,
+      "integralLimit": 0,
+      "effortLimit": 100,
+      "velocityLimit": 500,
+      "velocityFilterQ8": 64,
+      "gravitySlewEffortPerS": 1000,
+      "velocityFeedforward": {
+        "positiveGainQ8": 0,
+        "negativeGainQ8": 0,
+        "effortLimit": 0
+      }
+    }
+  }
+}

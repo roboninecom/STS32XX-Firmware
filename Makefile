@@ -208,13 +208,13 @@ $(HOST_TEST_TARGETS):
 
 # Host interfaces are local to this repository; these targets are offline.
 host-verify:
-	node --test host/servo-driver/test/*.test.js host/teleoperation/*.test.js tools/diagnostics/test/*.test.js tools/hw-diff-tests/test/*.test.js tools/settings/test/*.test.js tools/pose-recorder/test/*.test.js
+	node --test host/servo-driver/test/*.test.js tools/teleoperation/test/*.test.js tools/diagnostics/test/*.test.js tools/hw-diff-tests/test/*.test.js tools/settings/test/*.test.js tools/pose-recorder/test/*.test.js
 
 arm-host-verify:
 	node --test host/servo-driver/test/arm-extension.test.js
 
 teleop-host-verify:
-	node --test host/teleoperation/*.test.js
+	node --test tools/teleoperation/test/*.test.js
 
 flash-verify:
 	$(PYTHON) -m unittest discover -s tools/flash/tests -v

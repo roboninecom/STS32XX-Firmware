@@ -1,17 +1,17 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { Teleoperation, mapPosition } = require('./Teleoperation');
-const { Instruction } = require('../servo-driver');
+const { Teleoperation, mapPosition } = require('../Teleoperation');
+const { Instruction } = require('../../../host/servo-driver');
 const profile = {gravitySlewEffortPerS:1000,velocityFeedforward:{positiveGainQ8:0,negativeGainQ8:0,effortLimit:0},kpQ8:256,kdQ8:32,kiQ8:0,integralLimit:0,effortLimit:100,velocityFilterQ8:64};
 function rig(protocol='legacy') {
   const calls = [], joints = [1,2].map(id => ({leaderId:id,followerId:id,mapping:'angle'}));
-  const config = {protocol,joints,acceleration:10000,rampTimeMs:30,profiles:{1:profile,2:profile}};
+  const config = {protocol,joints,session:1,acceleration:10000,rampTimeMs:30,profiles:{1:profile,2:profile}};
   function servo(name) {
     const s = {bus:{discover:async()=>({ids:[1,2],alarms:new Map()})}, arm:{}, protocol:{}};
     s.protocol.read = async (id,address,length) => {
       const b = Buffer.alloc(length);
-      if (address===0) {b.writeUInt16LE(100,9);b.writeUInt16LE(4000,11);b.writeUInt16LE(2050,56);}
+      if (address===0) {b[55]=1;b[8]=1;b.writeUInt16LE(100,9);b.writeUInt16LE(4000,11);b.writeUInt16LE(2050,56);}
       if(address===56) b.writeUInt16LE(2050);
       return b;
     };
@@ -356,4 +356,92 @@ test('failed torque-enable startup is detected from feedback and cleared on ever
   r.follower.arm.feedback=async()=>({...await feedback(),armed:false,session:0,fresh:false});
   await assert.rejects(r.t.run(),/startup ownership lost/);
   assert.deepEqual(r.calls.filter(c=>c[1]==='write'&&c[3]===40&&c[4][0]===0).map(c=>c[2]),[1,2]);
+});
+
+for (const protocol of ['legacy', 'extension']) {
+  test(`${protocol}: serial fault while idle triggers torque-off, not powered hold`, async () => {
+    const r = rig(protocol); await r.t.preflight();
+    const sleep = r.t.sleep;
+    r.t.sleep = async ms => { await sleep(ms); if (ms > 5) r.t.fail(new Error('serial fault')); };
+    await assert.rejects(r.t.run(), /serial fault/);
+    assert.deepEqual(r.calls.filter(c => c[1] === 'write' && c[3] === 40 && c[4][0] === 0).map(c => c[2]), [1, 2]);
+  });
+  test(`${protocol}: stale queued frame is not sent`, async () => {
+    const r = rig(protocol); await r.t.preflight(); const frame = await r.t.sample();
+    r.follower.protocol.transaction = async fn => { r.setTime(101); return fn(r.follower.protocol); };
+    await assert.rejects(r.t.send(frame), /stale/);
+    assert.equal(r.calls.length, 0);
+  });
+  test(`${protocol}: slow or failing command logging stops before sending`, async () => {
+    for (const fail of [false, true]) {
+      const r = rig(protocol); await r.t.preflight();
+      await assert.rejects(r.t.run({ onCommand: async () => {
+        if (fail) throw new Error('disk full');
+        r.setTime(200);
+      } }), fail ? /disk full/ : /stale/);
+      assert(!r.calls.some(c => c[1] === 'sync' || c[1] === 'arm'));
+      assert.deepEqual(r.calls.filter(c => c[1] === 'write' && c[3] === 40 && c[4][0] === 0).map(c => c[2]), [1, 2]);
+    }
+  });
+}
+
+test('invalid frame times and duration are rejected', async () => {
+  const r = rig(); await r.t.preflight();
+  for (const timestamp of [NaN, Infinity, 1]) assert.throws(() => r.t.fresh({ timestamp }), /stale/);
+  for (const durationMs of [NaN, -1, 0, '10']) assert.throws(() => new Teleoperation({
+    leader: r.leader, follower: r.follower, config: { ...r.config, durationMs },
+  }), /durationMs/);
+});
+
+test('session defaults to a generated valid ID and supplied velocity limit is retained', async () => {
+  const r = rig('extension'), config = { ...r.config }; delete config.session;
+  const t = new Teleoperation({ leader: r.leader, follower: r.follower, config });
+  assert.ok(Number.isInteger(t.session) && t.session >= 1 && t.session <= 65535);
+  r.config.profiles[1] = { ...profile, velocityLimit: 500 };
+  await r.t.preflight(); assert.equal(r.t.profiles[1].velocityLimit, 500);
+});
+
+test('preflight rejects unlocked follower settings and pending deferred writes', async () => {
+  for (const address of [55, 64]) {
+    const r = rig(), read = r.follower.protocol.read;
+    r.follower.protocol.read = async (...args) => { const b = await read(...args); if (args[1] === 0) b[address] = address === 55 ? 0 : 1; return b; };
+    await assert.rejects(r.t.preflight(), /locked.*deferred/); assert.equal(r.calls.length, 0);
+  }
+});
+
+test('legacy writes respect response level; fault cleanup verifies despite alarms', async () => {
+  const r = rig(); await r.t.preflight(); r.t.limits.follower[1].responseStatusLevel = 0;
+  const options = [];
+  r.follower.protocol.write = async (id, address, data, opts) => { options.push(opts); };
+  await r.t.write(1, 40, Buffer.from([0])); assert.equal(options[0].expectResponse, false);
+  r.t.prepared.add(1);
+  r.follower.protocol.read = async (id, address, length, opts) => {
+    assert.equal(opts.rejectOnAlarm, false); return Buffer.from([0]);
+  };
+  assert.deepEqual(await r.t.disableTorque(), []); assert.equal(options[1].expectResponse, false);
+});
+
+test('already requested stop skips initialization and motor writes', async () => {
+  const r = rig(); r.t.stopping = true; await r.t.run(); assert.equal(r.calls.length, 0);
+});
+
+test('failed normal legacy hold falls back to torque-off', async () => {
+  const r = rig(); await r.t.preflight(); let frames = 0;
+  const write = r.follower.protocol.write;
+  r.follower.protocol.write = async (id, address, data) => {
+    if (frames && address === 42) throw new Error('hold failed');
+    return write(id, address, data);
+  };
+  await assert.rejects(r.t.run({ onFrame: () => { frames++; }, shouldStop: () => frames === 1 }), /hold/);
+  assert.deepEqual(r.calls.filter(c => c[1] === 'write' && c[3] === 40 && c[4][0] === 0).map(c => c[2]), [1, 2]);
+});
+
+test('cadence skips missed periods instead of catching up in bursts', async () => {
+  const r = rig(); await r.t.preflight(); r.t.hz = 50;
+  let frames = 0; const timestamps = [];
+  await r.t.run({ onFrame: async frame => {
+    timestamps.push(frame.timestamp); frames++;
+    if (frames === 1) r.setTime(r.t.clock() + 55);
+  }, shouldStop: () => frames === 3 });
+  assert.deepEqual(timestamps, [0, 60, 80]);
 });

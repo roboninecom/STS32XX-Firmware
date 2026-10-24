@@ -648,6 +648,7 @@ or encryption key. Follow its setup and verification guide before using hardware
 | `platform/gd32f130/` | Hardware drivers, startup code, and build support for the microcontroller |
 | `tests/` | Regression tests, required fixtures, and selected hardware diagnostics |
 | [`host/servo-driver/`](host/servo-driver/README.md) | Installable Node.js driver for legacy commands and the v9 extension |
+| [`tools/teleoperation/`](tools/teleoperation/README.md) | Control a follower from a hand-operated leader |
 | [`tools/pose-recorder/`](tools/pose-recorder/README.md) | Record named motor positions |
 | [`tools/settings/`](tools/settings/README.md) | Motor discovery and settings backup/restore |
 | [`tools/hw-diff-tests/`](tools/hw-diff-tests/README.md) | Hardware comparison tests for factory and custom firmware |

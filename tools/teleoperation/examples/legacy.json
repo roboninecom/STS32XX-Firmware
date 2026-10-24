@@ -1,0 +1,12 @@
+{
+  "leaderPort": "/dev/ttyUSB0",
+  "followerPort": "/dev/ttyUSB1",
+  "baudRate": 1000000,
+  "protocol": "legacy",
+  "hz": 30,
+  "maxAgeMs": 100,
+  "durationMs": 10000,
+  "joints": [
+    { "leaderId": 1, "followerId": 1, "mapping": "angle", "direction": 1 }
+  ]
+}
