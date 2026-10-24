@@ -38,7 +38,7 @@ def apply_pose(model, data, counts, mapping):
         joint = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
         data.qpos[model.jnt_qposadr[joint]] = np.deg2rad(angle)
     # M5/M6 calibration is deferred. These are explicitly fixed visual placeholders.
-    for name, value in [(JOINTS[4], 0.0), (JOINTS[5], 0.016), (JOINTS[6], 0.016)]:
+    for name, value in [(JOINTS[4], 0.0), (JOINTS[5], 0.016), (JOINTS[6], -0.016)]:
         joint = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
         data.qpos[model.jnt_qposadr[joint]] = value
     data.qvel[:] = 0

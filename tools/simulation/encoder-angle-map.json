@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "status": "user-confirmed-angle-anchors-with-recorded-nominal-directions",
+  "status": "user-confirmed-anchors-translated-to-upstream-cad-zero",
   "middleCount": 2048,
   "nominalCountsPerRevolution": 4096,
   "nominalDegreesPerCount": 0.087890625,
   "jointAnchorsDeg": {
     "1": 0,
-    "2": 87,
-    "3": -75,
-    "4": 15,
+    "2": -3,
+    "3": 1,
+    "4": 1,
     "5": 0
   },
   "encoderToUrdfDirection": {
@@ -20,13 +20,13 @@
   "formula": "qDeg = angleAt2048Deg + direction * (encoderCount - 2048) * 360 / 4096",
   "inverseFormula": "encoderCount = round(2048 + direction * (qDeg - angleAt2048Deg) * 4096 / 360)",
   "zeroAngleCountsFloat": {
-    "1": 2048,
-    "2": 3037.866666666667,
-    "3": 1194.6666666666665,
-    "4": 1877.3333333333333
+    "1": 2048.0,
+    "2": 2013.8666666666666,
+    "3": 2059.3777777777777,
+    "4": 2036.6222222222223
   },
   "unresolved": [
-    "M4 physical parallel wording was superseded by explicit URDF+15\u00b0 confirmation. URDF origin rotations remain unchanged.",
+    "M1\u2013M4 anchors translated to the upstream CAD zero; physical validation of the new meshes is still pending.",
     "M1 zero2048 confirmed; nominal direction+1 retained. M5 zero2048 confirmed but detailed direction/scale validation deferred; M6 jaw opening uncalibrated/deferred.",
     "Nominal scale and geometric link dimensions are not independently validated; no provisional inertials or gravity effort model applied."
   ],
@@ -67,5 +67,14 @@
       "resolution": 1,
       "reverse": false
     }
-  }
+  },
+  "modelSourceCommit": "0f0dd95526638042a3213598ee0ae7f167c40efe",
+  "urdfReferenceShiftDeg": {
+    "1": 0,
+    "2": 90,
+    "3": -76,
+    "4": 14,
+    "5": 0
+  },
+  "referenceNote": "Subtract the upstream CAD reference from the previous confirmed angles (M2 87, M3 -75, M4 15 degrees). Encoder calibration and motor directions are unchanged."
 }

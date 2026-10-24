@@ -7,11 +7,10 @@ An illustrative physics demo and a gravity-geometry check are also included.
 
 ## Install and prepare the model
 
-Use Python 3.12. The SO-102 URDF, eight STL meshes, original sources and mass
-assumptions are included under [models/so102](models/so102/README.md). Model
-preparation uses that bundled copy by default; no sibling workspace is needed.
-The copied package has an unresolved license declaration, recorded in the model
-README. No license for those assets is inferred from this repository.
+Use Python 3.12. The standalone [URDF and meshes](urdf/README.md) are bundled
+from Robonine's SO-ARM-102 repository under CC BY 4.0. The layout is simply
+`urdf/so_arm_102.urdf` with `urdf/meshes/` beside it. No ROS package or sibling
+workspace is needed.
 
 ```sh
 python3.12 -m venv tools/simulation/.venv
@@ -19,10 +18,11 @@ tools/simulation/.venv/bin/python -m pip install -r tools/simulation/requirement
 tools/simulation/.venv/bin/python tools/simulation/prepare_so102.py
 ```
 
-The importer preserves the URDF inertials and jaw coupling and produces
+The importer preserves the URDF inertials and jaw coupling, omits collision
+boxes for contact-free display, and produces
 `tools/simulation/logs/model/so102-preview.xml`. Generated models, logs and
 renders are excluded from Git. `--output DIRECTORY` selects another destination. `--assets DIRECTORY` optionally
-selects another SO-102 package containing `urdf/so-arm.urdf` and `meshes/`.
+selects another SO-102 export containing `so_arm_102.urdf` and `meshes/`.
 
 ## Display a recording
 
@@ -55,7 +55,8 @@ C2 contains the planner reference; C1 does not. The display labels C1 comparison
 as the commanded destination, while preserving C2's actual reference for the
 tuning probe. Destination error during motion is not controller tracking error.
 
-The supplied encoder-angle map describes the original upright arm calibration.
+The supplied encoder-angle map describes the original upright arm calibration,
+translated to the new URDF zero angles. Motor encoder settings are unchanged.
 Recorded calibration must match it. Use `--mapping FILE.json` for another
 validated map. M1–M4 are mapped; M5 and jaw geometry remain explicitly fixed
 placeholders because their mapping has not been validated. All available motor
@@ -78,7 +79,7 @@ mass distribution, friction, motor dynamics or effort-to-torque conversion.
 Neither check qualifies hardware tuning. Hardware identification is available
 through the [automated tuning tool](../tuning/README.md).
 
-## Tests and migration
+## Tests
 
 ```sh
 PYTHONPATH=tools/simulation tools/simulation/.venv/bin/python \
@@ -88,22 +89,15 @@ PYTHONPATH=tools/simulation tools/simulation/.venv/bin/python \
 Display unit tests use original primitive geometry. The bundled-model tests also
 verify source hashes, mesh resolution, import and the 20-second demo. No hardware
 is required.
-The reusable viewer, model preparation, demo and geometry checks replace the
-older workspace entry points. Current controller events replace private v4
-campaign formats. Historical analysis scripts for individual experiments remain
-in the old workspace; they are not a second supported controller or viewer.
 
 ## Verification
 
-On October 24, 2026, the migrated importer and 20-second physics demo passed
-without warnings using the existing local SO-102 assets. The gravity-geometry
-check passed at 160 poses. Fifteen offline tests cover data freshness, recording
-adaptation, calibration rejection, partial log writes, overlays and charts.
+The bundled upstream export passes 18 offline tests, model import, a 20-second
+physics demo and gravity-geometry checks at 160 poses. Regression checks preserve
+joint locations from three reference poses within 2 micrometres after
+translating the zero angles, and verify opposite jaw motion. Current six-motor
+recordings also pass headless playback and image rendering.
 
-Current six-motor replay and tuning recordings passed headless playback and
-image rendering. The native viewer followed the M3 hardware batch for ten
-seconds without opening the serial port or disrupting control. Its observed
-update-loop rate was about 14 Hz on this machine, with variable GUI latency;
-that is not a claim of 60 Hz rendering or measured GPU frame rate. Complete
-feedback passes are grouped for display, and the history retains a bounded
-20-second window.
+The viewer does not connect to hardware. M5 and gripper encoder mapping still
+need physical validation; the model's mass estimates are not used to replace
+the measured gravity compensation.

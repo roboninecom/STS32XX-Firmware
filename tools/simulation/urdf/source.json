@@ -1,0 +1,18 @@
+{
+  "repository": "https://github.com/roboninecom/SO-ARM-102",
+  "commit": "0f0dd95526638042a3213598ee0ae7f167c40efe",
+  "directory": "simulation/urdf",
+  "license": "CC-BY-4.0",
+  "sha256": {
+    "LICENSE.txt": "9e5f1b3c610b9c2da5c313bf81d577a7d1acec686bdb0384edefa6df0f90cd94",
+    "meshes/base_link.stl": "14283b862bae5b71b39092e08422c49a44afa7d8bbf3b4f19988e9377de5788d",
+    "meshes/clamp1_1.stl": "a0276124d4a92276256883e4b4e09e820107ea2ad1ec86369ef979194073ada5",
+    "meshes/clamp2_1.stl": "fb0b0db6def0e54da5a4a7dd06d089050db311c130f24013a9a98839497e3dc6",
+    "meshes/link1_1.stl": "774d342ab81dff54bd81592152ca9fc17fff0a5204e75e8f209c06ece706b6e1",
+    "meshes/link2_1.stl": "b1452f14fd3858cf967d214e95dab1d2f0635fea5594d5872541e7cc0d40b2c0",
+    "meshes/link3_1.stl": "dcda5964332b6418704bb26883d9539bc08ea7942fd82e5ab9e0af53e78f8880",
+    "meshes/link4_1.stl": "727bf2eb7859c80e0cf8f2ef9e2ed6dfec35e1fc6f1e4b1dd4ae0aad70d202ce",
+    "meshes/link5_1.stl": "3041844df75a779802f55d50bcbfcb42edaa4fdf7702ee612c06ecb958eebb9d",
+    "so_arm_102.urdf": "09c397631e5ceaeb31d7448bf274501d3bdff658c3991ae71246ae638be20257"
+  }
+}

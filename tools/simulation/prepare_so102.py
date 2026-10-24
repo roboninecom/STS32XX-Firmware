@@ -1,4 +1,4 @@
-"""Build the provisional SO-102 model from sources inside this simulation folder."""
+"""Build a lightweight SO-102 preview from the bundled upstream URDF."""
 from pathlib import Path
 import argparse
 import json
@@ -9,7 +9,7 @@ import mujoco
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-SOURCE = HERE / "models/so102/so-arm_description"
+SOURCE = HERE / "urdf"
 
 BUILD = HERE / "logs/model"
 
@@ -18,8 +18,14 @@ def prepare(source=SOURCE, build=BUILD):
     source, build = Path(source).resolve(), Path(build).resolve()
     build.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source / "meshes", build / "meshes", dirs_exist_ok=True)
-    tree = ET.parse(source / "urdf/so-arm.urdf")
+    tree = ET.parse(source / "so_arm_102.urdf")
     robot = tree.getroot()
+    source_mass = sum(float(mass.get("value")) for mass in robot.findall("./link/inertial/mass"))
+    # These tools do not simulate contacts. Skip hundreds of collision boxes at
+    # import time while keeping the upstream URDF and visual meshes unchanged.
+    for link in robot.findall("link"):
+        for collision in link.findall("collision"):
+            link.remove(collision)
     for mesh in robot.findall(".//mesh"):
         mesh.set("filename", Path(mesh.get("filename")).name)
     extension = ET.SubElement(robot, "mujoco")
@@ -40,15 +46,20 @@ def prepare(source=SOURCE, build=BUILD):
     for geom in root.findall(".//geom"):
         geom.set("contype", "0")
         geom.set("conaffinity", "0")
-    # Explicitly preserve the source's jaw coupling across importer versions.
+    # Preserve the source's mimic relation, including its sign and offset.
     equality = root.find("equality")
     if equality is None:
         equality = ET.SubElement(root, "equality")
-    coupled = any(e.get("joint1") in ("clamp1", "clamp2") and
-                  e.get("joint2") in ("clamp1", "clamp2") for e in equality)
-    if not coupled:
-        ET.SubElement(equality, "joint", name="jaw_mimic", joint1="clamp2",
-                      joint2="clamp1", polycoef="0 1 0 0 0")
+    for joint in robot.findall("joint"):
+        mimic = joint.find("mimic")
+        if mimic is None:
+            continue
+        for existing in list(equality):
+            if existing.get("joint1") == joint.get("name"):
+                equality.remove(existing)
+        ET.SubElement(equality, "joint", name=f"{joint.get('name')}_mimic",
+                      joint1=joint.get("name"), joint2=mimic.get("joint"),
+                      polycoef=f"{mimic.get('offset', '0')} {mimic.get('multiplier', '1')} 0 0 0")
     output = build / "so102-preview.xml"
     mjcf.write(output, encoding="utf-8", xml_declaration=True)
     model = mujoco.MjModel.from_xml_path(str(output))
@@ -56,7 +67,7 @@ def prepare(source=SOURCE, build=BUILD):
     mujoco.mj_forward(model, data)
     assert model.njnt == 7, f"Expected five rotary joints and two jaw slides: {model.njnt}"
     assert model.neq == 1, f"Expected one jaw coupling: {model.neq}"
-    assert np.isclose(model.body_mass.sum(), 1.225), model.body_mass.sum()
+    assert np.isclose(model.body_mass.sum(), source_mass), model.body_mass.sum()
     for _ in range(1000):
         mujoco.mj_step(model, data)
     assert np.isfinite(data.qpos).all() and np.isfinite(data.qvel).all()
@@ -78,7 +89,7 @@ def prepare(source=SOURCE, build=BUILD):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--view", action="store_true", help="Open the geometry preview (use mjpython on macOS)")
-    parser.add_argument("--assets", default=SOURCE, type=Path, help="SO-102 package (default: bundled model)")
+    parser.add_argument("--assets", default=SOURCE, type=Path, help="Folder with so_arm_102.urdf and meshes/ (default: bundled model)")
     parser.add_argument("--output", type=Path, default=BUILD)
     args = parser.parse_args()
     path = prepare(args.assets, args.output)

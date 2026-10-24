@@ -33,7 +33,7 @@ def build_demo(assets=SOURCE, build=BUILD):
         # Idealized support separates this visual demo from uncalibrated gravity loading.
         body.set("gravcomp", "1")
     for body in root.findall(".//body"):
-        # URDF has identical visual/collision meshes. Only show the visual copy.
+        # Only show visual geometry.
         for geom in list(body.findall("geom")):
             if geom.get("group") != "1":
                 body.remove(geom)
@@ -53,7 +53,7 @@ def build_demo(assets=SOURCE, build=BUILD):
     model = mujoco.MjModel.from_xml_path(str(path))
     data = mujoco.MjData(model)
     data.qpos[:6] = target(0)
-    data.qpos[6] = data.qpos[5]
+    data.qpos[6] = -data.qpos[5]
     data.ctrl[:] = target(0)
     mujoco.mj_forward(model, data)
     return model, data
@@ -75,7 +75,7 @@ def check(model, data, build=BUILD):
     assert not any(w.number for w in data.warning), "MuJoCo issued a warning"
     span = np.ptp(positions, axis=0)
     assert np.all(span[:5] > 0.3) and np.all(span[5:] > 0.015), span
-    assert np.max(np.abs(positions[:, 5] - positions[:, 6])) < 0.001
+    assert np.max(np.abs(positions[:, 5] + positions[:, 6])) < 0.001
     report = {"seconds": float(data.time), "actuators": model.nu,
               "joint_travel_rad_or_m": span.tolist(), "warnings": 0,
               "servo_parameters_calibrated": False, "contacts_enabled": False,

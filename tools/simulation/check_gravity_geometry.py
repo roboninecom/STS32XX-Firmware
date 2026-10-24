@@ -37,7 +37,7 @@ def main():
     poses = rng.uniform(np.deg2rad([5, -170, -90]), np.deg2rad([185, 5, 20]), (160, 3))
     x, y, finite_difference_error, base_torque = [], [], [], []
     def set_q(q):
-        data.qpos[qadr] = [0.3, *q, 0., 0.016, 0.016]
+        data.qpos[qadr] = [0.3, *q, 0., 0.016, -0.016]
         data.qvel[:] = 0
         mujoco.mj_forward(model, data)
     def energy(q):
