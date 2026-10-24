@@ -103,8 +103,12 @@ the run with an error. Manually recorded timestamps do not set playback speed.
 Use `protocol: "extension"` for S-curves and explicit gains. Top-level
 `acceleration` and `rampTimeMs` control acceleration smoothing;
 `profiles[ID].velocityLimit` also caps speed. Motors receive one group command
-but can arrive at different times. Playback does not calculate gravity
-compensation; use a mechanically supported setup if your arm requires it.
+but can arrive at different times. To enable gravity compensation, add
+`gravityModel` to the configuration as described in the
+[shared controller guide](../../host/arm-control/README.md). The existing arm
+model is included. Compensation uses measured follower positions and continues
+through movement, holds and normal completion. After exit, firmware retains the
+final effort, but it no longer adapts to position or load changes.
 
 `protocol: "legacy"` uses the existing position controller and does not need
 profiles, `acceleration` or `rampTimeMs`. Optional `legacyAcceleration` uses the

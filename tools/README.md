@@ -3,7 +3,8 @@
 Utilities for working with STS servos. Each guide includes setup instructions,
 commands and hardware requirements. For application development, use the
 [Node.js servo driver](../host/servo-driver/README.md), available as a standalone
-npm package built from this repository.
+npm package built from this repository. Replay and teleoperation share the
+[arm controller and gravity model](../host/arm-control/README.md).
 
 | Tool | Purpose |
 | --- | --- |

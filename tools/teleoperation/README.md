@@ -73,8 +73,15 @@ See the [firmware register guide](../../README.md) for gain units and field
 ranges. Profiles are configuration entries for individual motors, not switchable
 firmware profiles. Acceleration and ramp time are shared by all followers.
 The tool configures and selects extension control with a generated session ID,
-then enables torque and waits for ready feedback. It does not calculate or send
-gravity compensation or change persistent settings.
+then enables torque and waits for ready feedback. Persistent settings are unchanged.
+
+For gravity compensation, add `gravityModel` to the configuration. See the
+[shared controller guide](../../host/arm-control/README.md) for the existing arm
+model, configuration-relative paths and startup checks. Gravity uses measured
+follower positions and continues during live input and replay pauses. With it
+enabled, normal exit waits for the final motion and gravity slew to settle before
+retaining a powered hold. After exit, the retained gravity effort no longer
+adapts to position or load changes.
 
 ## Timing and checks
 
@@ -89,7 +96,7 @@ gravity compensation or change persistent settings.
 
 A frame must include all leader positions. Its age is checked again when the
 follower bus becomes available. Follower health is checked at startup and roughly
-every 250 ms during control: alarms, invalid/stale readings, temperatures at or
+every 250 ms during control (approximately 50 ms with gravity): alarms, invalid/stale readings, temperatures at or
 above 60 °C, and lost extension ownership or rejected targets stop the run.
 Health checks and logging share the loop, so the achieved rate depends on bus,
 computer and disk performance.
@@ -140,6 +147,7 @@ recording instead of the example's 10-second cap.
 
 For named poses from the pose recorder, use `npm run replay-poses` as described
 in that guide. Both commands share follower setup, health checks and cleanup.
-Replay logs include the source path and SHA-256 hash.
+Replay logs include the source path and SHA-256 hash. Gravity-enabled logs also
+identify the current model and record requested efforts and acceptance feedback.
 
 Run offline tests with `npm run test:teleoperation`.
