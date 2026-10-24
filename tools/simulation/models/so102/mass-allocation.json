@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "status": "provisional simulation-only; separate rods reconciled with total; not validated for hardware feedforward",
+  "source": "User-reported 1225 g total including separate rods, six motor masses, four printed-part/assembly masses; see docs/arm-measurements.json",
+  "motorToLinkAssignmentVerified": false,
+  "componentOverlapVerified": false,
+  "baseResidualLocationVerified": false,
+  "fixedBaseAndRotatingStructurePlacementUserReported": true,
+  "bearingRingMassSplitVerified": false,
+  "clampMassSplitVerified": false,
+  "centerOfMassVerified": false,
+  "inertiaVerified": false,
+  "assumptions": [
+    "The 1225 g weighing includes the separate 20 g rods; fixture and payload are excluded.",
+    "The 57/100/26 g link weighings do not include motors.",
+    "Motor casings are provisionally assigned to the fixed side of each serial joint: M1 base_link, M2 link1_1, M3 link2_1, M4 link3_1, M5 link4_1, M6 link5_1.",
+    "The user identifies a fixed 110 g base piece and a 105 g bearing with fixed inner and rotating outer rings. The corrected rotating residual is 318 g. The model places the full bearing mass on fixed base_link until ring masses are measured.",
+    "The 75 g gripper assembly excludes the separate 20 g aluminum rods. Rod mounting is unknown; the generated model places them provisionally on link5_1 until measured.",
+    "The original inertial centers and tensor shapes are retained; each tensor is scaled by new mass divided by original mass."
+  ],
+  "componentMassGrams": {
+    "baseResidual": 533,
+    "rodsIncludedInReportedTotalArmMass": true,
+    "reportedTotalArmMassGrams": 1225,
+    "basePartGrams": 110,
+    "bearingGrams": 105,
+    "baseStructureRemainderGrams": 318,
+    "baseResidualFixedPlatformGrams": 110,
+    "baseResidualRotatingBaseGrams": 318,
+    "bearingRotatingMassGramsInGeneratedModel": 0,
+    "bearingActualOuterRingMassGrams": null,
+    "motors": {"1": 70, "2": 80, "3": 80, "4": 70, "5": 57, "6": 57},
+    "m2ToM3": 57,
+    "m3ToM4": 100,
+    "m4ToM5": 26,
+    "gripperAssemblyWithoutRods": 75,
+    "gripperRodsCombined": 20,
+    "rodPlacementInProvisionalModel": "link5_1"
+  },
+  "sourceSha256": {
+    "so-arm.urdf": "2ab87877942183071f40aa23a32d1a1853431bd9f3b12d715f98a9d31fbb9a7e",
+    "so-arm.xacro": "4f2610c53218fc508cf1a67e957c093fc07d26c7d5c9fe42f3a3ecee153e3cae"
+  }
+}

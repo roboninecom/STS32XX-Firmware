@@ -9,11 +9,12 @@ import mujoco
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
+SOURCE = HERE / "models/so102/so-arm_description"
 
 BUILD = HERE / "logs/model"
 
 
-def prepare(source, build=BUILD):
+def prepare(source=SOURCE, build=BUILD):
     source, build = Path(source).resolve(), Path(build).resolve()
     build.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source / "meshes", build / "meshes", dirs_exist_ok=True)
@@ -77,7 +78,7 @@ def prepare(source, build=BUILD):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--view", action="store_true", help="Open the geometry preview (use mjpython on macOS)")
-    parser.add_argument("--assets", required=True, type=Path, help="Local SO-102 package with urdf/so-arm.urdf and meshes/")
+    parser.add_argument("--assets", default=SOURCE, type=Path, help="SO-102 package (default: bundled model)")
     parser.add_argument("--output", type=Path, default=BUILD)
     args = parser.parse_args()
     path = prepare(args.assets, args.output)

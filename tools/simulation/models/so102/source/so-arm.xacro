@@ -1,0 +1,238 @@
+<?xml version="1.0" ?>
+<robot name="so-arm" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+<xacro:include filename="$(find so-arm_description)/urdf/materials.xacro" />
+<xacro:include filename="$(find so-arm_description)/urdf/so-arm.trans" />
+
+<link name="base_link">
+  <inertial>
+    <origin xyz="-0.009406544829903572 6.007217489668264e-05 0.008235205211362326" rpy="0 0 0"/>
+    <mass value="1.19098497271946"/>
+    <inertia ixx="0.001873" iyy="0.001135" izz="0.00291" ixy="2e-06" iyz="0.0" ixz="-9e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link1_1">
+  <inertial>
+    <origin xyz="0.005464885749287921 -1.2675422346798214e-05 0.03240352538520035" rpy="0 0 0"/>
+    <mass value="2.2403884827714697"/>
+    <inertia ixx="0.002478" iyy="0.002807" izz="0.002419" ixy="1e-06" iyz="1e-06" ixz="-0.000363"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.006 0.0 -0.025" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/link1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.006 0.0 -0.025" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/link1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link2_1">
+  <inertial>
+    <origin xyz="0.056505092817969824 0.017999730747229378 0.00011963824154033464" rpy="0 0 0"/>
+    <mass value="1.0038909417141955"/>
+    <inertia ixx="0.000236" iyy="0.001588" izz="0.001617" ixy="1.6e-05" iyz="-0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.034 0.018 -0.098357" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/link2_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.034 0.018 -0.098357" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/link2_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link3_1">
+  <inertial>
+    <origin xyz="0.07032572998340453 -0.0180163064459541 0.012228646336233537" rpy="0 0 0"/>
+    <mass value="0.9959769427609523"/>
+    <inertia ixx="0.000539" iyy="0.002171" izz="0.002355" ixy="4e-06" iyz="-0.0" ixz="0.000216"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.147001 -0.018 -0.098323" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/link3_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.147001 -0.018 -0.098323" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/link3_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link4_1">
+  <inertial>
+    <origin xyz="0.03159105739141316 -0.010094336391021686 -0.0001713219399298166" rpy="0 0 0"/>
+    <mass value="0.47315362223870805"/>
+    <inertia ixx="0.000177" iyy="0.00017" izz="0.000277" ixy="-2.8e-05" iyz="1e-06" ixz="2e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.286186 -0.018 -0.098287" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/link4_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.286186 -0.018 -0.098287" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/link4_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link5_1">
+  <inertial>
+    <origin xyz="0.03741565773493527 -0.00011824563115753717 0.013731317481773586" rpy="0 0 0"/>
+    <mass value="0.6948514192250708"/>
+    <inertia ixx="0.000968" iyy="0.000587" izz="0.000772" ixy="-4e-06" iyz="1e-06" ixz="9.1e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.34538 1e-06 -0.098247" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/link5_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.34538 1e-06 -0.098247" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/link5_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<!-- Negative-Y / right claw. -->
+<link name="clamp2_1">
+  <inertial>
+    <origin xyz="0.015089611475487041 -0.05201855841456542 -0.014925662643598639" rpy="0 0 0"/>
+    <mass value="0.08274917910303048"/>
+    <inertia ixx="2e-05" iyy="5.6e-05" izz="3.9e-05" ixy="4e-06" iyz="0.0" ixz="-1e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.409377 -0.044101 -0.112532" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/clamp2_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.409377 -0.044101 -0.112532" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/clamp2_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<!-- Positive-Y / left claw. -->
+<link name="clamp1_1">
+  <inertial>
+    <origin xyz="0.015089611631717736 0.052019408526296096 -0.01364049960713011" rpy="0 0 0"/>
+    <mass value="0.0827491781431124"/>
+    <inertia ixx="2e-05" iyy="5.6e-05" izz="3.9e-05" ixy="-4e-06" iyz="0.0" ixz="1e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.409377 0.043099 -0.112532" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/clamp1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.409377 0.043099 -0.112532" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://so-arm_description/meshes/clamp1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<joint name="base_to_link1" type="revolute">
+  <origin xyz="-0.006 0.0 0.025" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="link1_1"/>
+  <axis xyz="-0.0 -0.0 -1.0"/>
+  <limit upper="3.071779" lower="-3.071779" effort="100" velocity="100"/>
+</joint>
+
+<joint name="link1_to_link2" type="revolute">
+  <origin xyz="0.04 -0.018 0.073357" rpy="0 0 0"/>
+  <parent link="link1_1"/>
+  <child link="link2_1"/>
+  <axis xyz="0.0 -1.0 0.0"/>
+  <limit upper="3.159046" lower="-0.750492" effort="100" velocity="100"/>
+</joint>
+
+<joint name="link2_to_link3" type="revolute">
+  <origin xyz="0.113001 0.036 -3.4e-05" rpy="0 0 0"/>
+  <parent link="link2_1"/>
+  <child link="link3_1"/>
+  <axis xyz="0.0 -1.0 -0.0"/>
+  <limit upper="1.343904" lower="-2.897247" effort="100" velocity="100"/>
+</joint>
+
+<joint name="link3_to_link4" type="revolute">
+  <origin xyz="0.139185 0.0 -3.6e-05" rpy="0 0 0"/>
+  <parent link="link3_1"/>
+  <child link="link4_1"/>
+  <axis xyz="-0.0 1.0 0.0"/>
+  <limit upper="1.937315" lower="-1.48353" effort="100" velocity="100"/>
+</joint>
+
+<joint name="link4_to_link5" type="revolute">
+  <origin xyz="0.059194 -0.018001 -4e-05" rpy="0 0 0"/>
+  <parent link="link4_1"/>
+  <child link="link5_1"/>
+  <axis xyz="-1.0 -0.0 0.0"/>
+  <limit upper="2.844887" lower="-2.879793" effort="100" velocity="100"/>
+</joint>
+
+<joint name="clamp1" type="prismatic">
+  <!-- The joint frame is placed at the fully-open pose. -->
+  <origin xyz="0.063997 -0.000498 0.014285" rpy="0 0 0"/>
+  <parent link="link5_1"/>
+  <child link="clamp1_1"/>
+  <axis xyz="0.0 -1.0 0.0"/>
+  <limit upper="0.0425" lower="0.0" effort="100" velocity="100"/>
+</joint>
+
+<joint name="clamp2" type="prismatic">
+  <!-- The joint frame is placed at the fully-open pose. -->
+  <origin xyz="0.063997 0.001502 0.014285" rpy="0 0 0"/>
+  <parent link="link5_1"/>
+  <child link="clamp2_1"/>
+  <!-- Positive displacement closes both claws. -->
+  <axis xyz="0.0 1.0 0.0"/>
+  <limit upper="0.0425" lower="0.0" effort="100" velocity="100"/>
+  <!-- The opposite axis makes the same displacement mirror clamp1 physically. -->
+  <mimic joint="clamp1" multiplier="1.0" offset="0.0"/>
+</joint>
+
+</robot>

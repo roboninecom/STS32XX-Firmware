@@ -1,0 +1,19 @@
+{
+  "mass-allocation.json": "0db633763df9424380759f4853283afbcabc0cbee9d04bc4813ff6192f03ee91",
+  "so-arm_description/meshes/base_link.stl": "a059f219fa719360f1a05b3e0e5f36c216cbc5cff19b360d36145eec33fb56ae",
+  "so-arm_description/meshes/clamp1_1.stl": "05d4fc0e353d2b3e6f387e719426eceb1b1e2d98f89c12fde0aa02245b2384af",
+  "so-arm_description/meshes/clamp2_1.stl": "6c3880eccf2b0d4142bb5aa38133b12076da806184f3410fa8cfad2a8b3ff87a",
+  "so-arm_description/meshes/link1_1.stl": "4f3f4827df6ae8b1cd42dfbb60d753ed56d34e1a81b6e15b81c92c3f1ecf1794",
+  "so-arm_description/meshes/link2_1.stl": "861d0fbd9d50f62d36942f082cae463bf95db14cc684cb2ed91606d24ba45343",
+  "so-arm_description/meshes/link3_1.stl": "55ad8949e68cfbaa3a380333e42fbfd467091e393eba1a5e9a197755793ea99d",
+  "so-arm_description/meshes/link4_1.stl": "13f4a30b50094c7236584d78f0bee487d2ddafda99b41046bb1eafc0db081b0f",
+  "so-arm_description/meshes/link5_1.stl": "2443a133151f6111d6ef309012ca25d30a7b3735be670e850f11dc2d8dc8c885",
+  "so-arm_description/package.xml": "f2de24bec28407c0c77cb82bba942431857c7b9c960e63e035a21421e1be5c50",
+  "so-arm_description/setup.py": "7aba1cf38be5aadf62e13482cd6df65c9746e2d2105bdc821d14aae024744e9e",
+  "so-arm_description/urdf/materials.xacro": "1e3e443bda67501d993d656757172a803e37063c0bc3ccad4487ddf8bf599b2f",
+  "so-arm_description/urdf/so-arm.trans": "fefc5fa8f6575f878290eedda77d4f3534113c91603a9f2684858327ecd9aa3b",
+  "so-arm_description/urdf/so-arm.urdf": "ebef648806df4525b3a6acbaa0a1ed03c74afe0ca96c703db46a696ce0d321e7",
+  "so-arm_description/urdf/so-arm.xacro": "29b6af77b0339759d968bbcbc97b6783e7377c55933d8afe53ecbb9b7b387ae0",
+  "source/so-arm.urdf": "2ab87877942183071f40aa23a32d1a1853431bd9f3b12d715f98a9d31fbb9a7e",
+  "source/so-arm.xacro": "4f2610c53218fc508cf1a67e957c093fc07d26c7d5c9fe42f3a3ecee153e3cae"
+}

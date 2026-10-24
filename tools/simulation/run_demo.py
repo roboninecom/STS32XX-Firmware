@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 import mujoco
 import numpy as np
 
-from prepare_so102 import prepare, BUILD
+from prepare_so102 import prepare, BUILD, SOURCE
 
 JOINTS = ["base_to_link1", "link1_to_link2", "link2_to_link3",
           "link3_to_link4", "link4_to_link5", "clamp1"]
@@ -23,7 +23,7 @@ def target(t):
                      0.016 + 0.012 * np.sin(phase)])
 
 
-def build_demo(assets, build=BUILD):
+def build_demo(assets=SOURCE, build=BUILD):
     tree = ET.parse(prepare(assets, build))
     root = tree.getroot()
     root.set("model", "SO-102 motion demo (illustrative servos)")
@@ -114,7 +114,7 @@ def view(model, data):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="Check 20 seconds without a window")
-    parser.add_argument("--assets", required=True, type=Path)
+    parser.add_argument("--assets", default=SOURCE, type=Path)
     parser.add_argument("--output", type=Path, default=BUILD)
     args = parser.parse_args()
     args.output = args.output.resolve()

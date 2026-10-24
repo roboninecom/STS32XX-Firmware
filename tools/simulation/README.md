@@ -7,19 +7,22 @@ An illustrative physics demo and a gravity-geometry check are also included.
 
 ## Install and prepare the model
 
-Use Python 3.12 and a local SO-102 model package containing `urdf/so-arm.urdf`
-and `meshes/`. CAD assets are not bundled: their redistribution license is not
-yet resolved. Supply your own authorized copy.
+Use Python 3.12. The SO-102 URDF, eight STL meshes, original sources and mass
+assumptions are included under [models/so102](models/so102/README.md). Model
+preparation uses that bundled copy by default; no sibling workspace is needed.
+The copied package has an unresolved license declaration, recorded in the model
+README. No license for those assets is inferred from this repository.
 
 ```sh
 python3.12 -m venv tools/simulation/.venv
 tools/simulation/.venv/bin/python -m pip install -r tools/simulation/requirements.txt
-tools/simulation/.venv/bin/python tools/simulation/prepare_so102.py --assets /path/to/so-arm_description
+tools/simulation/.venv/bin/python tools/simulation/prepare_so102.py
 ```
 
 The importer preserves the URDF inertials and jaw coupling and produces
 `tools/simulation/logs/model/so102-preview.xml`. Generated models, logs and
-renders are excluded from Git. `--output DIRECTORY` selects another destination.
+renders are excluded from Git. `--output DIRECTORY` selects another destination. `--assets DIRECTORY` optionally
+selects another SO-102 package containing `urdf/so-arm.urdf` and `meshes/`.
 
 ## Display a recording
 
@@ -62,8 +65,7 @@ not physics steps, and does not predict the real controller's performance.
 ## Physics and geometry checks
 
 ```sh
-tools/simulation/.venv/bin/python tools/simulation/run_demo.py \
-  --assets /path/to/so-arm_description --check
+tools/simulation/.venv/bin/python tools/simulation/run_demo.py --check
 tools/simulation/.venv/bin/python tools/simulation/check_gravity_geometry.py \
   --model tools/simulation/logs/model/so102-preview.xml
 ```
@@ -83,7 +85,9 @@ PYTHONPATH=tools/simulation tools/simulation/.venv/bin/python \
   -m unittest discover -s tools/simulation/test -v
 ```
 
-Tests use original primitive geometry and require no CAD assets or hardware.
+Display unit tests use original primitive geometry. The bundled-model tests also
+verify source hashes, mesh resolution, import and the 20-second demo. No hardware
+is required.
 The reusable viewer, model preparation, demo and geometry checks replace the
 older workspace entry points. Current controller events replace private v4
 campaign formats. Historical analysis scripts for individual experiments remain
