@@ -58,6 +58,11 @@ function rig(raw = poses(), config = configuration(), gravity) {
       }
     },
     syncWrite: async (address, entries) => {
+      if (address === 40) {
+        calls.push({ type: 'enable-group', ids: entries.map(e => e.id), at: now });
+        for (const { id, data } of entries) { motors.get(id).torque = data[0]; calls.push({ type: 'write', id, address, value: data[0] }); }
+        return;
+      }
       for (const entry of entries) {
         motors.get(entry.id).position = entry.data.readUInt16LE();
         calls.push({ type: 'target', id: entry.id, position: entry.data.readUInt16LE(), speed: entry.data.readUInt16LE(4), at: now });

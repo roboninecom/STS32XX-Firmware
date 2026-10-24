@@ -167,10 +167,11 @@ test('temperature and accepted sequence failures terminate monitoring',async()=>
 });
 test('explicit follower rearm verifies torque off and never releases leader',async()=>{
   const r=rig('extension');await r.t.preflight();r.config.rearmPoweredFollower=true;
-  const read=r.follower.protocol.read,write=r.follower.protocol.write;
+  const read=r.follower.protocol.read,write=r.follower.protocol.write,syncWrite=r.follower.protocol.syncWrite;
   let torque=1;
   r.follower.protocol.read=async(id,address,length)=>address===40?Buffer.from([id===1?torque:0]):read(id,address,length);
   r.follower.protocol.write=async(id,address,data)=>{if(id===1&&address===40)torque=data[0];return write(id,address,data);};
+  r.follower.protocol.syncWrite=async(address,entries)=>{if(address===40)torque=entries.find(e=>e.id===1).data[0];return syncWrite(address,entries);};
   await r.t.initialize();
   assert.equal(torque,1);
   assert.equal(r.calls.filter(c=>c[1]==='write'&&c[3]===40&&c[4][0]===0).length,1);
@@ -347,7 +348,9 @@ test('startup prepares all sessions before enabling and never calls a separate A
   const r=rig('extension');await r.t.preflight();await r.t.initialize();
   const setups=r.calls.filter(c=>c[1]==='select'&&c[3]===true);
   assert.deepEqual(setups.map(c=>[c[2],c[4]]),[[1,1],[2,1]]);
-  const firstEnable=r.calls.findIndex(c=>c[1]==='write'&&c[3]===40&&c[4][0]===1);
+  const firstEnable=r.calls.findIndex(c=>c[1]==='sync'&&c[2]===40);
+  assert(firstEnable>=0);
+  assert.deepEqual(r.calls[firstEnable][3].map(e=>[e.id,e.data[0]]),[[1,1],[2,1]]);
   assert(setups.every(c=>r.calls.indexOf(c)<firstEnable));
   assert.equal(r.follower.arm.arm,undefined);
 });
@@ -381,7 +384,7 @@ for (const protocol of ['legacy', 'extension']) {
         if (fail) throw new Error('disk full');
         r.setTime(200);
       } }), fail ? /disk full/ : /stale/);
-      assert(!r.calls.some(c => c[1] === 'sync' || c[1] === 'arm'));
+      assert(!r.calls.some(c => (c[1] === 'sync' && c[2] === 42) || c[1] === 'arm'));
       assert.deepEqual(r.calls.filter(c => c[1] === 'write' && c[3] === 40 && c[4][0] === 0).map(c => c[2]), [1, 2]);
     }
   });

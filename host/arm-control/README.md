@@ -45,9 +45,10 @@ path and SHA-256 hash are included in the session log.
 
 1. Preflight checks firmware, saved limits, health, profiles and model inputs.
 2. With torque off, the controller configures and selects each motor with the
-   new session ID. It enables motors one at a time and waits for ready output.
-3. Gravity is measured, sent and confirmed for each enabled motor before the
-   next motor is enabled. All motors are primed before the first motion target.
+   new session ID. One group torque-enable packet starts all prepared motors;
+   individual feedback confirms ready output. This avoids leaving later joints
+   unpowered during earlier motors' readiness and gravity checks.
+3. Gravity is measured, sent and confirmed before the first motion target.
 4. During movement and pauses, one feedback pass supplies both health checks
    and gravity calculations. Gravity is refreshed approximately every 50 ms.
    There is no second telemetry reader or host velocity feedforward loop.

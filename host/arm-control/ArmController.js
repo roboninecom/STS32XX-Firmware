@@ -197,18 +197,26 @@ class ArmController {
         await this.write(id, 41, Buffer.from([this.config.legacyAcceleration]));
       }
     }
-    for (const t of frame.targets) {
-      if (this.stopping) throw new Error('Startup cancelled');
-      // Track before write: response loss must still trigger torque-off cleanup.
-      this.enabled.add(t.id);
-      await this.write(t.id, 40, Buffer.from([1]));
-      if (this.config.protocol === 'extension') {
-        await this.waitUntilOutputReady(t.id);
-        this.ready.add(t.id);
-        if (this.gravity) {
-          await this.monitor(this.onTelemetry);
-          await this.monitor(this.onTelemetry, false); // Confirm gravity before another motor or target starts.
-        }
+    if (this.stopping) throw new Error('Startup cancelled');
+    if (this.config.protocol === 'extension') {
+      // A loaded joint can fall while earlier axes are being checked. Enable
+      // the prepared group in one packet, then verify every motor from feedback.
+      const entries = frame.targets.map(t => ({ id: t.id, data: Buffer.from([1]) }));
+      for (const { id } of entries) this.enabled.add(id); // Include an uncertain broadcast in cleanup.
+      await this.follower.protocol.syncWrite(40, entries, this.options);
+      for (const { id } of entries) {
+        await this.waitUntilOutputReady(id);
+        this.ready.add(id);
+      }
+      if (this.gravity) {
+        await this.monitor(this.onTelemetry);
+        await this.monitor(this.onTelemetry, false); // Confirm all gravity before the first target.
+      }
+    } else {
+      for (const t of frame.targets) {
+        if (this.stopping) throw new Error('Startup cancelled');
+        this.enabled.add(t.id);
+        await this.write(t.id, 40, Buffer.from([1]));
       }
     }
   }
@@ -221,7 +229,12 @@ class ArmController {
         await this.monitor(this.onTelemetry);
       const s = await this.follower.arm.feedback(id, this.options);
       this.checkHealth(id, s);
-      if (!s.armed || s.session !== this.session) throw new Error(`Follower ${id}: startup ownership lost`);
+      if (!s.armed || s.session !== this.session) {
+        const q = s.measuredPositionQ8 / 256, limits = this.limits.follower[id];
+        if (Number.isFinite(q) && (q < limits.min || q > limits.max))
+          throw new Error(`Follower ${id}: outside saved position limits at torque enable (${q}, limits ${limits.min}–${limits.max})`);
+        throw new Error(`Follower ${id}: startup ownership lost`);
+      }
       if (s.fresh && s.driveEnabled && s.outputReady) return;
       if (this.stopping || this.clock() - started >= 3000) throw new Error(`Follower ${id}: output readiness timeout`);
     }

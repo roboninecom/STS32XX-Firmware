@@ -177,3 +177,33 @@ test('confirmation followed immediately by normal completion waits for fresh fee
   r.controller.source.play = async () => {};
   await r.controller.run(); assert.equal(torqueOff(r).length, 0);
 });
+
+test('group torque enable prevents later joints drifting during earlier readiness checks', async () => {
+  const ids = [1, 2, 3, 4, 5, 6], config = configuration(); delete config.joints;
+  config.profiles = Object.fromEntries(ids.map(id => [id, profile]));
+  const r = rig(poses([1500], ids), config, model(ids));
+  const sleep = r.controller.sleep, feedback = r.follower.arm.feedback;
+  r.controller.sleep = async ms => {
+    for (const motor of r.motors.values()) if (!motor.torque) motor.position = 4001;
+    await sleep(ms);
+  };
+  r.follower.arm.feedback = async id => ({ ...await feedback(id),
+    ...(r.motors.get(id).position > 4000 ? { armed: false, session: 0 } : {}) });
+  await r.controller.preflight(); await r.controller.run();
+  assert.equal(r.calls.filter(c => c.type === 'enable-group').length, 1);
+  assert.deepEqual(r.calls.find(c => c.type === 'enable-group').ids, ids);
+  assert.equal(torqueOff(r).length, 0);
+});
+
+for (const failure of ['broadcast', 'last motor']) test(`group enable ${failure} failure cleans up every prepared motor`, async () => {
+  const ids = [1, 2, 3], config = configuration(); delete config.joints;
+  config.profiles = Object.fromEntries(ids.map(id => [id, profile]));
+  const r = rig(poses([1500], ids), config, model(ids)); await r.controller.preflight();
+  if (failure === 'broadcast') r.follower.protocol.syncWrite = async () => { throw new Error('uncertain transmission'); };
+  else {
+    const feedback = r.follower.arm.feedback;
+    r.follower.arm.feedback = async id => ({ ...await feedback(id), ...(id === 3 ? { armed: false } : {}) });
+  }
+  await assert.rejects(r.controller.run(), /uncertain transmission|startup ownership/);
+  assert.equal(targets(r).length, 0); assert.deepEqual(torqueOff(r).map(c => c.id), ids);
+});
