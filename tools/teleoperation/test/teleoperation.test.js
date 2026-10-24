@@ -145,6 +145,7 @@ test('run failure turns off all owned followers',async()=>{
 test('torque-off cleanup attempts remaining joints after one write fails',async()=>{
   const r=rig('extension');r.t.prepared=new Set([1,2]);const seen=[];
   r.follower.protocol.write=async (id,address,data)=>{assert.equal(address,40);assert.equal(data[0],0);seen.push(id);if(id===1)throw Error('offline');};
+  r.follower.protocol.read=async id=>{if(id===1)throw Error('offline');return Buffer.from([0]);};
   assert.equal((await r.t.disableTorque()).length,1);assert.deepEqual(seen,[1,2]);
 });
 test('normal exit holds current legacy position and never turns torque off',async()=>{
@@ -449,4 +450,26 @@ test('cadence skips missed periods instead of catching up in bursts', async () =
     if (frames === 1) r.setTime(r.t.clock() + 55);
   }, shouldStop: () => frames === 3 });
   assert.deepEqual(timestamps, [0, 60, 80]);
+});
+
+test('torque-off consumes configured ACKs before verification, including alarm replies', async () => {
+  const r = rig('extension'); await r.t.preflight(); r.t.prepared = new Set([1, 2]);
+  let pendingReply = false;
+  r.follower.protocol.write = async (id, address, data, options) => {
+    assert.equal(options.rejectOnAlarm, false);
+    pendingReply = !options.expectResponse;
+  };
+  r.follower.protocol.read = async () => {
+    if (pendingReply) throw new Error('Read collided with ignored write ACK');
+    return Buffer.from([0]);
+  };
+  assert.deepEqual(await r.t.disableTorque(), []);
+});
+
+test('lost torque-off ACK still verifies output and does not report an unproved cleanup failure', async () => {
+  const r = rig('extension'); await r.t.preflight(); r.t.prepared = new Set([1, 2]);
+  const readIds = [];
+  r.follower.protocol.write = async () => { throw new Error('lost ACK'); };
+  r.follower.protocol.read = async id => { readIds.push(id); return Buffer.from([0]); };
+  assert.deepEqual(await r.t.disableTorque(), []); assert.deepEqual(readIds, [1, 2]);
 });

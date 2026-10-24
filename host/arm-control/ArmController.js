@@ -396,12 +396,21 @@ class ArmController {
   async disableTorque() {
     const failures = [];
     for (const id of new Set([...this.enabled, ...this.prepared])) {
+      let writeError;
       try {
-        // Send even when the motor is alarming or its acknowledgement setting is unknown.
-        await this.follower.protocol.write(id, 40, Buffer.from([0]), { ...this.options, expectResponse: false });
+        // Consume replies when enabled, even if they report an alarm. An ignored
+        // ACK can collide with the immediate readback on a half-duplex bus.
+        await this.follower.protocol.write(id, 40, Buffer.from([0]), { ...this.options,
+          rejectOnAlarm: false, expectResponse: this.limits?.follower[id]?.responseStatusLevel !== 0 });
+      } catch (error) { writeError = error; }
+      try {
+        // A missing ACK does not prove the write failed. Always verify output,
+        // and continue with the remaining motors if this one cannot be reached.
         if ((await this.follower.protocol.read(id, 40, 1, { ...this.options, rejectOnAlarm: false }))[0] !== 0)
           throw new Error('Torque-off verification failed');
-      } catch (error) { failures.push({ id, error: error.message }); }
+      } catch (error) {
+        failures.push({ id, error: [writeError?.message, error.message].filter(Boolean).join('; ') });
+      }
     }
     return failures;
   }
