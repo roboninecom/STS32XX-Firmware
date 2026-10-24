@@ -1,0 +1,161 @@
+{
+  "format": "sts-gravity",
+  "version": 1,
+  "units": "pwm-effort",
+  "name": "Recorded arm M2–M4 gravity model, 2026-10-04",
+  "calibration": "October 4 encoder mapping: 4096 counts/turn; at count 2048, M2=87°, M3=−75°, M4=15°; directions M2/M3 −1, M4 +1. Mapping is embedded in term weights and offsets.",
+  "mounting": "Original arm mounted upright; unchanged joint directions, encoder offsets and link geometry.",
+  "payload": "Empty gripper; no added payload. M1/M5/M6 compensation is explicitly zero.",
+  "status": "Historical coefficients preserved; current v9 host integration awaits hardware verification.",
+  "source": {
+    "filename": "arm-gravity-model-2026-10-04.json",
+    "sha256": "f40cec4b598a4399aa26b714a545e3b3fe5c43ccc328adbb24970adf4e374c00"
+  },
+  "models": {
+    "1": {
+      "terms": [],
+      "maxEffort": 0,
+      "note": "Explicit zero compensation in the original upright, empty-gripper setup; no model fitted for this axis."
+    },
+    "2": {
+      "terms": [
+        {
+          "fn": "cos",
+          "weights": {
+            "2": -0.0015339807878856412
+          },
+          "offsetRad": 4.6600291028248595,
+          "coefficient": -51.974175536574826
+        },
+        {
+          "fn": "sin",
+          "weights": {
+            "2": -0.0015339807878856412
+          },
+          "offsetRad": 4.6600291028248595,
+          "coefficient": 0.30196523395245933
+        },
+        {
+          "fn": "cos",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412
+          },
+          "offsetRad": 6.492624817418906,
+          "coefficient": -50.028837751430636
+        },
+        {
+          "fn": "sin",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412
+          },
+          "offsetRad": 6.492624817418906,
+          "coefficient": -8.716439074921437
+        },
+        {
+          "fn": "cos",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412,
+            "4": -0.0015339807878856412
+          },
+          "offsetRad": 9.37241808320955,
+          "coefficient": -16.55280091776853
+        },
+        {
+          "fn": "sin",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412,
+            "4": -0.0015339807878856412
+          },
+          "offsetRad": 9.37241808320955,
+          "coefficient": 1.1271792332618358
+        }
+      ],
+      "maxEffort": 1000,
+      "note": "Continuous shared conservative-potential gravity with positive relative actuator scales. Paired moving-load fit separates Coulomb friction and directional speed terms; held-out support configurations and zero/model/zero stationary comparisons precede operating validation. PWM units, not measured Nm. Upright empty gripper; scope in arm-tuned-m2-m4-2026-10-04.md."
+    },
+    "3": {
+      "terms": [
+        {
+          "fn": "cos",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412
+          },
+          "offsetRad": 6.492624817418906,
+          "coefficient": -45.437777672223135
+        },
+        {
+          "fn": "sin",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412
+          },
+          "offsetRad": 6.492624817418906,
+          "coefficient": -7.916546507587674
+        },
+        {
+          "fn": "cos",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412,
+            "4": -0.0015339807878856412
+          },
+          "offsetRad": 9.37241808320955,
+          "coefficient": -15.033778951473437
+        },
+        {
+          "fn": "sin",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412,
+            "4": -0.0015339807878856412
+          },
+          "offsetRad": 9.37241808320955,
+          "coefficient": 1.0237399407951195
+        }
+      ],
+      "maxEffort": 1000,
+      "note": "Continuous shared conservative-potential gravity with positive relative actuator scales. Paired moving-load fit separates Coulomb friction and directional speed terms; held-out support configurations and zero/model/zero stationary comparisons precede operating validation. PWM units, not measured Nm. Upright empty gripper; scope in arm-tuned-m2-m4-2026-10-04.md."
+    },
+    "4": {
+      "terms": [
+        {
+          "fn": "cos",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412,
+            "4": -0.0015339807878856412
+          },
+          "offsetRad": 9.37241808320955,
+          "coefficient": -30.96378205894795
+        },
+        {
+          "fn": "sin",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412,
+            "4": -0.0015339807878856412
+          },
+          "offsetRad": 9.37241808320955,
+          "coefficient": 2.1085091455806992
+        }
+      ],
+      "maxEffort": 1000,
+      "note": "Continuous shared conservative-potential gravity with positive relative actuator scales. Paired moving-load fit separates Coulomb friction and directional speed terms; held-out support configurations and zero/model/zero stationary comparisons precede operating validation. PWM units, not measured Nm. Upright empty gripper; scope in arm-tuned-m2-m4-2026-10-04.md."
+    },
+    "5": {
+      "terms": [],
+      "maxEffort": 0,
+      "note": "Explicit zero compensation in the original upright, empty-gripper setup; no model fitted for this axis."
+    },
+    "6": {
+      "terms": [],
+      "maxEffort": 0,
+      "note": "Explicit zero compensation in the original upright, empty-gripper setup; no model fitted for this axis."
+    }
+  }
+}
