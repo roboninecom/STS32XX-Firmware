@@ -228,3 +228,13 @@ test('calibration mismatch prevents all setup and motion writes', async () => {
     assert.equal(r.calls.length, 0);
   }
 });
+
+for (const stage of ['readiness', 'gravity confirmation']) test(`interrupted grouped startup during ${stage} removes torque without a target`, async () => {
+  const r = rig(poses(), configuration(), model()); await r.controller.preflight();
+  const sleep = r.controller.sleep;
+  if (stage === 'readiness') r.controller.sleep = async ms => { await sleep(ms); r.controller.stopping = true; };
+  await assert.rejects(r.controller.run({ onTelemetry: () => {
+    if (stage === 'gravity confirmation') r.controller.stopping = true;
+  } }), /Startup cancelled/);
+  assert.equal(targets(r).length, 0); assert.equal(torqueOff(r).length, 1);
+});

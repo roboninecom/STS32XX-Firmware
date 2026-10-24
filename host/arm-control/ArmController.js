@@ -222,12 +222,14 @@ class ArmController {
         await this.write(t.id, 40, Buffer.from([1]));
       }
     }
+    if (this.stopping) throw this.failure ?? new Error('Startup cancelled');
   }
 
   async waitUntilOutputReady(id) {
     const started = this.clock();
     while (true) {
       await this.sleep(5);
+      if (this.stopping) throw this.failure ?? new Error('Startup cancelled');
       if (this.gravity && this.ready.size && this.clock() - this.lastMonitorAt >= this.monitorIntervalMs)
         await this.monitor(this.onTelemetry);
       const s = await this.follower.arm.feedback(id, this.options);
