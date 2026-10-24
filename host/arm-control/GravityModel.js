@@ -7,6 +7,18 @@ function check(ok, message) { if (!ok) throw new Error(`Gravity model: ${message
 function finite(value, min, max) { return Number.isFinite(value) && value >= min && value <= max; }
 function idKey(id) { return /^[1-9]\d*$/.test(id) && Number(id) <= 253; }
 
+// Shared by runtime compensation and offline identification. The fitted model
+// must use exactly the same angle convention as the running controller.
+function basis(term, positions) {
+  if (term.fn === 'constant') return 1;
+  let angle = term.offsetRad;
+  for (const [input, weight] of Object.entries(term.weights)) {
+    check(finite(positions[input], -32767, 32767), `missing/invalid measured motor ${input}`);
+    angle += positions[input] * weight;
+  }
+  return Math[term.fn](angle);
+}
+
 // Pure evaluator: measured encoder counts -> signed PWM effort. The angle
 // calibration is already encoded in each term's weights and offsetRad.
 class GravityModel {
@@ -75,16 +87,7 @@ class GravityModel {
       const model = this.document.models[id];
       check(model, `missing explicit model for motor ${id}`);
       const effort = model.terms.reduce((sum, term) => {
-        let basis = 1;
-        if (term.fn !== 'constant') {
-          let angle = 0;
-          for (const [input, weight] of Object.entries(term.weights)) {
-            check(finite(positions[input], -32767, 32767), `missing/invalid measured motor ${input}`);
-            angle += positions[input] * weight;
-          }
-          basis = Math[term.fn](term.offsetRad + angle);
-        }
-        return sum + term.coefficient * basis;
+        return sum + term.coefficient * basis(term, positions);
       }, 0);
       const limit = Math.min(model.maxEffort, profiles[id].effortLimit);
       check(Number.isFinite(effort) && Math.abs(effort) <= limit, `motor ${id} effort ${effort} exceeds cap ${limit}`);
@@ -93,4 +96,4 @@ class GravityModel {
     return efforts;
   }
 }
-module.exports = { GravityModel };
+module.exports = { GravityModel, basis };

@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "name": "small-pid-screen",
+  "config": "controller.example.json",
+  "stage": "pid",
+  "probeId": 1,
+  "poses": { "screen": [[2000, 2050]], "validate": [[2010, 2040]] },
+  "motion": { "speeds": [100], "moveTimeoutMs": 5000 },
+  "batch": { "screenRepeats": 2, "validateRepeats": 2, "screenHoldMs": 1000,
+    "validateHoldMs": 3000, "finalists": 1, "maxDurationMs": 180000, "driftRatio": 0.25 },
+  "sampling": { "intervalMs": 50, "maxGapMs": 150 },
+  "limits": { "followingError": 100, "supportError": 50, "maxTemperature": 55,
+    "minVoltageRaw": 100, "maxVoltageRaw": 140 },
+  "acceptance": { "trackingRms": 10, "holdError": 10, "holdSpan": 5, "overshoot": 10,
+    "settlingMs": 1000, "responseMs": 4000, "saturationFraction": 0.05,
+    "settleBand": 10, "settleDwellMs": 300 },
+  "candidates": [{ "name": "p-1_125", "changes": { "kpQ8": 288 } }]
+}

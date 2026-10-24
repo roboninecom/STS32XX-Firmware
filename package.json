@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test host/servo-driver/test/*.test.js tools/teleoperation/test/*.test.js tools/diagnostics/test/*.test.js tools/hw-diff-tests/test/*.test.js tools/settings/test/*.test.js tools/pose-recorder/test/*.test.js host/arm-control/test/*.test.js",
+    "test": "node --test host/servo-driver/test/*.test.js tools/teleoperation/test/*.test.js tools/diagnostics/test/*.test.js tools/hw-diff-tests/test/*.test.js tools/settings/test/*.test.js tools/pose-recorder/test/*.test.js host/arm-control/test/*.test.js tools/tuning/test/*.test.js",
     "test:diff": "node --test tools/hw-diff-tests/test/*.test.js",
     "diff": "node tools/hw-diff-tests/src/cli.js",
     "test:diagnostics": "node --test tools/diagnostics/test/*.test.js",
@@ -23,7 +23,9 @@
     "teleoperate": "node tools/teleoperation/cli.js",
     "test:teleoperation": "node --test tools/teleoperation/test/*.test.js",
     "replay-poses": "node tools/pose-recorder/replay.js",
-    "test:arm": "node --test host/arm-control/test/*.test.js"
+    "test:arm": "node --test host/arm-control/test/*.test.js",
+    "test:tuning": "node --test tools/tuning/test/*.test.js",
+    "tune": "node tools/tuning/cli.js"
   },
   "dependencies": {
     "serialport": "^13.0.0"
