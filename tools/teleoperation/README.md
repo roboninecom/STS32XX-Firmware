@@ -74,7 +74,7 @@ ranges. Profiles are configuration entries for individual motors, not switchable
 firmware profiles. Acceleration and ramp time are shared by all followers.
 The tool configures and selects extension control with a generated session ID,
 then enables torque and waits for ready feedback. It does not calculate or send
-gravity compensation, replay poses or change persistent settings.
+gravity compensation or change persistent settings.
 
 ## Timing and checks
 
@@ -99,5 +99,47 @@ They contain configuration, the chosen session ID, preview, intended commands,
 sent frames, feedback and stop/error records. A command record alone does not
 prove a target was sent or accepted. Writes are awaited without accumulating an
 unbounded log queue; slow logging may trigger the frame-age check.
+
+## Replay a recorded session
+
+Replay recorded leader positions on the follower without connecting the leader:
+
+```sh
+npm run teleoperate -- CONFIG.json --replay SESSION.ndjson
+npm run teleoperate -- CONFIG.json --replay SESSION.ndjson --run
+```
+
+The first command is a read-only preview. The second starts motion. Use the
+current configuration and tested gains. The recording must contain a `preflight`
+event with leader limits and joint mapping, followed by `command` events with
+monotonic timestamps and all leader positions. The joint mapping must match the
+current configuration. Old session logs with those fields can be read, but old
+controller configurations must be adapted to the current configuration format.
+Files up to 64 MiB are supported. Truncated or malformed JSON is rejected
+before opening a port.
+
+Replay maps recorded leader positions through the recorded leader limits and
+the follower's current limits. It sends new commands with a fresh session and
+sequence numbers; recorded gains, gravity efforts, targets and packets are not
+reused. A `command` event records an intended command, so a log from a failed run
+can include a position that was never sent during that run.
+
+Recorded gaps are preserved. Processing delays can stretch playback; it never
+sends catch-up bursts. Health checks continue during pauses. After the final
+frame, playback waits for arrival (default tolerance 10 counts, timeout 30 s),
+then exits with the same powered-hold behaviour as live control. Ctrl+C ends it
+early; faults attempt torque-off. The first frame can cause an initial approach
+from the follower's current pose.
+
+Optional `replay.repeat`, `replay.moveTimeoutMs` and `replay.toleranceCounts` use
+the ranges documented in the [pose replay guide](../pose-recorder/README.md#replay-poses).
+`replay.speed` and `replay.holdMs` apply only to pose files; session replay uses
+recorded timing and the configured controller limits. `hz` applies only to live
+control. Remove `durationMs` from a copied example if you want the complete
+recording instead of the example's 10-second cap.
+
+For named poses from the pose recorder, use `npm run replay-poses` as described
+in that guide. Both commands share follower setup, health checks and cleanup.
+Replay logs include the source path and SHA-256 hash.
 
 Run offline tests with `npm run test:teleoperation`.

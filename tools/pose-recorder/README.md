@@ -2,7 +2,8 @@
 
 Record named positions by moving an unpowered mechanism by hand. Works with
 factory firmware and custom firmware, using 1–6 selected motors on one bus.
-It saves encoder counts; it does not move motors or replay recordings.
+The recorder saves encoder counts without moving motors. The separate replay
+command below can move a follower through those poses.
 
 ## Run
 
@@ -59,4 +60,68 @@ when reading starts; `durationMs` measures the full acquisition. Counts are raw
 signed encoder values, without conversion to angles. The file deliberately has
 no speed, acceleration or playback timing settings.
 
-Run offline tests with `npm run test:poses`.
+## Replay poses
+
+Replay requires a follower running this repository's v9 firmware. Copy
+[replay.example.json](replay.example.json) to your own configuration file and
+set `followerPort`. IDs come from the recording. In extension mode, provide a
+`profiles` entry for every recorded ID using gains and effort limits tested on
+your mechanism; the example values only illustrate the format.
+
+First preview without changing motor settings:
+
+```sh
+npm run replay-poses -- CONFIG.json POSES.json
+```
+
+Files up to 64 MiB are supported. The preview checks every pose against the follower's saved limits, reports how
+many targets will be capped, and shows the first target. Support the mechanism,
+check the path is clear, and start playback explicitly:
+
+```sh
+npm run replay-poses -- CONFIG.json POSES.json --run
+```
+
+Only the follower port is opened. The first pose is a real movement from the
+current position. All configured motors must start with torque off, healthy
+feedback, locked settings, and no deferred command pending. Extension startup
+also requires current positions inside the saved limits.
+
+Each pose is sent once. Playback waits for movement to finish and for every
+motor to be within `toleranceCounts`, then starts the hold period. Targets outside
+saved limits are capped. A motor that cannot arrive before `moveTimeoutMs` stops
+the run with an error. Manually recorded timestamps do not set playback speed.
+
+| `replay` setting | Default | Meaning |
+| --- | --- | --- |
+| `speed` | 1000 | Requested speed in encoder counts/s, 1–65535. |
+| `holdMs` | 1000 | Pause after each pose, 0–600000 ms. |
+| `repeat` | 1 | Number of passes through the list, 1–1000. Each new pass returns to the first pose. |
+| `moveTimeoutMs` | 30000 | Maximum wait for each arrival, 1–600000 ms. |
+| `toleranceCounts` | 10 | Allowed measured position error, 0–32767 counts. |
+
+Use `protocol: "extension"` for S-curves and explicit gains. Top-level
+`acceleration` and `rampTimeMs` control acceleration smoothing;
+`profiles[ID].velocityLimit` also caps speed. Motors receive one group command
+but can arrive at different times. Playback does not calculate gravity
+compensation; use a mechanically supported setup if your arm requires it.
+
+`protocol: "legacy"` uses the existing position controller and does not need
+profiles, `acceleration` or `rampTimeMs`. Optional `legacyAcceleration` uses the
+legacy register's units (0–254). Requested speed is converted using each motor's
+saved speed scale; firmware minimum/maximum speed limits still apply.
+
+Playback ends after the last hold. Ctrl+C or optional top-level `durationMs`
+ends it early. **A normal exit keeps torque on**: extension control retains its
+last target, while legacy control requests a hold at the measured position.
+Errors attempt torque-off on all prepared motors and report failed cleanup.
+A lost connection can prevent torque-off, and firmware retains the last target
+if the process is killed.
+
+Logs go to ignored `tools/teleoperation/logs/`, including the source file's hash,
+requested positions, capped targets and feedback. For timed teleoperation
+recordings, use [session replay](../teleoperation/README.md#replay-a-recorded-session).
+Old private campaign plans are not pose files; use the documented `sts-poses`
+format rather than copying historical tuning settings.
+
+Run offline tests with `npm run test:poses` and `npm run test:teleoperation`.

@@ -7,8 +7,8 @@ npm package built from this repository.
 
 | Tool | Purpose |
 | --- | --- |
-| [Teleoperation](teleoperation/README.md) | Control a follower mechanism by moving a leader by hand. |
-| [Pose recorder](pose-recorder/README.md) | Record named positions with torque off. |
+| [Teleoperation](teleoperation/README.md) | Control a follower by hand or replay a recorded session. |
+| [Pose recorder](pose-recorder/README.md) | Record named positions with torque off and replay them on a follower. |
 | [Discovery and settings](settings/README.md) | Find motors and back up or restore their persistent settings. |
 | [Hardware comparison tests](hw-diff-tests/README.md) | Compare factory and custom firmware behaviour on a dedicated servo bench. |
 | [Bus benchmark and telemetry](diagnostics/README.md) | Measure communication latency and check stationary readings for unusual values. |

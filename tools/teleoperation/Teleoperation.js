@@ -42,13 +42,14 @@ function mapPosition(position, leader, follower, joint) {
 }
 
 class Teleoperation {
-  constructor({ leader, follower, config, clock = () => performance.now(), sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
+  constructor({ leader, follower, config, replay, clock = () => performance.now(), sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
     this.leader = leader;
     this.follower = follower;
     this.config = config;
+    this.replay = replay;
     this.clock = clock;
     this.sleep = sleep;
-    this.joints = config.joints;
+    this.joints = replay?.joints ?? config.joints;
     const timeoutMs = integer(config.responseTimeoutMs ?? 100, 25, 10000, 'response timeout');
     this.options = { timeoutMs, deadlineMs: timeoutMs, rejectOnAlarm: true };
     if (!['legacy', 'extension'].includes(config.protocol)) throw new Error('Choose legacy or extension');
@@ -91,7 +92,12 @@ class Teleoperation {
       if (b[65]) throw new Error(`ID ${id}: servo alarm ${b[65]}`);
       if (role === 'Follower' && (b[55] !== 1 || b[64] !== 0))
         throw new Error(`Follower ${id}: settings must be locked and no deferred write may be pending`);
-      result[id] = { min, max, responseStatusLevel: b[8], torque: b[40],
+      // Legacy pose playback converts counts/s using the saved rate scale.
+      // Live streaming retains its existing zero-speed semantics.
+      let speedScale;
+      if (role === 'Follower' && this.replay?.kind === 'poses' && this.config.protocol === 'legacy')
+        speedScale = b[18] & 4 ? 1 : (await servo.protocol.read(id, 82, 1, this.options))[0] || 1;
+      result[id] = { min, max, speedScale, responseStatusLevel: b[8], torque: b[40],
         position: signed(b.subarray(56, 58)), acceleration: b[41] };
     }
     return result;
@@ -99,13 +105,13 @@ class Teleoperation {
 
   async preflight() {
     this.limits = {
-      leader: await this.inspect(this.leader, this.joints.map(j => j.leaderId), 'Leader'),
+      leader: this.replay ? this.replay.leaderLimits : await this.inspect(this.leader, this.joints.map(j => j.leaderId), 'Leader'),
       follower: await this.inspect(this.follower, this.joints.map(j => j.followerId), 'Follower'),
     };
     this.profiles = {};
     for (const j of this.joints) {
       const id = j.followerId, limits = this.limits.follower[id];
-      mapPosition(this.limits.leader[j.leaderId].position, this.limits.leader[j.leaderId], limits, j);
+      if (!this.replay) mapPosition(this.limits.leader[j.leaderId].position, this.limits.leader[j.leaderId], limits, j);
       const caps = await this.follower.arm.capabilities(id, this.options);
       if (caps?.major !== 9) throw new Error(`Follower ${id}: rewrite arm v9 required`);
       limits.feedback = await this.follower.arm.feedback(id, this.options);
@@ -119,6 +125,7 @@ class Teleoperation {
         this.profiles[id] = profile;
       }
     }
+    if (this.replay) this.replaySummary = this.replay.describe(this);
     return this.limits;
   }
 
@@ -132,6 +139,7 @@ class Teleoperation {
   }
 
   async sample() {
+    if (this.replay) return this.replay.frame(this);
     const timestamp = this.clock(); // conservative: includes complete acquisition time
     const positions = await this.positions(this.leader, this.joints.map(j => j.leaderId));
     const targets = this.joints.map(j => {
@@ -167,7 +175,7 @@ class Teleoperation {
     if (!this.limits) throw new Error('Preflight required');
     // Read both buses before mutation. Factory leader always stays unpowered.
     const powered = [];
-    for (const servo of [this.leader, this.follower]) {
+    for (const servo of [this.leader, this.follower].filter(Boolean)) {
       const ids = this.joints.map(j => servo === this.leader ? j.leaderId : j.followerId);
       for (const id of ids) if ((await servo.protocol.read(id, 40, 1, this.options))[0] !== 0) {
         if (servo === this.leader || this.config.rearmPoweredFollower !== true)
@@ -232,7 +240,11 @@ class Teleoperation {
     this.fresh(frame);
     if (this.config.protocol === 'legacy') {
       const entries = frame.targets.map(t => {
-        const data = Buffer.alloc(6); word(t.position).copy(data); // time=0, speed=0: native maximum/unlimited semantics
+        const data = Buffer.alloc(6); word(t.position).copy(data);
+        if (t.speedLimit !== undefined) {
+          const scale = this.limits.follower[t.id].speedScale;
+          data.writeUInt16LE(Math.min(32767, Math.max(1, Math.round(t.speedLimit / scale))), 4);
+        } // Otherwise time=0, speed=0 retain native maximum/unlimited semantics.
         return { id: t.id, data };
       });
       await this.follower.protocol.transaction(async wire => {
@@ -243,7 +255,7 @@ class Teleoperation {
     } else {
       const sequence = (this.sequence + 1) & 0xffff;
       const payload = ArmCodec.encodeTargets(frame.targets.map(t => ({ id: t.id, target: {
-        sequence, positionQ8: t.position * 256, speedLimit: 65535,
+        sequence, positionQ8: t.position * 256, speedLimit: t.speedLimit ?? 65535,
       } })), this.session);
       const sent = await this.follower.protocol.transaction(async wire => {
         if (this.stopping) return false;
@@ -316,30 +328,36 @@ class Teleoperation {
     return failures;
   }
 
+  async follow({ onFrame, onTelemetry, onCommand, shouldStop }) {
+    let monitored = this.clock(), nextCycle = this.clock();
+    while (!this.stopping && !shouldStop()) {
+      const started = this.clock(), frame = await this.sample(), sampled = this.clock();
+      if (this.stopping || shouldStop()) break;
+      // Await logging so disk failures are handled like other run failures.
+      await onCommand({ ...frame, sequence: (this.sequence + 1) & 0xffff });
+      await this.send(frame);
+      if (this.stopping) break;
+      const sent = this.clock();
+      if (sent - monitored >= 250) { await this.monitor(onTelemetry); monitored = this.clock(); }
+      await onFrame({ ...frame, sequence: this.sequence, elapsedMs: this.clock() - started,
+        timing: { sampleMs: sampled - started, sendMs: sent - sampled, monitorMs: this.clock() - sent } });
+      // Skip missed deadlines: never queue a burst of old leader positions.
+      const period = 1000 / this.hz;
+      nextCycle += period;
+      if (nextCycle < this.clock()) nextCycle += Math.ceil((this.clock() - nextCycle) / period) * period;
+      await this.sleep(Math.max(0, nextCycle - this.clock()));
+    }
+  }
+
   async run({ onFrame = () => {}, onTelemetry = () => {}, onCommand = () => {}, shouldStop = () => false } = {}) {
     let error;
     try {
       if (this.failure) throw this.failure;
       if (this.stopping || shouldStop()) return;
       await this.initialize();
-      let monitored = this.clock(), nextCycle = this.clock();
-      while (!this.stopping && !shouldStop()) {
-        const started = this.clock(), frame = await this.sample(), sampled = this.clock();
-        if (this.stopping || shouldStop()) break;
-        // Await logging so disk failures are handled like other run failures.
-        await onCommand({ ...frame, sequence: (this.sequence + 1) & 0xffff });
-        await this.send(frame);
-        if (this.stopping) break;
-        const sent = this.clock();
-        if (sent - monitored >= 250) { await this.monitor(onTelemetry); monitored = this.clock(); }
-        await onFrame({ ...frame, sequence: this.sequence, elapsedMs: this.clock() - started,
-          timing: { sampleMs: sampled - started, sendMs: sent - sampled, monitorMs: this.clock() - sent } });
-        // Skip missed deadlines: never queue a burst of old leader positions.
-        const period = 1000 / this.hz;
-        nextCycle += period;
-        if (nextCycle < this.clock()) nextCycle += Math.ceil((this.clock() - nextCycle) / period) * period;
-        await this.sleep(Math.max(0, nextCycle - this.clock()));
-      }
+      const callbacks = { onFrame, onTelemetry, onCommand, shouldStop };
+      if (this.replay) await this.replay.play(this, callbacks);
+      else await this.follow(callbacks);
       if (this.failure) throw this.failure;
     } catch (e) { error = e; }
     this.stopping = true;

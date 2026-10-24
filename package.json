@@ -21,7 +21,8 @@
     "record-poses": "node tools/pose-recorder/cli.js",
     "test:poses": "node --test tools/pose-recorder/test/*.test.js",
     "teleoperate": "node tools/teleoperation/cli.js",
-    "test:teleoperation": "node --test tools/teleoperation/test/*.test.js"
+    "test:teleoperation": "node --test tools/teleoperation/test/*.test.js",
+    "replay-poses": "node tools/pose-recorder/replay.js"
   },
   "dependencies": {
     "serialport": "^13.0.0"
