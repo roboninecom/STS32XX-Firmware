@@ -19,6 +19,8 @@ try {
   const names = packed.files.map(file => file.path);
   for (const required of ['index.js', 'StsServo.js', 'package.json', 'LICENSE', 'README.md', 'transport/SerialTransport.js'])
     assert(names.includes(required), `${required} is missing from the archive`);
+  for (const example of ['discover.js', 'v9-feedback.js', 'v9-move.js'])
+    assert(names.includes(`examples/${example}`), `Missing example ${example}`);
   assert(names.every(name => !/^(test|scripts|results|backups|node_modules)\//.test(name)),
     'Development files leaked into the archive');
   fs.writeFileSync(path.join(temporary, 'package.json'), JSON.stringify({ private: true }));
@@ -35,6 +37,10 @@ try {
     assert.equal(driver.ArmCodec.encodeGravity({ session: 1, sequence: 1, gravityEffort: -10 }).length, 6);
     import('sts32xx-servo-driver').then(module => assert.equal(module.default.StsServo, driver.StsServo));
   `], temporary);
+  for (const example of ['discover.js', 'v9-feedback.js', 'v9-move.js']) {
+    const entry = path.join(temporary, 'node_modules', 'sts32xx-servo-driver', 'examples', example);
+    assert(exec(process.execPath, [entry, '--help'], temporary).includes('PORT'));
+  }
   console.log(`Verified ${packed.filename}: ${names.length} files, isolated install and CommonJS/ESM imports; no serial port opened.`);
 } finally {
   fs.rmSync(temporary, { recursive: true, force: true });

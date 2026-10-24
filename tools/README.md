@@ -1,7 +1,9 @@
 # Tools
 
 Utilities for working with STS servos. Each guide includes setup instructions,
-commands and hardware requirements.
+commands and hardware requirements. For application development, use the
+[Node.js servo driver](../host/servo-driver/README.md), available as a standalone
+npm package built from this repository.
 
 | Tool | Purpose |
 | --- | --- |
