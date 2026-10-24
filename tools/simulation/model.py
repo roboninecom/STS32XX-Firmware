@@ -1,0 +1,61 @@
+"""SO-102 pose display helpers. No device access or hardware controller simulation."""
+from pathlib import Path
+import struct
+import zlib
+import xml.etree.ElementTree as ET
+import mujoco
+import numpy as np
+
+HERE = Path(__file__).resolve().parent
+JOINTS = ["base_to_link1", "link1_to_link2", "link2_to_link3",
+          "link3_to_link4", "link4_to_link5", "clamp1", "clamp2"]
+
+
+def build_model(filename):
+    # Load from its original directory so relative mesh paths remain valid.
+    model = mujoco.MjModel.from_xml_path(str(Path(filename).resolve()))
+    for name in JOINTS:
+        if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name) < 0:
+            raise ValueError(f"Model is missing SO-102 joint {name}")
+    model.jnt_limited[:] = False
+    model.opt.gravity[:] = 0
+    model.geom_contype[:] = 0
+    model.geom_conaffinity[:] = 0
+    for i in range(model.ngeom):
+        if model.geom_group[i] != 1 and model.geom_bodyid[i] > 0:
+            model.geom_rgba[i, 3] = 0
+    return model, mujoco.MjData(model)
+
+
+def apply_pose(model, data, counts, mapping):
+    for motor, name in enumerate(JOINTS[:4], 1):
+        key = str(motor)
+        angle = mapping["jointAnchorsDeg"][key] + mapping["encoderToUrdfDirection"][key] * (
+            counts[key] - mapping["middleCount"]) * mapping["nominalDegreesPerCount"]
+        joint = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        data.qpos[model.jnt_qposadr[joint]] = np.deg2rad(angle)
+    # M5/M6 calibration is deferred. These are explicitly fixed visual placeholders.
+    for name, value in [(JOINTS[4], 0.0), (JOINTS[5], 0.016), (JOINTS[6], 0.016)]:
+        joint = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        data.qpos[model.jnt_qposadr[joint]] = value
+    data.qvel[:] = 0
+    mujoco.mj_forward(model, data)
+
+
+def camera():
+    cam = mujoco.MjvCamera()
+    cam.lookat[:] = [0.14, 0.0, 0.16]
+    cam.distance, cam.azimuth, cam.elevation = 0.95, 135, -22
+    return cam
+
+
+def write_png(path, rgb):
+    height, width, _ = rgb.shape
+    def chunk(kind, payload):
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload))
+    scanlines = b"".join(b"\x00" + row.tobytes() for row in rgb)
+    Path(path).write_bytes(b"\x89PNG\r\n\x1a\n" +
+                          chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)) +
+                          chunk(b"IDAT", zlib.compress(scanlines)) + chunk(b"IEND", b""))
+
+

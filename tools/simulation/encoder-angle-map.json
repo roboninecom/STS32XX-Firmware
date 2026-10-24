@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "status": "user-confirmed-angle-anchors-with-recorded-nominal-directions",
+  "middleCount": 2048,
+  "nominalCountsPerRevolution": 4096,
+  "nominalDegreesPerCount": 0.087890625,
+  "jointAnchorsDeg": {
+    "1": 0,
+    "2": 87,
+    "3": -75,
+    "4": 15,
+    "5": 0
+  },
+  "encoderToUrdfDirection": {
+    "1": 1,
+    "2": -1,
+    "3": -1,
+    "4": 1
+  },
+  "formula": "qDeg = angleAt2048Deg + direction * (encoderCount - 2048) * 360 / 4096",
+  "inverseFormula": "encoderCount = round(2048 + direction * (qDeg - angleAt2048Deg) * 4096 / 360)",
+  "zeroAngleCountsFloat": {
+    "1": 2048,
+    "2": 3037.866666666667,
+    "3": 1194.6666666666665,
+    "4": 1877.3333333333333
+  },
+  "unresolved": [
+    "M4 physical parallel wording was superseded by explicit URDF+15\u00b0 confirmation. URDF origin rotations remain unchanged.",
+    "M1 zero2048 confirmed; nominal direction+1 retained. M5 zero2048 confirmed but detailed direction/scale validation deferred; M6 jaw opening uncalibrated/deferred.",
+    "Nominal scale and geometric link dimensions are not independently validated; no provisional inertials or gravity effort model applied."
+  ],
+  "hardwareEncoderOffsetsChanged": false,
+  "hardwareFeedforwardReady": false,
+  "physicalPositiveRotation": {
+    "1": "clockwise (URDF -Z, viewed from above)",
+    "5": "clockwise (viewing axis not specified; calibration deferred)"
+  },
+  "encoderCalibration": {
+    "1": {
+      "positionCorrection": -1082,
+      "resolution": 1,
+      "reverse": false
+    },
+    "2": {
+      "positionCorrection": 1113,
+      "resolution": 1,
+      "reverse": false
+    },
+    "3": {
+      "positionCorrection": 489,
+      "resolution": 1,
+      "reverse": false
+    },
+    "4": {
+      "positionCorrection": -534,
+      "resolution": 1,
+      "reverse": false
+    },
+    "5": {
+      "positionCorrection": -619,
+      "resolution": 1,
+      "reverse": false
+    },
+    "6": {
+      "positionCorrection": 1586,
+      "resolution": 1,
+      "reverse": false
+    }
+  }
+}
