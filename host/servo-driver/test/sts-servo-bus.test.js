@@ -439,3 +439,28 @@ test('settings relock after verification detects an ignored write', async () => 
 
   assert.equal(transport.memory.get(1)[0x37], 1);
 });
+
+
+test('settings skip unchanged values and wait for flash between disjoint writes and readback', async () => {
+  const values = { positionPGain: 32, ledAlarmMask: 47, derivativeSampleCount: 20 };
+  const writes = [];
+  let busyUntil = 0;
+  const ready = () => assert(performance.now() >= busyUntil, 'request arrived while flash was busy');
+  const bus = { read: async () => ({}), transaction: operation => operation({
+    read: async (_id, keys) => { ready(); return Object.fromEntries(keys.map(key =>
+      [key, key === 'responseStatusLevel' ? 1 : values[key]])); },
+    write: async (_id, update) => {
+      ready(); writes.push(update);
+      if ('lock' in update) return;
+      assert.equal(Object.keys(update).length, 1, 'disjoint ranges must be separate writes');
+      Object.assign(values, update); busyUntil = performance.now() + 40;
+    },
+  }) };
+  const settings = new StsSettings(bus);
+  const result = await settings.save(1, { positionPGain: 32, ledAlarmMask: 46, derivativeSampleCount: 21 });
+  assert.equal(result.verified, true);
+  assert.deepEqual(writes, [{lock: 0}, {ledAlarmMask: 46}, {derivativeSampleCount: 21}, {lock: 1}]);
+  writes.length = 0;
+  await settings.save(1, values);
+  assert.deepEqual(writes, []);
+});

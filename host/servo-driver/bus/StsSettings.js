@@ -1,10 +1,15 @@
 'use strict';
 
+const { setTimeout: delay } = require('node:timers/promises');
+const RegisterLayout = require('../registers/RegisterLayout');
 const { ControlTable, Storage } = require('../registers/ControlTable');
 const { SettingsVerificationError } = require('../protocol/errors');
 
 const GUARDED_SETTINGS = new Set(['id', 'baudRate', 'responseStatusLevel']);
 const DEFAULT_EEPROM_TIMEOUT_MS = 50;
+// A WRITE acknowledgment precedes flash completion. Requests sent immediately
+// after it can be lost while the motor saves its settings.
+const EEPROM_SETTLE_MS = 60;
 
 class StsSettings {
   constructor(bus) {
@@ -20,6 +25,7 @@ class StsSettings {
   save(id, values, { verify = true, timeoutMs = DEFAULT_EEPROM_TIMEOUT_MS } = {}) {
     validateValues(values);
     const keys = Object.keys(values);
+    RegisterLayout.encodeLayout(RegisterLayout.compileWrite(keys), values);
     return this.bus.transaction(async transaction => {
       const { responseStatusLevel } = await transaction.read(
         id,
@@ -31,11 +37,18 @@ class StsSettings {
         expectResponse: responseStatusLevel !== 0,
       };
       const before = await transaction.read(id, keys, requestOptions);
+      const changed = keys.filter(key => values[key] !== before[key]);
+      if (!changed.length) return { id, before, after: verify ? before : undefined, verified: verify };
+      const ranges = RegisterLayout.compileWrite(changed).ranges;
       let result;
       let failure;
       try {
         await transaction.write(id, { lock: 0 }, requestOptions);
-        await transaction.write(id, values, requestOptions);
+        for (const range of ranges) {
+          const update = Object.fromEntries(range.fields.map(({ key }) => [key, values[key]]));
+          try { await transaction.write(id, update, requestOptions); }
+          finally { await delay(EEPROM_SETTLE_MS); }
+        }
         const after = verify ? await transaction.read(id, keys, requestOptions) : undefined;
         if (verify) verifyValues(id, values, after);
         result = { id, before, after, verified: verify };

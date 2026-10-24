@@ -248,6 +248,7 @@ async function main() {
 
 if (require.main === module) main().catch(error => {
   console.error(error.message);
+  if (error.details) console.error(JSON.stringify(error.details, null, 2));
   if (error.mismatches) console.error(JSON.stringify(error.mismatches, null, 2));
   process.exitCode = 1;
 });

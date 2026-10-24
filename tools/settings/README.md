@@ -44,8 +44,8 @@ npm run settings -- restore --port /dev/cu.usbmodemYOUR_ADAPTER --id 2 \
 
 `--id` and `--baud` describe the **current connection**. The backup may restore a
 different ID or baud rate; the tool follows those changes and reports the final
-connection. It checks model identity, writes settings, reads them back and
-relocks the motor. It never enables torque or sends a motion command. A failed
+connection. It checks model identity, writes only changed settings, waits for each saved
+register range to finish, reads the settings back and relocks the motor. It never enables torque or sends a motion command. A failed
 restore may leave some settings changed; inspect the error before retrying.
 
 These backups cover legacy settings, not extension configuration or the factory
