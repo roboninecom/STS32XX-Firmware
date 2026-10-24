@@ -48,10 +48,6 @@ static void service_receive(uart_driver_t *driver)
         uint32_t produced = driver->receive_wraps * UART_RX_CAPACITY +
             ((UART_RX_CAPACITY - remaining) & (UART_RX_CAPACITY - 1u));
         uint32_t available = produced - driver->consumed;
-#ifdef FW_TIMING_PROBE
-        uint16_t observed = available > UINT16_MAX ? UINT16_MAX : (uint16_t)available;
-        if (observed > driver->max_rx_occupancy) driver->max_rx_occupancy = observed;
-#endif
         if (available > UART_RX_CAPACITY || driver->receive_error) {
             driver->consumed = produced;
             driver->overflowed = true;
@@ -111,15 +107,6 @@ void uart_driver_init(uart_driver_t *driver, uint8_t baud_index)
     driver->transmit_complete = false;
     driver->delay_running = false;
     driver->overflowed = false;
-#ifdef FW_TIMING_PROBE
-    driver->max_rx_occupancy = 0u;
-#endif
-#if defined(FW_TIMING_PROBE) && !defined(FW_ARM_TIMING_PROBE)
-    driver->idle_cycles = 0;
-    driver->tx_cycles = 0;
-    driver->idle_to_tx_us = driver->max_idle_to_tx_us = 0;
-    driver->tx_duration_us = driver->max_tx_duration_us = 0;
-#endif
 
     configure_pins_and_clocks();
 
@@ -150,13 +137,6 @@ void USART1_IRQHandler(void)
         REG32(HW_USART_CTL0) &= ~(HW_USART_TCIE | HW_USART_TEN);
         REG32(HW_USART_INTC) = HW_USART_TC;
         REG32(HW_USART_CTL0) |= HW_USART_REN;
-#if defined(FW_TIMING_PROBE) && !defined(FW_ARM_TIMING_PROBE)
-        uint32_t us = (REG32(HW_CYCLE_COUNTER) - driver->tx_cycles) /
-            (HW_USART_CLOCK_HZ / 1000000u);
-        driver->tx_duration_us = us > UINT16_MAX ? UINT16_MAX : (uint16_t)us;
-        if (driver->tx_duration_us > driver->max_tx_duration_us)
-            driver->max_tx_duration_us = driver->tx_duration_us;
-#endif
         driver->transmitting = false;
         driver->transmit_complete = true;
     }
@@ -165,9 +145,6 @@ void USART1_IRQHandler(void)
         driver->receive_error = true;
     }
     if ((status & HW_USART_IDLEF) != 0u) {
-#if defined(FW_TIMING_PROBE) && !defined(FW_ARM_TIMING_PROBE)
-        driver->idle_cycles = REG32(HW_CYCLE_COUNTER);
-#endif
         REG32(HW_USART_INTC) = HW_USART_IDLEF;
         driver->last_dma_count = REG32(HW_DMA_RX_COUNT);
         driver->receive_idle = true;
@@ -255,14 +232,6 @@ bool uart_driver_delay_done(uart_driver_t *driver)
 void uart_driver_transmit(uart_driver_t *driver, const uint8_t *bytes,
                           uint8_t length)
 {
-#if defined(FW_TIMING_PROBE) && !defined(FW_ARM_TIMING_PROBE)
-    driver->tx_cycles = REG32(HW_CYCLE_COUNTER);
-    uint32_t us = (driver->tx_cycles - driver->idle_cycles) /
-        (HW_USART_CLOCK_HZ / 1000000u);
-    driver->idle_to_tx_us = us > UINT16_MAX ? UINT16_MAX : (uint16_t)us;
-    if (driver->idle_to_tx_us > driver->max_idle_to_tx_us)
-        driver->max_idle_to_tx_us = driver->idle_to_tx_us;
-#endif
     driver->transmit_complete = false;
     driver->transmitting = true;
     REG32(HW_USART_CTL0) &= ~HW_USART_REN;

@@ -66,10 +66,6 @@ static __attribute__((noinline)) void publish_pair(sensor_driver_t *driver, bool
                                   driver->encoder_dma[1]),
         .adc_raw = {driver->adc_dma[0], driver->adc_dma[1], driver->adc_dma[2]},
         .valid = valid,
-#ifdef FW_TIMING_PROBE
-        .started_cycles = driver->started_cycles,
-        .tick_late_us = driver->tick_late_us,
-#endif
     };
     driver->ready = true;
     driver->in_flight = false;
@@ -248,10 +244,6 @@ uint32_t sensor_driver_ticks(const sensor_driver_t *driver)
 static void begin_pair(sensor_driver_t *driver)
 {
     driver->started_tick = driver->ticks;
-#ifdef FW_TIMING_PROBE
-    driver->started_cycles = DWT->CYCCNT;
-    driver->tick_late_us = (uint16_t)((47999u - SysTick->VAL) / 48u);
-#endif
     driver->in_flight = true;
     driver->encoder_done = driver->adc_done = false;
     driver->phase = SENSOR_I2C_WRITE_START;

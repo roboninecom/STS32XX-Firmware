@@ -1,8 +1,5 @@
 #include "bus_service.h"
 #include "bus_timing.h"
-#ifdef FW_TIMING_PROBE
-#include "diagnostics.h"
-#endif
 
 #include <stdint.h>
 
@@ -25,15 +22,6 @@ void bus_service_init(bus_service_t *bus, device_t *device,
     bus->response_timeouts = 0;
     bus->baud_pending = false;
     uart_driver_set_handler(&bus->uart, bus_service_event, bus);
-#ifdef FW_TIMING_PROBE
-    bus->timing_overflows = 0;
-    bus->command_completed_cycles = 0;
-    bus->command_wait_mean_cycles = 0;
-    bus->command_wait_max_cycles = 0;
-    bus->command_dispatch_mean_cycles = 0;
-    bus->command_dispatch_max_cycles = 0;
-    bus->timed_commands = 0;
-#endif
 }
 
 void bus_service_request_baud(bus_service_t *bus)
@@ -93,9 +81,6 @@ static void bus_service_event(void *context)
     if (bus->protocol.command_pending || bus->protocol.transmit_busy) return;
     if (uart_driver_take_overflow(&bus->uart)) {
         protocol_parser_init(&bus->protocol.parser);
-#ifdef FW_TIMING_PROBE
-        if (bus->timing_overflows != 255u) ++bus->timing_overflows;
-#endif
     }
     uint8_t byte;
     unsigned consumed = 0;
@@ -104,9 +89,6 @@ static void bus_service_event(void *context)
         ++consumed;
         (void)protocol_service_feed(&bus->protocol, byte);
         if (bus->protocol.command_pending) {
-#ifdef FW_TIMING_PROBE
-            bus->command_completed_cycles = diagnostics_probe_cycles();
-#endif
             return;
         }
         if (bus->protocol.response_ready) {
@@ -136,22 +118,7 @@ void bus_service_poll(bus_service_t *bus, uint32_t now_tick)
     bool pending = bus->protocol.command_pending;
     uart_driver_unlock();
     if (pending) {
-#ifdef FW_TIMING_PROBE
-        uint32_t dispatch_started = diagnostics_probe_cycles();
-#endif
         protocol_service_dispatch(&bus->protocol);
-#ifdef FW_TIMING_PROBE
-        uint32_t dispatch_finished = diagnostics_probe_cycles();
-        if (bus->timed_commands < 1024u) ++bus->timed_commands;
-        diagnostics_record(&bus->command_wait_mean_cycles,
-                      &bus->command_wait_max_cycles,
-                      dispatch_started - bus->command_completed_cycles,
-                      bus->timed_commands);
-        diagnostics_record(&bus->command_dispatch_mean_cycles,
-                      &bus->command_dispatch_max_cycles,
-                      dispatch_finished - dispatch_started,
-                      bus->timed_commands);
-#endif
         protocol_service_publish(&bus->protocol);
         uart_driver_lock();
         bus->protocol.command_pending = false;

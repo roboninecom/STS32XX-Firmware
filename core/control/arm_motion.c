@@ -358,13 +358,7 @@ static bool valid_plan(const arm_motion_t *plan, const endpoint_state_t *ends,
 
 static bool valid(const arm_motion_t *plan, const endpoint_state_t *ends, int32_t lower, int32_t upper)
 {
-#ifdef FW_ARM_TIMING_PROBE
-    uint32_t started = arm_motion_clock();
-#endif
     bool result = valid_plan(plan, ends, lower, upper);
-#ifdef FW_ARM_TIMING_PROBE
-    arm_motion_record(ARM_TIMING_VALIDATION, started);
-#endif
     return result;
 }
 
@@ -421,7 +415,7 @@ static __attribute__((noinline)) bool prepare_target(arm_motion_t *plan,
     }
     bool cruise = false;
     for (unsigned i = 0; i < 16; ++i) {
-#ifdef FW_ARM_TIMING_PROBE
+#ifdef ARM_MOTION_TEST
         arm_motion_iterations += 256;
 #endif
         endpoint_t estimate = endpoint(&search, orient(candidate, direction));
@@ -443,7 +437,7 @@ static __attribute__((noinline)) bool prepare_target(arm_motion_t *plan,
         /* Resolve the small difference between continuous endpoint arithmetic
          * and quantized phase times using the same distance derivative. */
         for (unsigned i = 0; i < 5; ++i) {
-#ifdef FW_ARM_TIMING_PROBE
+#ifdef ARM_MOTION_TEST
             ++arm_motion_iterations;
 #endif
             end = construct(plan, ends, initial, orient(candidate, direction), a, j);
@@ -463,7 +457,7 @@ bool arm_motion_target(arm_motion_t *motion, int32_t target_q8,
     uint16_t speed, uint16_t acceleration, uint8_t ramp_ms,
     int32_t lower_q8, int32_t upper_q8)
 {
-#ifdef FW_ARM_TIMING_PROBE
+#ifdef ARM_MOTION_TEST
     arm_motion_iterations = 0;
 #endif
     if (!speed || !acceleration || acceleration > 30000 || !ramp_ms ||
@@ -494,9 +488,6 @@ bool arm_motion_target(arm_motion_t *motion, int32_t target_q8,
 
 void arm_motion_step(arm_motion_t *motion, uint32_t milliseconds)
 {
-#ifdef FW_ARM_TIMING_PROBE
-    uint32_t started = arm_motion_clock();
-#endif
     uint64_t remaining = (uint64_t)milliseconds * TIME_UNIT;
     state_t state = {motion->position, motion->velocity, motion->acceleration};
     /* Each iteration consumes a phase or all remaining time; at most seven. */
@@ -517,7 +508,4 @@ void arm_motion_step(arm_motion_t *motion, uint32_t milliseconds)
     motion->position = state.q;
     motion->velocity = state.v;
     motion->acceleration = state.a;
-#ifdef FW_ARM_TIMING_PROBE
-    arm_motion_record(ARM_TIMING_EVALUATION, started);
-#endif
 }

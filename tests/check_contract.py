@@ -1,4 +1,4 @@
-"""Check phase-1 contract tables and preserve captured wire bytes exactly."""
+"""Check register contract tables and preserve captured wire bytes exactly."""
 import csv
 import json
 from pathlib import Path

@@ -10,9 +10,5 @@ typedef struct {
     uint16_t encoder_raw;
     uint16_t adc_raw[3];
     bool valid;
-#ifdef FW_TIMING_PROBE
-    uint32_t started_cycles;
-    uint16_t tick_late_us;
-#endif
 } sensor_pair_t;
 #endif

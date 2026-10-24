@@ -1,10 +1,6 @@
 #include "app_runtime.h"
 #include "storage_service.h"
 #include "board.h"
-#ifdef FW_TIMING_PROBE
-#include "diagnostic_service.h"
-#include "diagnostics.h"
-#endif
 #include "bridge_driver.h"
 #include "control_adapter.h"
 #include "status_led_driver.h"
@@ -56,9 +52,6 @@ void app_runtime_reanchor(app_state_t *state, int32_t position)
     arm_extension_end_session(state);
     state->arm_selected = false;
     state->motion = (pending_motion_t){0};
-#if defined(FW_TIMING_PROBE) && !defined(FW_ARM_TIMING_PROBE)
-    state->goal_timing_pending = false;
-#endif
 }
 
 static control_result_t run_control_step(app_state_t *state,
@@ -77,9 +70,6 @@ static control_result_t run_control_step(app_state_t *state,
             state->sensor_service.measurement.arm_position,
             tick, sample.fresh, false);
         if (!state->arm_result.fresh && state->arm.armed) {
-#ifdef FW_ARM_TIMING_PROBE
-            state->timing_arm_revocation = 1; /* Controller freshness / elapsed dt. */
-#endif
             arm_extension_end_session(state);
         }
         result = (control_result_t){
@@ -93,9 +83,6 @@ static control_result_t run_control_step(app_state_t *state,
             (registers->byte[REG_CONFIGURATION_FLAGS] & 0x20u) != 0u);
         if ((result.torque != 1u && registers->byte[REG_TORQUE_ENABLE] == 1u) ||
             (result.errors & protection.shutdown_mask) != 0u) {
-#ifdef FW_ARM_TIMING_PROBE
-            if (state->arm.armed) state->timing_arm_revocation = 2;
-#endif
             arm_extension_end_session(state);
         }
         if (!state->arm.armed) result.torque = 0;
@@ -123,11 +110,6 @@ __attribute__((noinline)) void app_runtime_service_control_pair(app_state_t *sta
     register_table_t *registers = &state->device.registers;
     const sensor_measurement_t *measurement = &state->sensor_service.measurement;
     int32_t position = measurement->position;
-#if defined(FW_TIMING_PROBE) && !defined(FW_ARM_TIMING_PROBE)
-    bool timed_goal = state->motion.pending && state->goal_timing_pending;
-    uint32_t goal_control_started = timed_goal ?
-        diagnostic_service_goal_started(state) : 0u;
-#endif
     if (!state->control_initialized) {
         control_pipeline_reanchor(&state->control, position);
         state->control_initialized = true;
@@ -162,16 +144,7 @@ __attribute__((noinline)) void app_runtime_service_control_pair(app_state_t *sta
         &state->output, !state->motion_rejected,
         (registers->byte[REG_CONFIGURATION_FLAGS] & 0x20u) == (state->bridge_config & 0x20u),
         (registers->byte[REG_SERVO_STATUS] & 0x02u) == 0u);
-#ifdef FW_ARM_TIMING_PROBE
-    uint32_t control_started = diagnostics_probe_cycles();
-#endif
     control_result_t result = run_control_step(state, sample, permit, sample_tick);
-#ifdef FW_ARM_TIMING_PROBE
-    state->timing_control_last_cycles = diagnostics_probe_cycles() - control_started;
-    if (state->timing_control_last_cycles > state->timing_control_max_cycles)
-        state->timing_control_max_cycles = state->timing_control_last_cycles;
-    if (state->timing_control_samples != UINT16_MAX) ++state->timing_control_samples;
-#endif
     int16_t applied_effort;
     bool bridge_ok = bridge_driver_apply(result.bridge,
                              (registers->byte[REG_CONFIGURATION_FLAGS] & 0x01u) != 0u,
@@ -194,9 +167,6 @@ __attribute__((noinline)) void app_runtime_service_control_pair(app_state_t *sta
         output_safety_fail(&state->output);
         arm_extension_end_session(state);
     }
-#if defined(FW_TIMING_PROBE) && !defined(FW_ARM_TIMING_PROBE)
-    if (timed_goal) diagnostic_service_goal_applied(state, goal_control_started);
-#endif
     telemetry_input_t telemetry = {
         .position = position,
         .speed = sample.speed,
@@ -225,9 +195,6 @@ __attribute__((noinline)) void app_runtime_service_sensors(app_state_t *state)
     bool state_changed = false;
     sensor_pair_t pair;
     if (sensor_driver_take_pair(&state->sensors, &pair)) {
-#ifdef FW_TIMING_PROBE
-        diagnostic_service_period_started(state, pair.started_cycles, pair.tick_late_us);
-#endif
         uint32_t age = sensor_driver_ticks(&state->sensors) - pair.tick_ms;
         /* A delayed foreground must never restamp an old DMA result as fresh. */
         bool published = age <= 2u && sensor_service_accept_pair(
@@ -236,16 +203,7 @@ __attribute__((noinline)) void app_runtime_service_sensors(app_state_t *state)
         state_changed = true;
         if (published) {
             app_runtime_service_control_pair(state, pair.tick_ms);
-#ifdef FW_TIMING_PROBE
-            diagnostic_service_pair_complete(state);
-#endif
         } else {
-#ifdef FW_ARM_TIMING_PROBE
-            if (state->arm.armed) state->timing_arm_revocation = 3;
-#endif
-#ifdef FW_TIMING_PROBE
-            diagnostic_service_pair_rejected(state);
-#endif
             app_runtime_revoke_output(state);
             arm_extension_end_session(state);
             state->device.registers.byte[REG_SERVO_STATUS] |= 0x02u;
@@ -254,9 +212,6 @@ __attribute__((noinline)) void app_runtime_service_sensors(app_state_t *state)
     if (state->control_initialized && !state->stale_reported &&
         (uint32_t)(sensor_driver_ticks(&state->sensors) - state->last_good_tick) > 2u) {
         state_changed = true;
-#ifdef FW_ARM_TIMING_PROBE
-        if (state->arm.armed) state->timing_arm_revocation = 4;
-#endif
         app_runtime_revoke_output(state);
         arm_extension_end_session(state);
         control_sample_t stale = {

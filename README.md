@@ -626,11 +626,8 @@ For a toolchain outside PATH, set `ARM_PREFIX` to its full executable prefix:
 make verify ARM_PREFIX=/path/to/toolchain/bin/arm-none-eabi-
 ```
 
-The default build is the normal motor firmware. Separate diagnostic builds are
-available with `TIMING_PROBE=1` for general timing measurements or
-`TIMING_PROBE=arm` for extension-control timing. These measurements are excluded
-from the normal build. Images and build records are generated under `build/`,
-which is excluded from Git. Verification builds and
+Images and build records are generated under `build/`, which is excluded from
+Git. Verification builds and
 tests offline; it does not flash a servo or open a serial port. See
 [tests/README.md](tests/README.md) for the available regression coverage.
 

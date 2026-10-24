@@ -2,9 +2,6 @@
 #include "app_runtime.h"
 #include "command_service.h"
 #include "board.h"
-#ifdef FW_TIMING_PROBE
-#include "diagnostic_service.h"
-#endif
 #include "storage_service.h"
 #include "flash_driver.h"
 #include "status_led_driver.h"
@@ -22,9 +19,6 @@ static __attribute__((noinline)) void initialize(void)
 {
     if (!board_init_safe()) board_halt_safe();
     status_led_driver_init();
-#ifdef FW_TIMING_PROBE
-    diagnostic_service_early_init(&app);
-#endif
 
     register_table_t initial = {0};
     registers_factory_defaults(&initial);

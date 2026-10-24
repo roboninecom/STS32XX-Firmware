@@ -7,16 +7,11 @@ ARM_OBJDUMP := $(ARM_PREFIX)objdump
 ARM_SIZE := $(ARM_PREFIX)size
 ARM_READELF := $(ARM_PREFIX)readelf
 
-# Reject old diagnostic options rather than silently building a motion image.
-ifneq ($(strip $(MOTOR_TEST)$(MOTOR_RELEASE)$(FLASH_DUMP)$(FLASH_PROBE)),)
-$(error Removed build option; use the default build or TIMING_PROBE=1/arm)
+# Unsupported image options must not silently produce a normal motor image.
+ifneq ($(strip $(MOTOR_TEST)$(MOTOR_RELEASE)$(FLASH_DUMP)$(FLASH_PROBE)$(TIMING_PROBE)),)
+$(error Unsupported build option; use the default firmware build)
 endif
-ifneq ($(strip $(TIMING_PROBE)),)
-ifeq ($(filter $(TIMING_PROBE),1 arm),)
-$(error TIMING_PROBE must be 1 or arm)
-endif
-endif
-PROFILE := motor-release$(if $(TIMING_PROBE),-timing)$(if $(filter arm,$(TIMING_PROBE)),-arm)
+PROFILE := motor-release
 FIRMWARE_DIR := build/$(PROFILE)
 
 CFLAGS := -std=c11 -Wall -Wextra -Werror -Os -flto -mcpu=cortex-m3 -mthumb \
@@ -40,13 +35,6 @@ CORE_SOURCES := core/protocol/protocol.c core/protocol/bus_timing.c \
   core/control/trajectory.c core/control/controller.c core/control/arm_control.c core/control/arm_motion.c core/control/bridge_policy.c \
   core/control/pipeline.c core/control/protection.c core/status_led.c
 SOURCES := $(APP_SOURCES) $(CORE_SOURCES) $(PLATFORM_SOURCES)
-ifdef TIMING_PROBE
-CFLAGS += -DFW_TIMING_PROBE
-ifeq ($(TIMING_PROBE),arm)
-CFLAGS += -DFW_ARM_TIMING_PROBE
-endif
-SOURCES += platform/gd32f130/diagnostics.c app/diagnostic_service.c
-endif
 OBJECTS := $(patsubst %.c,$(FIRMWARE_DIR)/%.o,$(SOURCES))
 
 .PHONY: all firmware verify host-verify arm-host-verify teleop-host-verify flash-verify clean FORCE
@@ -81,7 +69,6 @@ verify: firmware build/host/sensor_driver_test build/host/memory_test build/host
 	python3 tests/check_contract.py
 	python3 tests/check_storage_fixture.py
 	python3 tests/check_architecture.py
-	python3 tests/check_profiles.py $(FIRMWARE_DIR)
 	python3 tests/check_image.py $(FIRMWARE_DIR)/firmware.elf $(FIRMWARE_DIR)/firmware.bin "$(ARM_READELF)"
 
 build/host/memory_test: tests/memory_test.c platform/gd32f130/memory.c
@@ -198,7 +185,7 @@ HOST_TEST_TARGETS := build/host/sensor_driver_test build/host/arm_motion_test bu
   build/host/output_safety_test build/host/runtime_test \
   build/host/telemetry_test build/host/status_led_test \
   build/host/uart_driver_test
-build/host/arm_motion_test: RUNTIME_FLAGS := -DFW_ARM_TIMING_PROBE
+build/host/arm_motion_test: RUNTIME_FLAGS := -DARM_MOTION_TEST
 build/host/sensor_driver_test: RUNTIME_FLAGS := -DFW_SENSOR_HOST_TEST -Itests/support
 build/host/uart_driver_test: RUNTIME_FLAGS := -DFW_UART_HOST_TEST -Itests/support
 $(HOST_TEST_TARGETS):

@@ -6,11 +6,8 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Count search work in the host regression; hardware owns actual cycle timing. */
+/* Count planner search work without timing hooks in the firmware. */
 uint16_t arm_motion_iterations;
-uint32_t arm_motion_clock(void) { return 0; }
-void arm_motion_record(unsigned operation, uint32_t started)
-{ (void)operation; (void)started; }
 
 #define UNIT 68719476736.0
 static uint32_t seed = 0x63a271;

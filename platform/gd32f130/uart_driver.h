@@ -28,15 +28,6 @@ typedef struct {
     volatile bool transmit_complete;
     bool delay_running;
     bool overflowed;
-#ifdef FW_TIMING_PROBE
-    uint16_t max_rx_occupancy;
-#ifndef FW_ARM_TIMING_PROBE
-    volatile uint32_t idle_cycles;
-    uint32_t tx_cycles;
-    volatile uint16_t idle_to_tx_us, max_idle_to_tx_us;
-    volatile uint16_t tx_duration_us, max_tx_duration_us;
-#endif
-#endif
 } uart_driver_t;
 
 void uart_driver_init(uart_driver_t *driver, uint8_t baud_index);

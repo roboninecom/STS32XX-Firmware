@@ -263,13 +263,7 @@ static uint8_t apply_targets(app_state_t *state, const register_table_t *registe
         .position_q8 = get_i32(local + 3),
         .speed_limit = get_u16(local + 7),
     };
-#ifdef FW_ARM_TIMING_PROBE
-    uint32_t started = arm_motion_clock();
-#endif
     bool accepted = arm_control_target(&state->arm, get_u16(data), target);
-#ifdef FW_ARM_TIMING_PROBE
-    arm_motion_record(ARM_TIMING_TARGET, started);
-#endif
     return accepted ? EXT_OK : EXT_STATE;
 }
 

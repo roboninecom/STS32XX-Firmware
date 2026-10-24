@@ -20,10 +20,6 @@ typedef struct {
     volatile uint32_t ticks;
     elapsed_clock_t clock;
     uint32_t started_tick;
-#ifdef FW_TIMING_PROBE
-    uint32_t started_cycles;
-    uint16_t tick_late_us;
-#endif
     sensor_i2c_phase_t phase;
     volatile bool enabled;
     bool in_flight, encoder_done, adc_done;

@@ -2,9 +2,6 @@
 #include "command_service.h"
 #include "app_runtime.h"
 #include "board.h"
-#ifdef FW_TIMING_PROBE
-#include "diagnostic_service.h"
-#endif
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -70,9 +67,6 @@ void command_service_apply(const protocol_result_t *result, void *context)
             registers->byte[REG_TORQUE_ENABLE] = 0;
             app_runtime_revoke_output(state);
         }
-#ifdef FW_TIMING_PROBE
-        diagnostic_service_write(state, &result->write);
-#endif
         if (registers->byte[REG_LOCK] == 0u &&
             state->storage_source != STORAGE_SOURCE_NONE &&
             storage_update_mirror_range(&state->storage_mirror, registers,
@@ -115,9 +109,6 @@ void command_service_apply(const protocol_result_t *result, void *context)
         if (registers_write_touches(&result->write, 33u, 33u) ||
             registers_write_touches(&result->write, 40u, 49u)) {
             app_runtime_queue_motion(state, position_goal, auto_torque);
-#ifdef FW_TIMING_PROBE
-            if (position_goal) diagnostic_service_goal_queued(state);
-#endif
         }
         break;
     case PROTOCOL_EFFECT_SYSTEM_RESET:

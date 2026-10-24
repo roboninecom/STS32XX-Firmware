@@ -49,30 +49,6 @@ typedef struct app_state {
     uint8_t bridge_config;
     storage_mirror_t storage_mirror;
     storage_source_t storage_source;
-#ifdef FW_TIMING_PROBE
-#ifndef FW_ARM_TIMING_PROBE
-    uint32_t timing_started_cycles;
-    uint16_t timing_max_latency_us;
-    uint16_t timing_max_tick_late_us;
-#endif
-    uint16_t timing_rejected_pairs;
-    uint32_t timing_stack_mark_end;
-#ifdef FW_ARM_TIMING_PROBE
-    uint32_t timing_control_last_cycles;
-    uint32_t timing_control_max_cycles;
-    uint16_t timing_control_samples;
-    uint8_t timing_arm_revocation;
-#else
-    uint32_t goal_packet_cycles;
-    uint32_t goal_control_mean_cycles;
-    uint32_t goal_control_max_cycles;
-    uint32_t goal_output_mean_cycles;
-    uint32_t goal_output_max_cycles;
-    uint16_t goal_timing_count;
-    uint16_t goal_replaced_count;
-    bool goal_timing_pending;
-#endif
-#endif
 } app_state_t;
 
 
