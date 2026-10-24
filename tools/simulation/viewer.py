@@ -13,10 +13,6 @@ from viewer_timing import Pacer, Timing
 from recording import load_recording, follow_recording, validate_calibration
 
 
-def read_frame(file):
-    return validate_frame(json.loads(Path(file).read_text()))
-
-
 def render(display, data, frame, path):
     """Offscreen layout check using the same scene, texts and figures as the viewer."""
     display.observe(frame)
@@ -49,9 +45,7 @@ def render(display, data, frame, path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument('--feed', type=Path)
-    source.add_argument('--recording', type=Path, help='Current replay, teleoperation or tuning events.ndjson')
+    parser.add_argument('--recording', type=Path, required=True, help='Current replay, teleoperation or tuning events.ndjson')
     parser.add_argument('--check', action='store_true')
     parser.add_argument('--render', type=Path)
     parser.add_argument('--motor', type=int, choices=range(1, 7), default=2)
@@ -61,7 +55,7 @@ def main():
     parser.add_argument('--mapping', type=Path, default=HERE / 'encoder-angle-map.json')
     parser.add_argument('--follow', action='store_true', help='Follow an actively growing recording without touching the bus')
     args = parser.parse_args()
-    if args.follow and (not args.recording or args.check or args.render):
+    if args.follow and (args.check or args.render):
         parser.error('--follow requires --recording and a live window')
     mapping = json.loads(args.mapping.read_text())
     if args.recording and not args.follow:
@@ -74,7 +68,7 @@ def main():
     frames = load_recording(args.recording) if args.recording and not args.follow else None
     follower = follow_recording(args.recording, mapping) if args.follow else None
     if args.check or args.render:
-        checked = frames or [read_frame(args.feed)]
+        checked = frames
         for frame in checked:
             apply_pose(model, data, frame['measured'], mapping)
             apply_pose(model, display.reference, frame['reference'], mapping)
@@ -83,7 +77,8 @@ def main():
         display.chart_data()
         frame = {**checked[-1], "playback": True} if frames else checked[-1]
         if args.render:
-            frame = max(checked, key=lambda f: abs(f['reference']['2'] - f['measured']['2']))
+            motor = str(display.selected)
+            frame = max(checked, key=lambda f: abs(f['reference'].get(motor, 0) - f['measured'].get(motor, 0)))
             frame = {**frame, "playback": True} if frames else frame
             # Populate history preceding the preview sample, not from unrelated later poses.
             display.history.clear(); display.last_key = None
@@ -124,7 +119,7 @@ def main():
                 frame = {**frames[index], 'playback': True, 'playbackFinished': index + 1 == len(frames)}
             else:
                 try:
-                    frame = next(follower) if follower else read_frame(args.feed)
+                    frame = next(follower)
                 except (OSError, ValueError, KeyError, TypeError) as error:
                     read_error = str(error)
             if frame:

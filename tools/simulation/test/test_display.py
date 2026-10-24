@@ -27,13 +27,12 @@ def frame():
 
 
 class TelemetryTests(unittest.TestCase):
-    def test_fresh_finished_and_legacy(self):
+    def test_fresh_finished_and_recorded(self):
         f = frame()
         self.assertEqual(feed_status(f, 10500), 'LIVE')
         self.assertTrue(feed_status(f, 13000).startswith('STALE'))
         f['finished'], f['status'] = True, 'interrupted'
         self.assertIn('interrupted', feed_status(f, 10500))
-        self.assertIn('FINISHED', feed_status({'publishedUnixMs': 10000, 'label': 'complete; arm off=true'}, 10500))
         self.assertEqual(feed_status({**f, 'playback': True}), 'RECORDED PLAYBACK')
         self.assertTrue(feed_status({**frame(), 'measuredUnixMs': {'2': 7000}}, 10500).startswith('STALE MOTOR'))
 

@@ -34,9 +34,6 @@ def feed_status(frame, now_ms=None, stale_ms=1500):
         return "RECORDED PLAYBACK FINISHED" if frame.get("playbackFinished") else "RECORDED PLAYBACK"
     if frame.get("finished") or frame.get("status") in ("complete", "interrupted", "failed"):
         return f"TEST FINISHED ({frame.get('status', 'unknown')})"
-    # Compatibility with the original publisher, which only wrote a finish label.
-    if "; arm off=" in frame.get("label", ""):
-        return "TEST FINISHED (legacy feed)"
     motor_times = [frame.get("measuredUnixMs", {}).get(str(i)) for i in range(1, 5)]
     if any(number(stamp) and now_ms - stamp > stale_ms for stamp in motor_times):
         return "STALE MOTOR DATA - showing last received pose"

@@ -88,3 +88,18 @@ The reusable viewer, model preparation, demo and geometry checks replace the
 older workspace entry points. Current controller events replace private v4
 campaign formats. Historical analysis scripts for individual experiments remain
 in the old workspace; they are not a second supported controller or viewer.
+
+## Verification
+
+On October 24, 2026, the migrated importer and 20-second physics demo passed
+without warnings using the existing local SO-102 assets. The gravity-geometry
+check passed at 160 poses. Fifteen offline tests cover data freshness, recording
+adaptation, calibration rejection, partial log writes, overlays and charts.
+
+Current six-motor replay and tuning recordings passed headless playback and
+image rendering. The native viewer followed the M3 hardware batch for ten
+seconds without opening the serial port or disrupting control. Its observed
+update-loop rate was about 14 Hz on this machine, with variable GUI latency;
+that is not a claim of 60 Hz rendering or measured GPU frame rate. Complete
+feedback passes are grouped for display, and the history retains a bounded
+20-second window.
