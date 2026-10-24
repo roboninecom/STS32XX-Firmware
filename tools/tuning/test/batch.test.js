@@ -101,3 +101,15 @@ test('identification fitting rejects trajectory leakage and rank deficiency', ()
   const bad = structuredClone(dataset); bad.rows[9].group = 'a'; assert.throws(() => fit(bad), /leak/);
   bad.rows = rows.map(r => ({...r,x:[1,1]})); assert.throws(() => fit(bad), /Rank/);
 });
+
+test('final summary write failure still turns off motors before the serial port closes', async t => {
+  const r = fixture(); r.plan.candidates = [];
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sts-tune-final-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(directory, 'summary.json')); // A deterministic final-write failure.
+  await assert.rejects(execute(r, { move: true, directory, output: () => {}, createServo: () => r.follower,
+    createController: options => new ArmController({ ...options, source: options.replay,
+      clock: r.controller.clock, sleep: r.controller.sleep }) }), /EISDIR/);
+  assert.equal(r.motors.get(1).torque, 0);
+  assert.equal(analyse(path.join(directory, 'events.ndjson')).complete, false);
+});

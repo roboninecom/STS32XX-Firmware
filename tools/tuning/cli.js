@@ -72,21 +72,35 @@ async function execute({ plan, config, gravity }, { move = false, directory, sig
     if (event.type === 'comparison') output(JSON.stringify(event));
   };
   const source = new BatchSource(plan, config, { record });
-  let error;
+  let error, terminalWritten = false;
+  const saveSummary = () => fs.writeFileSync(path.join(directory, 'summary.json'), JSON.stringify(source.summary, null, 2) + '\n');
+  const logEvent = event => {
+    record(event);
+    if (event.type === 'stopped') {
+      // Final evidence must be durable while the shared lifecycle can still
+      // remove torque if a write fails. Do not defer this until the port closes.
+      saveSummary();
+      record({ type: 'run-end', summary: source.summary });
+      terminalWritten = true;
+    }
+  };
   try {
     record({ type: 'run-start', backend: 'hardware', plan, config, planHash: hash(plan), configHash: hash(config),
       implementation: implementationIdentity(), gravityModel: gravity?.document, gravityIdentity: gravity?.identity });
     await run(config, { ...dependencies, replay: source, gravity, move, signal,
       output: message => { if (!message.startsWith('{')) output(message); },
-      createLog: async () => ({ filename: file, write: record, close: async () => {} }) });
+      createLog: async () => ({ filename: file, write: logEvent, close: async () => {} }) });
     if (!move) source.summary.status = 'preflight';
+    else if (source.summary.status !== 'complete') throw new Error('Tuning interrupted before completion');
   } catch (cause) {
     error = cause; source.summary.status = 'failed'; source.summary.error = cause.message;
     source.summary.recommendation = null;
   } finally {
     try {
-      record({ type: 'run-end', summary: source.summary });
-      fs.writeFileSync(path.join(directory, 'summary.json'), JSON.stringify(source.summary, null, 2) + '\n');
+      if (!terminalWritten || error) {
+        record({ type: 'run-end', summary: source.summary });
+        saveSummary();
+      }
     } finally { fs.closeSync(fd); }
   }
   output(JSON.stringify({ directory, ...source.summary }));
