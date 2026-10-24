@@ -30,6 +30,16 @@ class RecordingTests(unittest.TestCase):
         self.assertEqual(terminal['publishedUnixMs'], 1200)
         self.assertEqual(terminal['measuredUnixMs']['1'], 1001)
 
+    def test_only_complete_feedback_passes_update_measured_poses(self):
+        f = Frames('test')
+        f.accept({'type': 'preflight', 'limits': {'follower': {str(i): {} for i in range(1, 7)}}})
+        for i in range(1, 6):
+            self.assertIsNone(f.accept(telemetry(i)))
+        self.assertEqual(len(f.accept(telemetry(6))['measured']), 6)
+        f.accept(telemetry(1, 1100))
+        command = f.accept({'type': 'command', 'timestamp': 1110, 'targets': [{'id': 1, 'position': 2100}]})
+        self.assertEqual(command['measuredUnixMs']['1'], 1000)
+
     def test_partial_lines_and_calibration_mismatch(self):
         settings = {'positionCorrection': 0, 'resolution': 1, 'reverse': False}
         pre = {'type': 'preflight', 'limits': {'follower': {'1': {'encoderCalibration': settings}}}}
@@ -56,8 +66,10 @@ class RecordingTests(unittest.TestCase):
         f = Frames('test')
         for i in range(1, 5):
             f.accept(telemetry(i))
+        for i in range(1, 4):
+            f.accept(telemetry(i, 999))
         with self.assertRaises(ValueError):
-            f.accept(telemetry(1, 999))
+            f.accept(telemetry(4, 999))
         with self.assertRaises(ValueError):
             f.accept(telemetry(1, float('nan')))
 

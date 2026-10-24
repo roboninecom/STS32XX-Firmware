@@ -17,6 +17,9 @@ def build_model(filename):
     for name in JOINTS:
         if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name) < 0:
             raise ValueError(f"Model is missing SO-102 joint {name}")
+    model.vis.headlight.active = 1
+    model.vis.headlight.ambient[:] = 0.5
+    model.vis.headlight.diffuse[:] = 0.8
     model.jnt_limited[:] = False
     model.opt.gravity[:] = 0
     model.geom_contype[:] = 0
@@ -57,5 +60,3 @@ def write_png(path, rgb):
     Path(path).write_bytes(b"\x89PNG\r\n\x1a\n" +
                           chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)) +
                           chunk(b"IDAT", zlib.compress(scanlines)) + chunk(b"IEND", b""))
-
-

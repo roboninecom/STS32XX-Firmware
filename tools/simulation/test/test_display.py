@@ -142,6 +142,14 @@ class TelemetryTests(unittest.TestCase):
         self.assertEqual(t.summary(1.1, 8), text)
         self.assertIn('missed deadlines 8', t.summary(2, 8))
 
+    def test_current_c1_destinations_are_not_labelled_tracking_error(self):
+        d = self.make_display(); f = frame()
+        f['referenceKind'] = {'2': 'destination', '1': 'planner'}
+        d.observe(f); d.chart_data()
+        self.assertIn('Destination error', d.figures[1].title)
+        d.selected = 1; d.chart_data()
+        self.assertIn('Tracking error', d.figures[1].title)
+
     def test_retina_chart_layout_and_shortcut_states(self):
         d = self.make_display()
         rects = d.chart_layout(mujoco.MjrRect(0, 0, 2880, 2160))

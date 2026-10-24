@@ -20,6 +20,8 @@ class Frames:
     def __init__(self, directory):
         self.directory = str(directory)
         self.samples, self.measured_at, self.targets = {}, {}, {}
+        self.pending = {}
+        self.required = {str(i) for i in range(1, 5)}
         self.label, self.status = '', 'running'
         self.calibration = None
         self.last_time = None
@@ -28,6 +30,7 @@ class Frames:
         kind = event.get('type')
         if kind == 'preflight':
             self.calibration = {str(k): v.get('encoderCalibration') for k, v in event.get('limits', {}).get('follower', {}).items()}
+            self.required.update(self.calibration)
             return None
         if kind == 'trial-start':
             self.label = f"{event['trial']['candidate']} | {event['trial']['split']} | trial {event['trial']['id']}"
@@ -39,8 +42,14 @@ class Frames:
             sample = event['telemetry']
             if not math.isfinite(sample['measuredPositionQ8']):
                 raise ValueError('Nonfinite measured position')
-            self.samples[motor] = {**sample, 'capturedUnixMs': timestamp(event)}
-            self.measured_at[motor] = timestamp(event)
+            self.pending[motor] = {**sample, 'capturedUnixMs': timestamp(event)}
+            if not self.required.issubset(self.pending):
+                return None
+            # The controller emits one event per motor in a feedback pass. Publish
+            # one full snapshot instead of rendering each partially updated arm.
+            self.samples.update(self.pending)
+            self.measured_at.update({i: s['capturedUnixMs'] for i, s in self.pending.items()})
+            self.pending.clear()
         elif kind in ('error', 'run-end', 'stopped'):
             self.status = 'failed' if kind == 'error' else event.get('summary', {}).get('status', 'complete')
         else:

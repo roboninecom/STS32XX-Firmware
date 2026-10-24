@@ -84,7 +84,7 @@ class Display:
         self.model, self.mapping = model, mapping
         self.reference = mujoco.MjData(model)
         self.ref_scene = mujoco.MjvScene(model, maxgeom=200)
-        self.history = deque(maxlen=1000)
+        self.history = deque(maxlen=3000)
         self.last_key = None
         self.run = None
         self.history_revision = 0
@@ -155,6 +155,8 @@ class Display:
             return False
         self.last_key = key
         self.history.append(frame)
+        while len(self.history) > 1 and self.history[1]['publishedUnixMs'] < frame['publishedUnixMs'] - 20000:
+            self.history.popleft()
         self.history_revision += 1
         return True
 
@@ -275,10 +277,10 @@ class Display:
                          ("requested", lambda f: sample(f, motor).get("requestedEffort"))])]
         palette = [[0.95, 0.95, 0.95], [0.1, 0.85, 1.0], [1.0, 0.65, 0.15]]
         frames = list(self.history)
-        if frames and frames[-1].get("referenceLabel") == "commanded follower targets":
+        if frames and frames[-1].get("referenceKind", {}).get(str(motor)) == "destination":
             definitions[1] = ("Destination error (counts)", definitions[1][1])
         def timestamp(f, label):
-            if label == "target" or (label in ("reference", "error") and f.get("referenceLabel") == "commanded follower targets"):
+            if label == "target" or (label in ("reference", "error") and f.get("referenceKind", {}).get(str(motor)) == "destination"):
                 return f["publishedUnixMs"]
             return sample(f, motor).get("capturedUnixMs", f.get("measuredUnixMs", {}).get(str(motor), f["publishedUnixMs"]))
         last = frames[-1]["publishedUnixMs"] if frames else 0
