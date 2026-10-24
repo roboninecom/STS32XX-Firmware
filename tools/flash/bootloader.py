@@ -1,6 +1,6 @@
 """STS GD32 TTL bootloader transport. Input bytes are already encoded.
 
-Wire layout and delays follow the locally hardware-tested Python uploader.
+Implements bootloader packets, transfer pacing and response checks.
 This module has no image conversion or network access.
 """
 

@@ -64,14 +64,14 @@ no speed, acceleration or playback timing settings.
 
 Replay requires a follower running this repository's v9 firmware. Copy
 [replay.example.json](replay.example.json) to your own configuration file and
-set `followerPort`. IDs come from the recording. In extension mode, provide a
+set `followerPort`. IDs come from the recording. Provide a
 `profiles` entry for every recorded ID using gains and effort limits tested on
 your mechanism; the example values only illustrate the format.
 
 First preview without changing motor settings:
 
 ```sh
-npm run replay-poses -- CONFIG.json POSES.json
+npm run replay -- CONFIG.json POSES.json
 ```
 
 Files up to 64 MiB are supported. The preview checks every pose against the follower's saved limits, reports how
@@ -79,7 +79,7 @@ many targets will be capped, and shows the first target. Support the mechanism,
 check the path is clear, and start playback explicitly:
 
 ```sh
-npm run replay-poses -- CONFIG.json POSES.json --run
+npm run replay -- CONFIG.json POSES.json --run
 ```
 
 Only the follower port is opened. The first pose is a real movement from the
@@ -100,7 +100,7 @@ the run with an error. Manually recorded timestamps do not set playback speed.
 | `moveTimeoutMs` | 30000 | Maximum wait for each arrival, 1–600000 ms. |
 | `toleranceCounts` | 10 | Allowed measured position error, 0–32767 counts. |
 
-Use `protocol: "extension"` for S-curves and explicit gains. Top-level
+The controller uses S-curves and explicit gains. Top-level
 `acceleration` and `rampTimeMs` control acceleration smoothing;
 `profiles[ID].velocityLimit` also caps speed. Motors receive one group command
 but can arrive at different times. To enable gravity compensation, add
@@ -110,22 +110,12 @@ model is included. Compensation uses measured follower positions and continues
 through movement, holds and normal completion. After exit, firmware retains the
 final effort, but it no longer adapts to position or load changes.
 
-`protocol: "legacy"` uses the existing position controller and does not need
-profiles, `acceleration` or `rampTimeMs`. Optional `legacyAcceleration` uses the
-legacy register's units (0–254). Requested speed is converted using each motor's
-saved speed scale; firmware minimum/maximum speed limits still apply.
-
 Playback ends after the last hold. Ctrl+C or optional top-level `durationMs`
-ends it early. **A normal exit keeps torque on**: extension control retains its
-last target, while legacy control requests a hold at the measured position.
+ends it early. **A normal exit keeps torque on** and retains the last target.
 Errors attempt torque-off on all prepared motors and report failed cleanup.
 A lost connection can prevent torque-off, and firmware retains the last target
 if the process is killed.
 
-Logs go to ignored `tools/teleoperation/logs/`, including the source file's hash,
+Logs go to ignored `logs/motion/`, including the source file's hash,
 requested positions, capped targets and feedback. For timed teleoperation
 recordings, use [session replay](../teleoperation/README.md#replay-a-recorded-session).
-Old private campaign plans are not pose files; use the documented `sts-poses`
-format rather than copying historical tuning settings.
-
-Run offline tests with `npm run test:poses` and `npm run test:teleoperation`.

@@ -17,17 +17,16 @@ For gravity, add `gravityModel` exactly as described in the
 The plan's `config` path is relative to the plan. The controller's `gravityModel`
 path is relative to that controller file. The same controller configuration can
 be used for pose replay. Omit `durationMs` for tuning: the plan owns the batch
-budget. Initial torque must be off unless the controller explicitly permits
-rearming a powered follower.
+budget. Initial torque must be off.
 
 ```sh
 npm run tune -- inspect tools/tuning/example.json
 npm run tune -- preflight tools/tuning/example.json
-npm run tune -- run tools/tuning/example.json --execute
+npm run tune -- run tools/tuning/example.json
 ```
 
 `inspect` does not connect. `preflight` reads firmware, calibration, saved limits,
-health and profiles without changing the motors. `run --execute` moves them.
+health and profiles without changing the motors. `run` moves them.
 Targets are capped to saved position limits; preflight reports the effective
 path. A pair collapsed to one position cannot be used as a tuning exercise.
 
@@ -80,8 +79,7 @@ the run. There is no separate polling process for tuning or visualization.
 **Changing a profile briefly removes torque from the motor being tuned.** v9
 requires this. Supporting motors stay controlled and gravity updates continue.
 Use a supported or mechanically safe pose; a loaded joint can move during this
-interval. Profile changes require stationary feedback. There are no live profile
-slots, heartbeat, STOP command or firmware command timeout.
+interval. Profile changes require stationary feedback. Firmware retains its last target if commands stop.
 
 Normal completion restores the configured baseline and retains powered hold
 with final gravity compensation. Ctrl+C interrupts the tuning batch and attempts
@@ -120,38 +118,6 @@ model. Update the model and repeat independent hardware checks deliberately.
 Use the [simulation viewer](../simulation/README.md) on the same event file to
 inspect the arm during or after a run. It adds no bus traffic.
 
-## Migration and tests
+## Tests
 
-This replaces the private v4 tuning runner and its separate hardware backend.
-Old plans require explicit conversion to version 2; removed protocol fields are
-not translated silently. Historical one-off campaigns and pose-dependent gain
-switching remain outside this tool. Physics predictions are not used to qualify
-settings; offline tests simulate communication and faults only.
-
-Run `npm run test:tuning`, or `npm test` for all Node.js tools.
-
-## Hardware verification
-
-Basic verification passed on six v9 motors on October 24, 2026:
-
-- M1 candidate screening and held-out validation: 24 trials in 73.7 seconds,
-  10–20-count strokes at 100 counts/s, with 1-second screening holds and
-  2.5-second validation holds. Baseline settings were restored after each
-  comparison. The candidate did not improve on the baseline; no recommendation.
-- Loaded M3 baseline: eight trials in 22.6 seconds at 60 counts/s. Worst steady
-  error was 4 counts and worst moving tracking RMS was 4.50 counts. Gravity
-  effort was −43 PWM units during recorded trials, and the applied effort
-  equalled the sum of the reported controller terms.
-- Both runs used measured gravity on the six-motor arm. No faults, saturation
-  or control overruns were recorded. Worst trial sample gap was 66.8 ms; sensor
-  age was at most 1 ms and peak reported temperature was 44 °C.
-
-The test harness verified normal powered hold and baseline readback, then turned
-all six motors off. Persistent settings matched the pre-test snapshot and
-settings writes were locked. M2 initially rested one count outside its saved
-limit and required a small legacy recovery move; no saved limit was changed.
-Raw evidence remains in ignored local logs. Cancellation, partial communication
-and final-summary logging failures are covered by offline fault tests.
-
-This validates the tool on small movements, not full-travel tuning, loaded-joint
-profile changes, automatic model acceptance or performance at higher speeds.
+Run `npm run test:tuning`, or `npm test` for all Node.js tools. Tests do not connect to motors.

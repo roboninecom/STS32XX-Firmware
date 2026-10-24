@@ -1,6 +1,6 @@
 # Gravity models
 
-`arm-upright-empty.json` preserves the existing October 4 arm model, including
+`arm-upright-empty.json` defines the unloaded upright SO-ARM-102 model, including
 its encoder calibration and coupled terms for motors 2–4. Motors 1, 5 and 6
 have explicit zero compensation. It assumes the original upright mounting,
 unchanged encoder offsets and an empty gripper. It is not a universal servo
@@ -10,10 +10,6 @@ The file contains signed PWM effort coefficients and the encoder settings they
 were fitted against. `encoderCalibration` lists signed position corrections,
 unit resolution and encoder reversal for each motor. Preflight requires them to
 match the connected arm. Limits and gains are separate settings.
-Its source hash records the original model; offline reference tests cover 24
-poses. Basic replay and signed gravity readback with the shared v9 controller passed
-on the six-motor arm on October 24, 2026, after restoring matching calibration.
-This small near-rest check does not qualify the full travel or additional loads.
 
 Each motor has a `maxEffort`, an explanatory `note` and a list of `terms`.
 A term contributes `coefficient * sin(angle)` or `coefficient * cos(angle)`,

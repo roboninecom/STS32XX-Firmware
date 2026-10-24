@@ -2,13 +2,12 @@
 
 Move a powered follower by moving an unpowered leader by hand. Supports 1–6
 joint pairs on two separate serial buses. The leader may use factory firmware;
-the follower requires this repository's v9 firmware in both control modes.
+the follower requires this repository's v9 firmware.
 
 ## Run
 
 Install Node.js 20 or newer, then run `npm install` from the repository root.
-Copy [legacy.json](examples/legacy.json) or [extension.json](examples/extension.json)
-to your own configuration file. Set the ports, baud rate and joint IDs. Example
+Copy [example.json](example.json) to your own configuration file. Set the ports, baud rate and joint IDs. Example
 gains and limits illustrate the format; use settings tested on your mechanism.
 
 Preview the mapping without changing any motor settings:
@@ -30,9 +29,8 @@ Follower settings must be locked with no deferred write pending. Torque must
 already be off on both buses; this tool never writes to the leader.
 
 The examples run for 10 seconds. Remove `durationMs` to run until Ctrl+C.
-**A normal stop leaves the follower powered.** Extension control finishes its
-last target and holds there; legacy control requests a hold at the measured
-position. An error or interrupted startup attempts torque-off on every follower
+**A normal stop leaves the follower powered.** It finishes its last target
+and holds there. An error or interrupted startup attempts torque-off on every follower
 prepared or powered by the tool. Support the mechanism in case power is removed.
 A broken connection can prevent torque-off; failed cleanup is reported. The
 firmware has no command timeout, so a killed process or lost connection can leave
@@ -52,11 +50,7 @@ Each `joints` entry contains `leaderId`, `followerId` and `mapping`:
 Targets are capped to the follower's saved limits. `angle` operates in encoder
 counts, so it assumes compatible encoder scales and gearing.
 
-`protocol: "legacy"` uses the existing position controller with maximum-speed
-semantics (goal time and speed are zero). Optional `legacyAcceleration` (0–254)
-sets the legacy acceleration register for the session; otherwise it is unchanged.
-
-`protocol: "extension"` uses the firmware's PID controller and S-curves. It needs
+The follower uses the firmware's PID controller and S-curves. It needs
 `acceleration` in counts/s² (1–30000), `rampTimeMs` in milliseconds (1–255), and
 one `profiles` entry per follower ID:
 
@@ -91,8 +85,6 @@ adapts to position or load changes.
 | `maxAgeMs` | 100 | Maximum age of a leader frame before sending, 10–10000 ms. |
 | `responseTimeoutMs` | 100 | Response and transaction queue timeout, 25–10000 ms. |
 | `durationMs` | Unlimited | Run duration including control startup, 1–86400000 ms. |
-| `session` | Generated | Explicit extension session ID, 1–65535, if needed. |
-| `rearmPoweredFollower` | false | Allow torque-off before reconfiguring a powered follower. Support it first. |
 
 A frame must include all leader positions. Its age is checked again when the
 follower bus becomes available. Follower health is checked at startup and roughly
@@ -101,7 +93,7 @@ above 60 °C, and lost extension ownership or rejected targets stop the run.
 Health checks and logging share the loop, so the achieved rate depends on bus,
 computer and disk performance.
 
-Logs are saved in ignored `tools/teleoperation/logs/` as newline-delimited JSON.
+Logs are saved in ignored `logs/motion/` as newline-delimited JSON.
 They contain configuration, the chosen session ID, preview, intended commands,
 sent frames, feedback and stop/error records. A command record alone does not
 prove a target was sent or accepted. Writes are awaited without accumulating an
@@ -112,17 +104,15 @@ unbounded log queue; slow logging may trigger the frame-age check.
 Replay recorded leader positions on the follower without connecting the leader:
 
 ```sh
-npm run teleoperate -- CONFIG.json --replay SESSION.ndjson
-npm run teleoperate -- CONFIG.json --replay SESSION.ndjson --run
+npm run replay -- CONFIG.json SESSION.ndjson
+npm run replay -- CONFIG.json SESSION.ndjson --run
 ```
 
 The first command is a read-only preview. The second starts motion. Use the
 current configuration and tested gains. The recording must contain a `preflight`
 event with leader limits and joint mapping, followed by `command` events with
 monotonic timestamps and all leader positions. The joint mapping must match the
-current configuration. Old session logs with those fields can be read, but old
-controller configurations must be adapted to the current configuration format.
-Files up to 64 MiB are supported. Truncated or malformed JSON is rejected
+current configuration. Files up to 64 MiB are supported. Truncated or malformed JSON is rejected
 before opening a port.
 
 Replay maps recorded leader positions through the recorded leader limits and
@@ -145,8 +135,8 @@ recorded timing and the configured controller limits. `hz` applies only to live
 control. Remove `durationMs` from a copied example if you want the complete
 recording instead of the example's 10-second cap.
 
-For named poses from the pose recorder, use `npm run replay-poses` as described
-in that guide. Both commands share follower setup, health checks and cleanup.
+For named poses from the pose recorder, use `npm run replay` as described
+in that guide. Both recording formats share follower setup, health checks and cleanup.
 Replay logs include the source path and SHA-256 hash. Gravity-enabled logs also
 identify the current model and record requested efforts and acceptance feedback.
 

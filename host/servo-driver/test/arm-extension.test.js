@@ -222,7 +222,7 @@ test('feedback and tuning decode signed fields, health and identity from one pac
 
 test('obsolete motion FF fields are rejected instead of silently ignored', () => {
   const target={sequence:1,positionQ8:0,speedLimit:100};
-  assert.throws(()=>encodeOne({...target,feedforward:0}),/removed/);
+  assert.throws(()=>encodeOne({...target,feedforward:0}),/Unknown field/);
 });
 
 test('capability cache invalidates on discovery, disconnect and reset', async () => {
@@ -375,11 +375,11 @@ test('v9 rejects removed timers and expired-state flags', () => {
     rampTimeMs:30,};
   assert.deepEqual(ArmCodec.decodeConfig(ArmCodec.encodeConfig(config)),config);
   assert.equal(ArmCodec.encodeConfig(config).length,24);
-  assert.throws(()=>ArmCodec.encodeConfig({...config,timeoutMs:0}),/removed/);
+  assert.throws(()=>ArmCodec.encodeConfig({...config,timeoutMs:0}),/Unknown field/);
   assert.throws(()=>ArmCodec.decodeConfig(Buffer.alloc(32)),/24/);
   const gravity={session:1,sequence:1,gravityEffort:0};
   assert.equal(ArmCodec.encodeGravity(gravity).length,6);
-  assert.throws(()=>ArmCodec.encodeGravity({...gravity,ttlMs:0}),/removed/);
+  assert.throws(()=>ArmCodec.encodeGravity({...gravity,ttlMs:0}),/Unknown field/);
   for (const flag of [0x4,0x40,0x200,0x800]) {
     const data=Buffer.alloc(32);data.writeUInt16LE(flag,12);
     assert.throws(()=>ArmCodec.decodeFeedback(data),/Unknown/);
@@ -397,7 +397,7 @@ test('v9 rejects separate position bounds instead of silently discarding them',(
     effortLimit:100,velocityLimit:100,accelerationLimit:100,
     velocityFilterQ8:64,rampTimeMs:30};
   for(const key of ['positionMinQ8','positionMaxQ8'])
-    assert.throws(()=>ArmCodec.encodeConfig({...config,[key]:0}),/removed.*legacy position limits/);
+    assert.throws(()=>ArmCodec.encodeConfig({...config,[key]:0}),/Unknown field/);
   const decoded=ArmCodec.decodeConfig(ArmCodec.encodeConfig(config));
   assert.equal(decoded.positionMinQ8,undefined);
   assert.equal(decoded.positionMaxQ8,undefined);

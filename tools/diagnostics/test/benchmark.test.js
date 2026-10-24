@@ -7,8 +7,8 @@ const path = require('node:path');
 const { PacketEncoder, Instruction } = require('../../../host/servo-driver');
 const { parse } = require('../bus-benchmark');
 const { cases } = require('../cases');
-const { distribution, summarize } = require('../../../host/diagnostics/stats');
-const { Probe, MeasuredTransport } = require('../../../host/diagnostics/probe');
+const { distribution, summarize } = require('../stats');
+const { Probe, MeasuredTransport } = require('../probe');
 const { run, safeBaseline } = require('../benchmark');
 
 const { FakePort, transportFor } = require('./fake-port');

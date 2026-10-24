@@ -92,11 +92,3 @@ If the servo does not answer, check power and its current ID/baud. If it answers
 but settings differ, preserve the report and investigate before repeating repair.
 Without a valid backup, obtain settings for the exact model and recalibrate the
 individual servo; another motor's offset is not a replacement for its calibration.
-
-## Hardware check
-
-On 2026-10-22, the tool restored a deliberately changed reply-delay setting on
-an isolated model 9.3 servo running factory 3.10. Settings matched the original
-backup after software restart and a user-performed power cycle. Template-command
-acknowledgments were also checked on hardware. The test did not deliberately
-corrupt flash storage; that failure path is covered by simulated-state tests.

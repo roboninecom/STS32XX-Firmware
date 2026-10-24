@@ -1,6 +1,6 @@
 'use strict';
 const { setTimeout: delay } = require('node:timers/promises');
-const { SerialTransport, RequestScheduler } = require('../servo-driver');
+const { SerialTransport, RequestScheduler } = require('../../host/servo-driver');
 const now = () => process.hrtime.bigint();
 const ms = (from, to = now()) => Number(to - from) / 1e6;
 

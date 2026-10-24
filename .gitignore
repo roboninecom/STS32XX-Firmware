@@ -36,7 +36,6 @@ __pycache__/
 *.bak
 *.tmp
 *.swp
-/host/tuning/
 
 # Regression fixtures are required test inputs.
 !tests/fixtures/**

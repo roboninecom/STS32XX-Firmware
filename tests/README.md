@@ -1,77 +1,26 @@
-# Verification
+# Tests
 
-Run `make verify` from the repository root. It builds the selected target
-profile, runs sanitized C regressions, and checks the register contract,
-storage fixture, module boundaries, profile manifest, and image layout.
+Run commands from the repository root. These commands do not connect to hardware.
 
-`fixtures/` contains required, pinned regression inputs. The synthetic plant
-tests cover controller regressions; they do not qualify a physical arm.
-Coverage includes a full minute of motion and holding without host updates,
-persistent gravity compensation, position correction after a disturbance,
-sensor and motor protection, rejection of removed extension commands, sequence gaps and half-range boundaries,
-and repeated counter wraparound without rearming. Legacy travel-limit coverage
-checks target capping, inclusive boundaries, out-of-range startup rejection,
-disabled/invalid limits, and session invalidation after either limit changes.
-Runtime tests also cover setup without power, position capture on enable,
-repeated enable during motion, consumed setup after a failed start, protection
-shutdown/restart, and rejection of the retired ARM selector.
-Legacy command-order regressions verify that an explicit torque write cancels
-automatic enable queued by an earlier goal before the next sensor pair. A new
-goal received afterward can still enable torque normally.
+| Command | Coverage |
+| --- | --- |
+| `make verify` | Firmware build, sanitized C tests, register contract, storage fixtures, module boundaries and image layout. |
+| `npm test` or `make host-verify` | Driver, shared controller and Node.js tools. |
+| `npm run test:driver-package` | Isolated installation of the driver package using cached npm dependencies. |
+| `make flash-verify` | Flashing and settings recovery with simulated serial devices; activate the flash Python environment first. |
+| `PYTHONPATH=tools/simulation tools/simulation/.venv/bin/python -m unittest discover -s tools/simulation/test` | Model import, recording readers and viewer behaviour. |
 
-The three October 10 fixes ported from the separate `rewrite` repository retain
-their regressions here:
+`fixtures/` contains required regression inputs. Keep them with the tests.
+Install the firmware toolchain as described in the [root guide](../README.md),
+and each Python tool's requirements before running its checks.
 
-- `82e5c12`: ADC cancellation before DMA shutdown, late interrupts, and clean scan
-  configuration after restart (`sensor_driver_test.c`).
-- `7bb7de2`: immediate corrected-position publication after offset writes,
-  including the clear/read/home calibration sequence across acquisition restart
-  without treating cached readings as fresh (`sensor_service_test.c`).
-- `1661003`: legacy torque enable holds the measured position, including outside
-  saved limits; new absolute/relative goals still move and clamp
-  (`control_pipeline_test.c`).
+## Hardware tests
 
-`make host-verify` runs the host tests without opening serial ports. These check
-v9 packet layouts, selection/session encoding and startup ordering,
-failed-enable cleanup, normal-exit target retention, and torque-off cleanup on errors.
+The [comparison suite](../tools/hw-diff-tests/README.md) requires a dedicated
+bench. List scenarios with `npm run diff -- --list`. Motion and persistent
+writes require explicit options. The full suite installs a test configuration
+and finishes at saved reset-template defaults; it does not restore the initial
+settings and is not suitable as an assembled-arm smoke test.
 
-`hardware/` contains development bus/stack timing probes. These require explicit
-device selection and, for timing measurements, a firmware build with
-`TIMING_PROBE=1` or `TIMING_PROBE=arm`. They are not invoked by offline verification.
-
-The public [diagnostics tools](../tools/diagnostics/README.md) provide bus
-benchmarks and stationary telemetry checks; their offline tests run with
-`npm run test:diagnostics` and are included in `make host-verify`.
-The public tools work with ordinary firmware; no timing build is needed.
-
-The [settings tool](../tools/settings/README.md) tests discovery, backup validation,
-restore ordering and failure cleanup with `npm run test:settings`. They are also
-included in `make host-verify`.
-
-## Hardware differential tests
-
-The [servo comparison suite](../tools/hw-diff-tests/README.md) compares factory
-firmware with a candidate on a dedicated bench. It includes communication,
-registers, motion, protection, persistence, calibration and LeRobot regressions.
-It uses this repository's shared host driver; no sibling checkout is required.
-
-Run `npm run test:diff` for its offline tests, or `npm run diff -- --list` to list
-hardware scenarios without opening a serial port. `npm test` includes the offline
-suite. Hardware execution requires an explicit port and separate opt-ins for
-motion, persistent writes, template writes and driven current protection.
-
-Read the suite manual before connecting hardware: the full run replaces live
-settings with a test configuration and finishes at saved reset-template defaults,
-not the user's starting settings. It is not an assembled-arm smoke test.
-
-## Encoded firmware uploader
-
-The [upload and recovery tool](../tools/flash/README.md) has a separate Python
-offline suite: `make flash-verify`, after installing its requirements in an
-active virtual environment. It checks release validation before serial access,
-factory block framing, fragmented responses, bounded retries, model/torque checks,
-settings preservation, application verification and recovery reporting using fake
-serial devices. Settings-recovery checks cover backup validation, configuration
-readback, ID/baud changes, template repair ordering, restart verification and
-relocking after failure. It never flashes hardware. These checks are separate from `npm test`
-and `make verify` because the uploader has an optional Python serial dependency.
+The [diagnostics tools](../tools/diagnostics/README.md) measure bus latency and
+stationary telemetry on ordinary firmware.

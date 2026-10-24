@@ -2,14 +2,18 @@
   "leaderPort": "/dev/ttyUSB0",
   "followerPort": "/dev/ttyUSB1",
   "baudRate": 1000000,
-  "protocol": "extension",
   "hz": 30,
   "maxAgeMs": 100,
   "durationMs": 10000,
   "acceleration": 1000,
   "rampTimeMs": 50,
   "joints": [
-    { "leaderId": 1, "followerId": 1, "mapping": "angle", "direction": 1 }
+    {
+      "leaderId": 1,
+      "followerId": 1,
+      "mapping": "angle",
+      "direction": 1
+    }
   ],
   "profiles": {
     "1": {

@@ -5,7 +5,8 @@ const { EventEmitter } = require('node:events');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { parse, validatePorts, run } = require('../cli');
+const { parse } = require('../cli');
+const { validatePorts, run } = require('../../../host/arm-control/session');
 const { TeleoperationInput } = require('../Teleoperation');
 const { ArmController } = require('../../../host/arm-control/ArmController');
 function Teleoperation(options) { return new ArmController({ ...options, source: new TeleoperationInput(options) }); }
@@ -19,9 +20,9 @@ function fixture() {
     run: async () => { events.push('run'); },
     disableTorque: async () => { events.push('disable'); return []; },
   };
-  const config = { leaderPort: 'COM3', followerPort: 'COM4', protocol: 'extension' };
+  const config = { leaderPort: 'COM3', followerPort: 'COM4' };
   const options = {
-    output: () => {}, createController: () => teleop,
+    output: () => {}, createSource: () => ({}), createController: () => teleop,
     createServo: () => {
       const servo = new EventEmitter();
       servo.open = async () => { events.push('open'); };
@@ -102,13 +103,11 @@ test('already cancelled run opens no ports and still reports cleanup errors', as
   assert(!r.events.includes('open')); assert(!r.events.includes('run'));
 });
 
-test('published example configurations satisfy control and profile validation', async () => {
-  for (const name of ['legacy', 'extension']) {
-    const config = JSON.parse(await fs.readFile(path.join(__dirname, '..', 'examples', `${name}.json`), 'utf8'));
-    await validatePorts(config);
-    new Teleoperation({ leader: {}, follower: {}, config });
-    if (name === 'extension') for (const profile of Object.values(config.profiles)) {
-      ArmCodec.encodeConfig({ ...profile, accelerationLimit: config.acceleration, rampTimeMs: config.rampTimeMs });
-    }
+test('published example satisfies control and profile validation', async () => {
+  const config = JSON.parse(await fs.readFile(path.join(__dirname, '..', 'example.json'), 'utf8'));
+  await validatePorts(config);
+  new Teleoperation({ leader: {}, follower: {}, config });
+  for (const profile of Object.values(config.profiles)) {
+    ArmCodec.encodeConfig({ ...profile, accelerationLimit: config.acceleration, rampTimeMs: config.rampTimeMs });
   }
 });

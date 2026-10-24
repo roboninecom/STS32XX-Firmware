@@ -8,7 +8,6 @@ const integer = (v, lo, hi, name) => {
   return v;
 };
 const signed = bytes => RegisterCodec.decode('presentPosition', bytes);
-const word = value => RegisterCodec.encode('targetPosition', value);
 
 class ArmController {
   constructor({ follower, config, source, gravity, clock = () => performance.now(), sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
@@ -19,9 +18,11 @@ class ArmController {
     if ('gravityModel' in config && (typeof config.gravityModel !== 'string' || !config.gravityModel.trim()))
       throw new Error('gravityModel must be a nonempty file path');
     if (config.gravityModel && !gravity) throw new Error('Load gravityModel before creating the controller');
-    if (gravity && config.protocol !== 'extension') throw new Error('Gravity requires extension mode');
-    for (const key of ['gravity', 'startupGravity', 'tunedSettingsFile', 'profileSets'])
-      if (key in config) throw new Error(`${key} is obsolete; use gravityModel and profiles`);
+    const allowed = ['leaderPort', 'followerPort', 'baudRate', 'joints', 'profiles',
+      'acceleration', 'rampTimeMs', 'gravityModel', 'hz', 'maxAgeMs',
+      'responseTimeoutMs', 'durationMs', 'replay'];
+    for (const key of Object.keys(config))
+      if (!allowed.includes(key)) throw new Error(`Unknown controller setting: ${key}`);
     this.monitorIntervalMs = integer(source.feedbackIntervalMs ?? (gravity ? 50 : 250),
       20, gravity ? 50 : 250, 'feedback interval');
     this.expectedSequences = new Map();
@@ -34,7 +35,6 @@ class ArmController {
     this.joints = source.joints;
     const timeoutMs = integer(config.responseTimeoutMs ?? 100, 25, 10000, 'response timeout');
     this.options = { timeoutMs, deadlineMs: timeoutMs, rejectOnAlarm: true };
-    if (!['legacy', 'extension'].includes(config.protocol)) throw new Error('Choose legacy or extension');
     if (!Array.isArray(this.joints) || !this.joints.length || this.joints.length > 6) throw new Error('Expected 1–6 joints');
     for (const key of ['leaderId', 'followerId']) {
       const ids = this.joints.map(j => integer(j[key], 1, 253, key));
@@ -42,14 +42,9 @@ class ArmController {
     }
     this.hz = integer(config.hz ?? 60, 1, 60, 'hz');
     this.maxAgeMs = integer(config.maxAgeMs ?? 100, 10, 10000, 'maxAgeMs');
-    this.session = integer(config.session ?? randomInt(1, 65536), 1, 65535, 'session');
-    if (config.protocol === 'extension') {
-      integer(config.acceleration, 1, 30000, 'extension acceleration');
-      if ('braking' in config) throw new Error('braking is obsolete; use symmetric acceleration');
-      integer(config.rampTimeMs, 1, 255, 'rampTimeMs');
-    } else if (config.legacyAcceleration !== undefined) integer(config.legacyAcceleration, 0, 254, 'legacy acceleration');
-    if ('startupBounds' in config) throw new Error('startupBounds was removed; extension uses saved legacy position limits');
-    if ('velocityFeedforward' in config) throw new Error('Put velocityFeedforward inside each servo profile');
+    this.session = randomInt(1, 65536);
+    integer(config.acceleration, 1, 30000, 'acceleration');
+    integer(config.rampTimeMs, 1, 255, 'rampTimeMs');
     if (config.durationMs !== undefined) integer(config.durationMs, 1, 86400000, 'durationMs');
     this.lastFeedback = new Map();
     this.captureNotBefore = -Infinity;
@@ -73,12 +68,7 @@ class ArmController {
       if (b[65]) throw new Error(`ID ${id}: servo alarm ${b[65]}`);
       if (role === 'Follower' && (b[55] !== 1 || b[64] !== 0))
         throw new Error(`Follower ${id}: settings must be locked and no deferred write may be pending`);
-      // Legacy pose playback converts counts/s using the saved rate scale.
-      // Live streaming retains its existing zero-speed semantics.
-      let speedScale;
-      if (role === 'Follower' && this.source.kind === 'poses' && this.config.protocol === 'legacy')
-        speedScale = b[18] & 4 ? 1 : (await servo.protocol.read(id, 82, 1, this.options))[0] || 1;
-      result[id] = { min, max, speedScale, responseStatusLevel: b[8], torque: b[40],
+      result[id] = { min, max, responseStatusLevel: b[8], torque: b[40],
         position: signed(b.subarray(56, 58)), acceleration: b[41],
         encoderCalibration: { positionCorrection: RegisterCodec.decode('positionCorrection', b.subarray(31, 33)),
           resolution: b[30] || 1, reverse: !!(b[18] & 0x80) } };
@@ -95,17 +85,15 @@ class ArmController {
     for (const j of this.joints) {
       const id = j.followerId, limits = this.limits.follower[id];
       const caps = await this.follower.arm.capabilities(id, this.options);
-      if (caps?.major !== 9) throw new Error(`Follower ${id}: rewrite arm v9 required`);
+      if (caps?.major !== 9) throw new Error(`Follower ${id}: extension v9 required`);
       limits.feedback = await this.feedback(id);
       this.checkHealth(id, limits.feedback);
-      if (this.config.protocol === 'extension') {
-        const supplied = this.config.profiles?.[id];
-        if (!supplied) throw new Error(`Missing explicit RAM gain/effort profile for follower ${id}`);
-        const profile = { ...supplied, velocityLimit: supplied.velocityLimit ?? 65535,
-          accelerationLimit: this.config.acceleration, rampTimeMs: this.config.rampTimeMs };
-        ArmCodec.encodeConfig(profile);
-        this.profiles[id] = profile;
-      }
+      const supplied = this.config.profiles?.[id];
+      if (!supplied) throw new Error(`Missing explicit RAM gain/effort profile for follower ${id}`);
+      const profile = { ...supplied, velocityLimit: supplied.velocityLimit ?? 65535,
+        accelerationLimit: this.config.acceleration, rampTimeMs: this.config.rampTimeMs };
+      ArmCodec.encodeConfig(profile);
+      this.profiles[id] = profile;
     }
     if (this.gravity) {
       const ids = this.joints.map(j => j.followerId);
@@ -126,7 +114,7 @@ class ArmController {
   }
 
   async changeProfile(id, profile) {
-    if (this.config.protocol !== 'extension' || !this.ready.has(id)) throw new Error('Profile change requires a ready extension motor');
+    if (!this.ready.has(id)) throw new Error('Profile change requires a ready extension motor');
     if (this.sequence >= 32767) throw new Error('Start a new session before another profile change');
     ArmCodec.encodeConfig(profile); // Validate before releasing any output.
     if (this.gravity) {
@@ -204,19 +192,9 @@ class ArmController {
     if (!this.limits) throw new Error('Preflight required');
     // Check the input and follower before changing any motor state.
     await this.source.assertUnpowered?.(this);
-    const powered = [];
     for (const { followerId: id } of this.joints) {
-      if ((await this.follower.protocol.read(id, 40, 1, this.options))[0] !== 0) {
-        if (this.config.rearmPoweredFollower !== true)
-          throw new Error(`ID ${id}: startup requires torque already off (or explicit follower rearm)`);
-        powered.push(id);
-      }
-    }
-    for (const id of powered) {
-      if (this.stopping) throw new Error('Startup cancelled');
-      await this.write(id, 40, Buffer.from([0]));
       if ((await this.follower.protocol.read(id, 40, 1, this.options))[0] !== 0)
-        throw new Error(`Follower ${id}: torque-off rearm verification failed`);
+        throw new Error(`ID ${id}: startup requires torque already off`);
     }
     const frame = await this.sample();
     const q = await this.positions(this.follower, frame.targets.map(t => t.id));
@@ -224,46 +202,25 @@ class ArmController {
     for (const t of frame.targets) {
       if (this.stopping) throw this.failure ?? new Error('Startup cancelled');
       const id = t.id;
-      await this.operation(id, 'select legacy', () => this.follower.arm.select(id, false, 0, this.options));
-      // A legacy goal write can auto-enable torque under saved factory flags.
-      // Extension torque enable captures measured position itself; never seed legacy goals here.
-      if (this.config.protocol === 'legacy') {
-        const data = Buffer.alloc(6); word(q[id]).copy(data);
-        this.enabled.add(id); // goal-write auto-enable can precede its acknowledgement
-        await this.write(id, 42, data);
-      }
-      if (this.config.protocol === 'extension') {
-        const p = this.profiles[id];
-        const limits = this.limits.follower[id];
-        if (q[id] < limits.min || q[id] > limits.max) throw new Error(`ID ${id}: outside saved position limits`);
-        await this.operation(id, 'configure', () => this.follower.arm.configure(id, p, this.options));
-        this.prepared.add(id); // include uncertain setup ACKs in torque-off cleanup
-        await this.operation(id, 'select extension', () => this.follower.arm.select(id, true, this.session, this.options));
-      } else if (this.config.legacyAcceleration !== undefined) {
-        await this.write(id, 41, Buffer.from([this.config.legacyAcceleration]));
-      }
+      await this.operation(id, 'deselect', () => this.follower.arm.select(id, false, 0, this.options));
+      const limits = this.limits.follower[id];
+      if (q[id] < limits.min || q[id] > limits.max) throw new Error(`ID ${id}: outside saved position limits`);
+      await this.operation(id, 'configure', () => this.follower.arm.configure(id, this.profiles[id], this.options));
+      this.prepared.add(id); // Include uncertain setup acknowledgments in cleanup.
+      await this.operation(id, 'select extension', () => this.follower.arm.select(id, true, this.session, this.options));
     }
     if (this.stopping) throw new Error('Startup cancelled');
-    if (this.config.protocol === 'extension') {
-      // A loaded joint can fall while earlier axes are being checked. Enable
-      // the prepared group in one packet, then verify every motor from feedback.
-      const entries = frame.targets.map(t => ({ id: t.id, data: Buffer.from([1]) }));
-      for (const { id } of entries) this.enabled.add(id); // Include an uncertain broadcast in cleanup.
-      await this.follower.protocol.syncWrite(40, entries, this.options);
-      for (const { id } of entries) {
-        await this.waitUntilOutputReady(id);
-        this.ready.add(id);
-      }
-      if (this.gravity) {
-        await this.monitor(this.onTelemetry);
-        await this.monitor(this.onTelemetry, false); // Confirm all gravity before the first target.
-      }
-    } else {
-      for (const t of frame.targets) {
-        if (this.stopping) throw new Error('Startup cancelled');
-        this.enabled.add(t.id);
-        await this.write(t.id, 40, Buffer.from([1]));
-      }
+    // Enable all supporting joints together before checking individual readiness.
+    const entries = frame.targets.map(t => ({ id: t.id, data: Buffer.from([1]) }));
+    for (const { id } of entries) this.enabled.add(id);
+    await this.follower.protocol.syncWrite(40, entries, this.options);
+    for (const { id } of entries) {
+      await this.waitUntilOutputReady(id);
+      this.ready.add(id);
+    }
+    if (this.gravity) {
+      await this.monitor(this.onTelemetry);
+      await this.monitor(this.onTelemetry, false);
     }
     if (this.stopping) throw this.failure ?? new Error('Startup cancelled');
   }
@@ -292,37 +249,21 @@ class ArmController {
     if (this.stopping) return;
     this.fresh(frame);
     this.checkGravityAge();
-    if (this.config.protocol === 'legacy') {
-      const entries = frame.targets.map(t => {
-        const data = Buffer.alloc(6); word(t.position).copy(data);
-        if (t.speedLimit !== undefined) {
-          const scale = this.limits.follower[t.id].speedScale;
-          data.writeUInt16LE(Math.min(32767, Math.max(1, Math.round(t.speedLimit / scale))), 4);
-        } // Otherwise time=0, speed=0 retain native maximum/unlimited semantics.
-        return { id: t.id, data };
-      });
-      await this.follower.protocol.transaction(async wire => {
-        if (this.stopping) return;
-        this.fresh(frame);
-        await wire.syncWrite(42, entries, this.options);
-      }, this.options);
-    } else {
-      const sequence = (this.sequence + 1) & 0xffff;
-      const payload = ArmCodec.encodeTargets(frame.targets.map(t => ({ id: t.id, target: {
-        sequence, positionQ8: t.position * 256, speedLimit: t.speedLimit ?? 65535,
-      } })), this.session);
-      const sent = await this.follower.protocol.transaction(async wire => {
-        if (this.stopping) return false;
-        this.fresh(frame); // Recheck after acquiring the bus queue.
-        this.checkGravityAge();
-        await wire.armCommand(254, Instruction.ARM_TARGETS, payload, this.options);
-        return true;
-      }, this.options);
-      if (!sent) return;
-      this.sequence = sequence;
-      for (const target of frame.targets) this.expectedSequences.set(target.id, sequence);
-      this.captureNotBefore = this.clock() + 3;
-    }
+    const sequence = (this.sequence + 1) & 0xffff;
+    const payload = ArmCodec.encodeTargets(frame.targets.map(t => ({ id: t.id, target: {
+      sequence, positionQ8: t.position * 256, speedLimit: t.speedLimit ?? 65535,
+    } })), this.session);
+    const sent = await this.follower.protocol.transaction(async wire => {
+      if (this.stopping) return false;
+      this.fresh(frame); // Recheck after acquiring the bus queue.
+      this.checkGravityAge();
+      await wire.armCommand(254, Instruction.ARM_TARGETS, payload, this.options);
+      return true;
+    }, this.options);
+    if (!sent) return;
+    this.sequence = sequence;
+    for (const target of frame.targets) this.expectedSequences.set(target.id, sequence);
+    this.captureNotBefore = this.clock() + 3;
   }
 
   checkHealth(id, sample) {
@@ -378,7 +319,7 @@ class ArmController {
       if (previous && (telemetry.sampleSequence === previous.sampleSequence || telemetry.sampleMs === previous.sampleMs))
         throw new Error(`Follower ${id}: feedback sample did not advance`);
       const active = this.gravity ? this.ready.has(id) : this.enabled.has(id);
-      if (active && this.config.protocol === 'extension' &&
+      if (active &&
           (!telemetry.selected || !telemetry.armed || telemetry.session !== this.session || !telemetry.fresh ||
            !telemetry.driveEnabled || !telemetry.outputReady || telemetry.acceptedSequence !== (this.expectedSequences.get(id) ?? this.sequence)))
         throw new Error(`Follower ${id}: extension tracking/session fault`);
@@ -464,19 +405,6 @@ class ArmController {
     return failures;
   }
 
-  async shutdown() {
-    if (this.config.protocol === 'extension') return [];
-    const failures = [];
-    for (const id of this.enabled) {
-      try {
-        const q = signed(await this.follower.protocol.read(id, 56, 2, this.options));
-        const data = Buffer.alloc(6); word(q).copy(data);
-        await this.write(id, 42, data);
-      } catch (error) { failures.push({ id, error: error.message }); }
-    }
-    return failures;
-  }
-
   async run({ onFrame = () => {}, onTelemetry = () => {}, onCommand = () => {}, shouldStop = () => false } = {}) {
     let error;
     try {
@@ -490,12 +418,7 @@ class ArmController {
       if (this.failure) throw this.failure;
     } catch (e) { error = e; }
     this.stopping = true;
-    let failures = error ? await this.disableTorque() : await this.shutdown();
-    // A disconnect can arrive while the normal hold is being requested.
-    if (!error && (this.failure || failures.length)) {
-      error = this.failure ?? new Error('Could not request hold on every follower');
-      failures = [...failures, ...await this.disableTorque()];
-    }
+    const failures = error ? await this.disableTorque() : [];
     if (error || failures.length) throw new Error(JSON.stringify({ error: error?.message, cleanupFailures: failures }), { cause: error });
   }
 }

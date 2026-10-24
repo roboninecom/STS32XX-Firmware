@@ -6,7 +6,7 @@ The [servo driver](../servo-driver/README.md) owns packet encoding and transport
 
 ## Enable gravity
 
-Use extension mode and add `gravityModel` to your existing configuration. Paths
+Add `gravityModel` to your existing configuration. Paths
 are relative to the **configuration file**, not the working directory. For a
 configuration saved in the repository root:
 
@@ -18,7 +18,7 @@ This line is an addition to a complete configuration, not a standalone file.
 Provide tested `profiles` for every follower; `effortLimit` caps the total motor
 output and `gravitySlewEffortPerS` limits how quickly gravity effort changes.
 Setting the slew alone does not enable gravity. Without `gravityModel`, the tool
-sends no gravity compensation. Legacy mode does not support this model.
+sends no gravity compensation.
 
 The supplied [arm model](models/README.md) preserves the existing upright,
 empty-gripper arm calibration. Its coefficients for motors 2–4 use their measured
@@ -36,8 +36,8 @@ Use the same configuration field for each command:
 
 ```sh
 npm run teleoperate -- CONFIG.json
-npm run replay-poses -- CONFIG.json POSES.json
-npm run teleoperate -- CONFIG.json --replay SESSION.ndjson
+npm run replay -- CONFIG.json POSES.json
+npm run replay -- CONFIG.json SESSION.ndjson
 ```
 
 These commands only preview. Add `--run` to start control. Current configuration
@@ -96,9 +96,10 @@ gravity effort/sequence. Firmware feedback confirms that request on a subsequent
 sample; a recorded request alone is not proof of acceptance. `settledAt` is a
 conservative host estimate of when the requested gravity slew can finish.
 
-## Development and verification
+## API and tests
 
-`ArmController` accepts a follower driver, config, input source and optional
+`session.run` manages serial connections, session logs and cleanup for an input
+source. `ArmController` accepts a follower driver, config, input source and optional
 `GravityModel` instance. Load models with `await GravityModel.load(filename)`;
 the CLI resolves the configuration-relative path. Input sources provide
 `joints`, `preflight`, `describe`, `sample` and `play`; live input additionally
@@ -113,31 +114,4 @@ Sources submit positions through the
 controller and use its serviced waits, so long pauses continue feedback updates.
 
 Run `npm run test:arm` for model tests and `npm run test:teleoperation` for live,
-replay and failure-path tests. The reference fixture covers 24 historical arm
-poses. The integration tests use simulated serial responses.
-
-## Hardware verification
-
-Basic checks passed on six v9 motors at 1 Mbaud on October 24, 2026, with the
-encoder calibration and saved settings matching the original gravity model:
-
-- Three-pose replay near rest, moving M1–M4 by 20–30 counts while holding M5/M6.
-  Speed 100 counts/s, acceleration 500 counts/s², ramp time 100 ms.
-- Timed-session replay with 2.5 s gaps, plus normal interruption after one target.
-- Signed gravity readback matched the requested effort, and firmware output
-  matched the sum of its controller terms. Gravity continued during holds.
-- Calibration mismatch blocked read-only preflight. An injected logging failure
-  and cancellation during startup both removed output from all six motors.
-- Final errors were within 8 counts on this small path. Feedback gaps stayed
-  below 76 ms, sensor age was 0–1 ms, and recorded temperature peaked at 40 °C.
-  No reported motor faults, saturation or control overruns occurred in the
-  completed validation runs.
-
-Normal completion retained powered hold as designed. Test teardown then verified
-all six motors off, settings locked and persistent settings unchanged from the
-restored backup. Power-cycle persistence was not separately tested. Raw logs
-remain local and are excluded from Git.
-
-These checks do not establish tuning accuracy over the full travel, higher
-speeds, different payloads or live leader-following operation. Validate those
-conditions separately before extending the operating range.
+replay and failure-path tests. Tests use simulated serial responses.

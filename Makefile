@@ -208,7 +208,7 @@ $(HOST_TEST_TARGETS):
 
 # Host interfaces are local to this repository; these targets are offline.
 host-verify:
-	node --test host/servo-driver/test/*.test.js tools/teleoperation/test/*.test.js tools/diagnostics/test/*.test.js tools/hw-diff-tests/test/*.test.js tools/settings/test/*.test.js tools/pose-recorder/test/*.test.js host/arm-control/test/*.test.js
+	npm test
 
 arm-host-verify:
 	node --test host/servo-driver/test/arm-extension.test.js

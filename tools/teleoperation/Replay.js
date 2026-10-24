@@ -14,7 +14,6 @@ const signature = joints => joints?.map(j => [j.leaderId, j.followerId, j.mappin
   j.direction ?? 1, j.leaderMiddle ?? null, j.followerMiddle ?? null]);
 
 // Reuse recorded positions and timing, never packets, gains or session identities.
-// This replaces the private replay adapter's controller-method overrides.
 class Replay {
   static async load(filename, config) {
     if ((await fs.stat(filename)).size > MAX_FILE_BYTES) throw new Error('Replay file exceeds 64 MiB');
@@ -120,8 +119,7 @@ class Replay {
         for (const target of frame.targets) {
           const sample = controller.lastFeedback.get(target.id);
           if (!Number.isInteger(sample.measuredPositionQ8)) throw new Error(`Follower ${target.id}: invalid measured position`);
-          const running = controller.config.protocol === 'extension' ? sample.running
-            : (await controller.follower.protocol.read(target.id, 66, 1, controller.options))[0] !== 0;
+          const running = sample.running;
           if (running || Math.abs(sample.measuredPositionQ8 / 256 - target.position) > this.toleranceCounts) complete = false;
         }
         if (complete) return true;

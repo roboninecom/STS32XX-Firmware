@@ -8,8 +8,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { setTimeout: delay } = require('node:timers/promises');
 const { PacketEncoder, Instruction, BAUD_RATES } = require('../../host/servo-driver');
-const { Probe, MeasuredTransport } = require('../../host/diagnostics/probe');
-const { distribution } = require('../../host/diagnostics/stats');
+const { Probe, MeasuredTransport } = require('./probe');
+const { distribution } = require('./stats');
 
 const persistent = data => [...data.subarray(4, 40), ...data.subarray(78, 87)];
 const signed15 = (lo, hi) => (hi & 0x80) ? -(((hi & 0x7f) << 8) | lo) : (hi << 8) | lo;

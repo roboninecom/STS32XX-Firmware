@@ -646,7 +646,7 @@ or encryption key. Follow its setup and verification guide before using hardware
 | `include/` | Shared C declarations and data types |
 | `app/` | Main firmware loop and coordination between components |
 | `platform/gd32f130/` | Hardware drivers, startup code, and build support for the microcontroller |
-| `tests/` | Regression tests, required fixtures, and selected hardware diagnostics |
+| `tests/` | Regression tests and required fixtures |
 | [`host/servo-driver/`](host/servo-driver/README.md) | Installable Node.js driver for legacy commands and the v9 extension |
 | [`tools/teleoperation/`](tools/teleoperation/README.md) | Control a follower from a hand-operated leader |
 | [`tools/pose-recorder/`](tools/pose-recorder/README.md) | Record and replay named motor positions |

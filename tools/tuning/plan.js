@@ -18,7 +18,6 @@ function validate(plan, config) {
   assert(typeof plan.config === 'string' && plan.config.trim(), 'Shared controller config path required');
   assert(STAGES.includes(plan.stage), 'Unknown tuning stage');
   number(plan.probeId, 1, 253, 'probeId');
-  assert(config?.protocol === 'extension', 'Tuning requires v9 extension mode');
   assert(config.durationMs === undefined, 'Remove durationMs from tuning controller config; use batch.maxDurationMs');
   const ids = config.joints?.map(j => j.followerId);
   assert(ids?.includes(plan.probeId), 'probeId must be a configured follower');

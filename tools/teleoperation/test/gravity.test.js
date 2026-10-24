@@ -124,7 +124,7 @@ test('gravity sequence wraps independently of motion sequence', async () => {
 });
 
 test('gravity configuration errors are rejected before opening hardware', () => {
-  assert.throws(() => new ArmController({ config: { protocol: 'legacy' }, gravity: model() }), /extension/);
+  assert.throws(() => new ArmController({ config: { protocol: 'legacy' }, gravity: model() }), /Unknown controller setting: protocol/);
   assert.throws(() => new ArmController({ config: { gravityModel: 'x' } }), /Load gravityModel/);
 });
 
@@ -145,7 +145,7 @@ test('runtime gravity ownership loss during a hold stops before the next target'
 });
 
 test('gravity preview validates dependencies without motor writes and logs model identity', async () => {
-  const { run } = require('../cli');
+  const { run } = require('../../../host/arm-control/session');
   const g = await GravityModel.load(require('node:path').resolve(__dirname, '../../../host/arm-control/models/arm-upright-empty.json'));
   const config = configuration(); delete config.joints;
   config.profiles = Object.fromEntries([1, 2, 3, 4, 5, 6].map(id => [id, { ...profile, effortLimit: 1000 }]));
@@ -157,7 +157,7 @@ test('gravity preview validates dependencies without motor writes and logs model
       g.document.encoderCalibration[id].positionCorrection).copy(bytes, 31);
     return bytes;
   };
-  await run(config, { replay: r.replay, gravity: g, createServo: () => r.follower,
+  await run(config, { source: r.replay, gravity: g, createServo: () => r.follower,
     createController: () => r.controller, output: () => {},
     createLog: async () => ({ filename: 'test', write: async e => logs.push(e), close: async () => {} }) });
   assert.deepEqual(r.calls.map(c => c.type), ['open', 'close']);

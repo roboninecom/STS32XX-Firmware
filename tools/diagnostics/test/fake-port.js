@@ -1,7 +1,7 @@
 'use strict';
 const { EventEmitter } = require('node:events');
 const { PacketEncoder, Instruction } = require('../../../host/servo-driver');
-const { MeasuredTransport } = require('../../../host/diagnostics/probe');
+const { MeasuredTransport } = require('../probe');
 class FakePort extends EventEmitter {
   constructor() {
     super(); this.isOpen = false; this.writes = [];

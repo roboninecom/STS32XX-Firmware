@@ -2,8 +2,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Replay } = require('../Replay');
-const { run, parse } = require('../cli');
-const { argumentsForReplay } = require('../../pose-recorder/replay');
+const { parse } = require('../cli');
+const { run } = require('../../../host/arm-control/session');
 
 const { profile, configuration, poses, session, rig, targets, torqueOff } = require('./fake-arm');
 
@@ -113,7 +113,7 @@ test('recording validation rejects malformed paths and incompatible mappings bef
 
 test('replay CLI accepts only a follower and preview opens no leader or motor control', async () => {
   const r = rig(), logs = []; let clients = 0;
-  await run(r.config, { replay: r.replay, createServo: () => { clients++; return r.follower; },
+  await run(r.config, { source: r.replay, createServo: () => { clients++; return r.follower; },
     createController: () => r.controller, output: () => {},
     createLog: async () => ({ filename: 'test', write: async event => logs.push(event), close: async () => {} }) });
   assert.equal(clients, 1); assert.equal(targets(r).length, 0);
@@ -122,38 +122,14 @@ test('replay CLI accepts only a follower and preview opens no leader or motor co
   assert.equal(r.follower.listenerCount('disconnect'), 0);
 });
 
-test('CLI and pose shortcut parse replay paths without permitting accidental run', () => {
-  assert.deepEqual(parse(['config.json', '--replay', 'file.json']), { filename: 'config.json', move: false, replayFile: 'file.json' });
-  assert.deepEqual(argumentsForReplay(['config.json', 'poses.json']), ['config.json', '--replay', 'poses.json']);
-  assert.equal(parse(argumentsForReplay(['config.json', 'poses.json', '--run'])).move, true);
-  assert.throws(() => parse(['config.json', '--replay', '--run']));
-  assert.throws(() => parse(['config.json', '--replay', 'x', '--replay', 'y']));
-  assert.throws(() => argumentsForReplay(['config.json', 'poses.json', '--unknown']));
-});
-
-test('legacy session replay retains its wire format and completes without a leader', async () => {
-  const config = { ...configuration(), protocol: 'legacy' }, r = rig(session(config), config);
-  await r.controller.preflight(); await r.controller.run();
-  assert.deepEqual(targets(r).map(t => t.position), [1500, 2000]); assert.equal(torqueOff(r).length, 0);
-});
-
-test('replay wraps sequences without reusing the recording identity', async () => {
-  const r = rig(); await r.controller.preflight(); r.controller.sequence = 65534;
-  await r.controller.run(); assert.deepEqual(targets(r).map(t => t.sequence), [65535, 0]);
-});
-
-for (const scaled of [false, true]) test(`legacy poses convert speed using ${scaled ? 'stored scale' : 'counts/s flag'}`, async () => {
-  const config = { ...configuration(), protocol: 'legacy' }, r = rig(poses([1500]), config);
-  const read = r.follower.protocol.read;
-  r.follower.protocol.read = async (id, address, length) => {
-    const bytes = await read(id, address, length);
-    if (address === 0) bytes[18] = scaled ? 0 : 4;
-    if (address === 82) bytes[0] = 50;
-    return bytes;
-  };
-  await r.controller.preflight(); await r.controller.run();
-  assert.equal(targets(r)[0].speed, scaled ? 6 : 300);
-  assert.equal(targets(r)[0].position, 1500);
+test('one replay command accepts pose and session files with a read-only default', () => {
+  for (const file of ['poses.json', 'session.ndjson']) {
+    assert.deepEqual(parse(['config.json', file], 'replay'), { filename: 'config.json', move: false, replayFile: file });
+    assert.equal(parse(['config.json', file, '--run'], 'replay').move, true);
+  }
+  for (const args of [[], ['config.json'], ['config.json', '--run'], ['config.json', 'file', '--bad'], ['config.json', 'file', '--run', '--run']])
+    assert.throws(() => parse(args, 'replay'));
+  assert.throws(() => parse(['config.json', '--replay', 'file']));
 });
 
 test('ordinary transport time fits inside recorded spacing instead of accumulating drift', async () => {

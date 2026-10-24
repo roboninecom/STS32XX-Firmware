@@ -12,10 +12,16 @@ function integer(value, name, min, max) {
   return value;
 }
 
+function checkFields(value, allowed) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new RangeError('Expected an object');
+  for (const key of Object.keys(value))
+    if (!allowed.includes(key)) throw new RangeError(`Unknown field: ${key}`);
+}
+
 function encodeConfig(config) {
-  for (const key of ['positionMinQ8', 'positionMaxQ8'])
-    if (key in config) throw new RangeError(`${key} was removed; extension uses saved legacy position limits`);
-  if ('timeoutMs' in config) throw new RangeError('Command timeout was removed; targets persist until replaced');
+  checkFields(config, ['kpQ8', 'kdQ8', 'kiQ8', 'integralLimit', 'effortLimit',
+    'velocityLimit', 'accelerationLimit', 'gravitySlewEffortPerS',
+    'rampTimeMs', 'velocityFilterQ8', 'velocityFeedforward']);
   const result = Buffer.alloc(24);
   const fields = [
     ['kpQ8', 0, 0, 65535], ['kdQ8', 2, 0, 65535],
@@ -33,7 +39,7 @@ function encodeConfig(config) {
   result[15] = integer(config.rampTimeMs, 'rampTimeMs', 1, 255);
   result[14] = integer(config.velocityFilterQ8, 'velocityFilterQ8', 1, 255);
   const ff = config.velocityFeedforward;
-  if (!ff || typeof ff !== 'object') throw new RangeError('Explicit velocityFeedforward settings required');
+  checkFields(ff, ['positiveGainQ8', 'negativeGainQ8', 'effortLimit']);
   for (const [key, offset, max] of [['positiveGainQ8', 16, 65535],
     ['negativeGainQ8', 18, 65535], ['effortLimit', 20, config.effortLimit]])
     result.writeUInt16LE(integer(ff[key], key, 0, max), offset);
@@ -64,9 +70,7 @@ function encodeTargets(entries, session) {
   const out = Buffer.alloc(2 + entries.length * 9);
   out.writeUInt16LE(integer(session, 'session', 1, 65535));
   entries.forEach(({ id, target }, index) => {
-    rejectObsolete(target);
-    if ('acceleration' in target) throw new RangeError('Target acceleration was removed; use configuration accelerationLimit');
-    if ('session' in target) throw new RangeError('Session belongs to the group, not each target');
+    checkFields(target, ['sequence', 'positionQ8', 'speedLimit']);
     const offset = 2 + index * 9;
     out[offset] = integer(id, 'id', 1, 253);
     out.writeUInt16LE(integer(target.sequence, 'sequence', 0, 65535), offset + 1);
@@ -76,17 +80,8 @@ function encodeTargets(entries, session) {
   return out;
 }
 
-// Reject obsolete inputs, including zero, instead of silently dropping a caller's FF.
-function rejectObsolete(command) {
-  for (const key of ['feedforward', 'dynamicEffort', 'braking']) {
-    if (key in command) throw new RangeError(`${key} was removed; arm v9 uses symmetric acceleration, gravity and local velocity gains`);
-  }
-}
-
 function encodeGravity(command) {
-  rejectObsolete(command);
-  if ('ttlMs' in command) throw new RangeError('Gravity TTL was removed; gravity persists until replaced');
-  if ('slewEffortPerS' in command) throw new RangeError('Gravity slew moved to configuration gravitySlewEffortPerS');
+  checkFields(command, ['session', 'sequence', 'gravityEffort']);
   const out = Buffer.alloc(6);
   for (const [key, offset, min, max] of [['session', 0, 1, 65535],
     ['sequence', 2, 0, 65535]])

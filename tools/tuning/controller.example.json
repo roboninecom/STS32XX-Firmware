@@ -1,7 +1,6 @@
 {
   "followerPort": "/dev/ttyUSB1",
   "baudRate": 1000000,
-  "protocol": "extension",
   "maxAgeMs": 100,
   "acceleration": 1000,
   "rampTimeMs": 50,

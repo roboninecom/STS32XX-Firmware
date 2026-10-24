@@ -7,7 +7,7 @@ const { Instruction } = require('../../../host/servo-driver');
 const profile = { kpQ8: 256, kdQ8: 32, kiQ8: 0, integralLimit: 0, effortLimit: 100,
   velocityLimit: 500, velocityFilterQ8: 64, gravitySlewEffortPerS: 1000,
   velocityFeedforward: { positiveGainQ8: 0, negativeGainQ8: 0, effortLimit: 0 } };
-const configuration = () => ({ followerPort: 'COM4', protocol: 'extension', acceleration: 1000, rampTimeMs: 50,
+const configuration = () => ({ followerPort: 'COM4', acceleration: 1000, rampTimeMs: 50,
   joints: [{ leaderId: 1, followerId: 1, mapping: 'angle' }], profiles: { 1: profile },
   replay: { speed: 300, holdMs: 0, moveTimeoutMs: 100, toleranceCounts: 2 } });
 function poses(positions = [1500, 2000], ids = [1]) {

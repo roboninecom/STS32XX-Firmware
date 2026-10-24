@@ -2,13 +2,13 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const { run } = require('../teleoperation/cli');
+const { run } = require('../../host/arm-control/session');
 const { GravityModel } = require('../../host/arm-control/GravityModel');
 const { validate, estimate, hash } = require('./plan');
 const { BatchSource } = require('./BatchSource');
 const { score, fit } = require('./analysis');
 const { extract } = require('./identification');
-const USAGE = 'npm run tune -- inspect|preflight|run PLAN.json\n  run requires --execute\nnpm run tune -- analyse EVENTS.ndjson\nnpm run tune -- extract EVENTS.ndjson [MORE.ndjson ...]\nnpm run tune -- fit DATASET.json';
+const USAGE = 'npm run tune -- inspect|preflight|run PLAN.json\nnpm run tune -- analyse EVENTS.ndjson\nnpm run tune -- extract EVENTS.ndjson [MORE.ndjson ...]\nnpm run tune -- fit DATASET.json';
 
 function analyse(file) {
   const events = fs.readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line));
@@ -87,7 +87,7 @@ async function execute({ plan, config, gravity }, { move = false, directory, sig
   try {
     record({ type: 'run-start', backend: 'hardware', plan, config, planHash: hash(plan), configHash: hash(config),
       implementation: implementationIdentity(), gravityModel: gravity?.document, gravityIdentity: gravity?.identity });
-    await run(config, { ...dependencies, replay: source, gravity, move, signal,
+    await run(config, { ...dependencies, source, gravity, move, signal,
       output: message => { if (!message.startsWith('{')) output(message); },
       createLog: async () => ({ filename: file, write: logEvent, close: async () => {} }) });
     if (!move) source.summary.status = 'preflight';
@@ -118,7 +118,7 @@ async function main(args = process.argv.slice(2)) {
     console.log(JSON.stringify(result, null, 2)); return result;
   }
   if (!['inspect', 'preflight', 'run'].includes(command) ||
-      (command === 'run' ? options.length !== 1 || options[0] !== '--execute' : options.length)) throw new Error(USAGE);
+      options.length) throw new Error(USAGE);
   const inputs = await load(path.resolve(input));
   if (command === 'inspect') { console.log(JSON.stringify({ planHash: hash(inputs.plan), estimate: estimate(inputs.plan, inputs.config) }, null, 2)); return; }
   const root = path.join(__dirname, 'logs'); fs.mkdirSync(root, { recursive: true });

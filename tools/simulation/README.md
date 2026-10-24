@@ -89,15 +89,3 @@ PYTHONPATH=tools/simulation tools/simulation/.venv/bin/python \
 Display unit tests use original primitive geometry. The bundled-model tests also
 verify source hashes, mesh resolution, import and the 20-second demo. No hardware
 is required.
-
-## Verification
-
-The bundled upstream export passes 18 offline tests, model import, a 20-second
-physics demo and gravity-geometry checks at 160 poses. Regression checks preserve
-joint locations from three reference poses within 2 micrometres after
-translating the zero angles, and verify opposite jaw motion. Current six-motor
-recordings also pass headless playback and image rendering.
-
-The viewer does not connect to hardware. M5 and gripper encoder mapping still
-need physical validation; the model's mass estimates are not used to replace
-the measured gravity compensation.

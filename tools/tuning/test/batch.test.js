@@ -8,7 +8,7 @@ const { rig, poses, configuration } = require('../../teleoperation/test/fake-arm
 const { ArmController } = require('../../../host/arm-control/ArmController');
 const { BatchSource } = require('../BatchSource');
 const { validate } = require('../plan');
-const { analyse, execute } = require('../cli');
+const { analyse, execute, main } = require('../cli');
 const { score, fit } = require('../analysis');
 function fixture() {
   const plan = structuredClone(require('../example.json')), config = configuration();
@@ -72,7 +72,7 @@ test('CLI records replayable evidence and read-only preflight sends no writes', 
     const r = fixture(); r.plan.candidates = [];
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sts-tune-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
     await execute(r, { move, directory, output: () => {}, createServo: () => r.follower,
-      createController: options => new ArmController({ ...options, source: options.replay, clock: r.controller.clock, sleep: r.controller.sleep }) });
+      createController: options => new ArmController({ ...options, source: options.source, clock: r.controller.clock, sleep: r.controller.sleep }) });
     const result = analyse(path.join(directory, 'events.ndjson'));
     assert.equal(result.complete, move);
     if (!move) assert(!r.calls.some(c => ['write', 'configure', 'select'].includes(c.type)));
@@ -108,8 +108,17 @@ test('final summary write failure still turns off motors before the serial port 
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   fs.mkdirSync(path.join(directory, 'summary.json')); // A deterministic final-write failure.
   await assert.rejects(execute(r, { move: true, directory, output: () => {}, createServo: () => r.follower,
-    createController: options => new ArmController({ ...options, source: options.replay,
+    createController: options => new ArmController({ ...options, source: options.source,
       clock: r.controller.clock, sleep: r.controller.sleep }) }), /EISDIR/);
   assert.equal(r.motors.get(1).torque, 0);
   assert.equal(analyse(path.join(directory, 'events.ndjson')).complete, false);
+});
+
+
+test('run accepts a plan directly and rejects extra execution flags before opening a port', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sts-tune-cli-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const missing = path.join(directory, 'missing.json');
+  await assert.rejects(main(['run', missing]), { code: 'ENOENT' });
+  await assert.rejects(main(['run', missing, '--execute']), /npm run tune/);
 });

@@ -5,9 +5,9 @@ const os = require('node:os');
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
 const { PacketEncoder, Instruction } = require('../../host/servo-driver');
-const { Probe, MeasuredTransport } = require('../../host/diagnostics/probe');
+const { Probe, MeasuredTransport } = require('./probe');
 const { cases } = require('./cases');
-const { summarize } = require('../../host/diagnostics/stats');
+const { summarize } = require('./stats');
 
 const persistent = data => [...data.subarray(4, 40), ...data.subarray(78, 87)];
 function safeBaseline(id, data, writes) {
