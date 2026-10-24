@@ -7,6 +7,7 @@ const { randomUUID } = require('node:crypto');
 const { StsServo, BAUD_RATES } = require('../../host/servo-driver');
 const { TeleoperationInput } = require('./Teleoperation');
 const { ArmController } = require('../../host/arm-control/ArmController');
+const { GravityModel } = require('../../host/arm-control/GravityModel');
 const { Replay } = require('./Replay');
 
 const USAGE = 'npm run teleoperate -- CONFIG.json [--replay RECORDING] [--run]\nWithout --run: read-only preflight and preview.';
@@ -47,13 +48,13 @@ async function openLog() {
     close: () => file.close() };
 }
 
-async function run(config, { move = false, replay, signal, output = console.log,
+async function run(config, { move = false, replay, gravity, signal, output = console.log,
   createServo = options => new StsServo(options), createLog = openLog,
   createController = options => new ArmController({ ...options, source: options.replay ?? new TeleoperationInput(options) }) } = {}) {
   await validatePorts(config, !!replay);
   const leader = replay ? null : createServo({ serial: { path: config.leaderPort, baudRate: config.baudRate ?? 1000000 } });
   const follower = createServo({ serial: { path: config.followerPort, baudRate: config.baudRate ?? 1000000 } });
-  const teleop = createController({ leader, follower, config, replay });
+  const teleop = createController({ leader, follower, config, replay, gravity });
   let log, error, runEntered = false, runCompleted = false;
   const cleanupErrors = [], listeners = [];
   const stop = () => { teleop.stopping = true; };
@@ -74,6 +75,7 @@ async function run(config, { move = false, replay, signal, output = console.log,
       await leader?.open(); checkFault();
       await follower.open(); checkFault();
       const preflight = { type: 'preflight', config, session: teleop.session, limits: await teleop.preflight() };
+      if (gravity) preflight.gravityModel = gravity.identity;
       if (replay) preflight.replay = teleop.sourceSummary;
       checkFault(); await log.write(preflight); output(JSON.stringify(preflight));
       const preview = { type: 'preview', frame: await teleop.sample() };
@@ -93,7 +95,7 @@ async function run(config, { move = false, replay, signal, output = console.log,
         });
         runCompleted = true;
         const stopped = { type: 'stopped', follower: config.protocol === 'extension'
-          ? 'last target retained; torque remains enabled' : 'powered hold requested' };
+          ? (gravity ? 'motion settled; last target and gravity retained; torque remains enabled' : 'last target retained; torque remains enabled') : 'powered hold requested' };
         await log.write(stopped); checkFault(); output(JSON.stringify(stopped));
       }
       checkFault();
@@ -125,10 +127,11 @@ async function main(args = process.argv.slice(2)) {
   const options = parse(args);
   if (options.help) { console.log(USAGE); return; }
   const config = JSON.parse(await fs.readFile(options.filename, 'utf8'));
+  const gravity = config.gravityModel ? await GravityModel.load(path.resolve(path.dirname(options.filename), config.gravityModel)) : undefined;
   const replay = options.replayFile ? await Replay.load(options.replayFile, config) : undefined;
   const abort = new AbortController(), stop = () => abort.abort();
   process.on('SIGINT', stop); process.on('SIGTERM', stop);
-  try { await run(config, { move: options.move, replay, signal: abort.signal }); }
+  try { await run(config, { move: options.move, replay, gravity, signal: abort.signal }); }
   finally { process.off('SIGINT', stop); process.off('SIGTERM', stop); }
 }
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });

@@ -103,18 +103,13 @@ class Replay {
   }
 
   async play(controller, { onCommand, onFrame, onTelemetry, shouldStop }) {
-    let monitored = controller.clock();
     const stopped = () => {
       if (controller.failure) throw controller.failure;
       return controller.stopping || shouldStop();
     };
-    const monitor = async () => { await controller.monitor(onTelemetry); monitored = controller.clock(); };
+    const monitor = () => controller.monitor(onTelemetry);
     const waitUntil = async due => {
-      while (controller.clock() < due) {
-        if (stopped()) return false;
-        if (controller.clock() - monitored >= 250) await monitor();
-        await controller.sleep(Math.max(0, Math.min(20, due - controller.clock())));
-      }
+      await controller.waitUntil(due, onTelemetry, stopped);
       return !stopped();
     };
     const arrive = async frame => {
@@ -131,7 +126,7 @@ class Replay {
         }
         if (complete) return true;
         if (controller.clock() >= deadline) throw new Error(`Replay arrival timeout at frame ${frame.replay.index}`);
-        await controller.sleep(20);
+        await controller.sleep(controller.gravity ? controller.monitorIntervalMs : 20);
       }
       return false;
     };
@@ -158,7 +153,7 @@ class Replay {
         finalFrame = frame;
         if (this.kind === 'poses') {
           if (!await arrive(frame) || !await waitUntil(controller.clock() + this.holdMs)) return;
-        } else if (controller.clock() - monitored >= 250) await monitor();
+        } else await controller.service(onTelemetry);
       }
       if (this.kind === 'session' && !await arrive(finalFrame)) return;
     }

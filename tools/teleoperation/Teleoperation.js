@@ -57,7 +57,7 @@ class TeleoperationInput {
   }
 
   async play(controller, { onFrame, onTelemetry, onCommand, shouldStop }) {
-    let monitored = controller.clock(), nextCycle = controller.clock();
+    let nextCycle = controller.clock();
     while (!controller.stopping && !shouldStop()) {
       const started = controller.clock(), frame = await controller.sample(), sampled = controller.clock();
       if (controller.stopping || shouldStop()) break;
@@ -66,14 +66,14 @@ class TeleoperationInput {
       await controller.send(frame);
       if (controller.stopping) break;
       const sent = controller.clock();
-      if (sent - monitored >= 250) { await controller.monitor(onTelemetry); monitored = controller.clock(); }
+      await controller.service(onTelemetry);
       await onFrame({ ...frame, sequence: controller.sequence, elapsedMs: controller.clock() - started,
         timing: { sampleMs: sampled - started, sendMs: sent - sampled, monitorMs: controller.clock() - sent } });
       // Skip missed deadlines: never queue a burst of old leader positions.
       const period = 1000 / controller.hz;
       nextCycle += period;
       if (nextCycle < controller.clock()) nextCycle += Math.ceil((controller.clock() - nextCycle) / period) * period;
-      await controller.sleep(Math.max(0, nextCycle - controller.clock()));
+      await controller.waitUntil(nextCycle, onTelemetry, shouldStop);
     }
   }
 

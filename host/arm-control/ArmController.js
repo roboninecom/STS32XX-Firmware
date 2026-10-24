@@ -20,10 +20,22 @@ function word(value) {
 }
 
 class ArmController {
-  constructor({ follower, config, source, clock = () => performance.now(), sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
+  constructor({ follower, config, source, gravity, clock = () => performance.now(), sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
     this.follower = follower;
     this.config = config;
     this.source = source;
+    this.gravity = gravity;
+    if ('gravityModel' in config && (typeof config.gravityModel !== 'string' || !config.gravityModel.trim()))
+      throw new Error('gravityModel must be a nonempty file path');
+    if (config.gravityModel && !gravity) throw new Error('Load gravityModel before creating the controller');
+    if (gravity && config.protocol !== 'extension') throw new Error('Gravity requires extension mode');
+    for (const key of ['gravity', 'startupGravity', 'tunedSettingsFile', 'profileSets'])
+      if (key in config) throw new Error(`${key} is obsolete; use gravityModel and profiles`);
+    this.monitorIntervalMs = gravity ? 50 : 250;
+    this.gravityMaxAgeMs = 100;
+    this.gravitySent = new Map();
+    this.ready = new Set();
+    this.lastMonitorAt = -Infinity;
     this.clock = clock;
     this.sleep = sleep;
     this.joints = source.joints;
@@ -99,6 +111,11 @@ class ArmController {
         ArmCodec.encodeConfig(profile);
         this.profiles[id] = profile;
       }
+    }
+    if (this.gravity) {
+      const ids = this.joints.map(j => j.followerId);
+      this.gravity.validateIds(ids);
+      this.gravity.evaluate(Object.fromEntries(ids.map(id => [id, this.measuredPosition(id, this.limits.follower[id].feedback)])), ids, this.profiles);
     }
     this.sourceSummary = this.source.describe(this);
     return this.limits;
@@ -185,7 +202,14 @@ class ArmController {
       // Track before write: response loss must still trigger torque-off cleanup.
       this.enabled.add(t.id);
       await this.write(t.id, 40, Buffer.from([1]));
-      if (this.config.protocol === 'extension') await this.waitUntilOutputReady(t.id);
+      if (this.config.protocol === 'extension') {
+        await this.waitUntilOutputReady(t.id);
+        this.ready.add(t.id);
+        if (this.gravity) {
+          await this.monitor(this.onTelemetry);
+          await this.monitor(this.onTelemetry, false); // Confirm gravity before another motor or target starts.
+        }
+      }
     }
   }
 
@@ -193,6 +217,8 @@ class ArmController {
     const started = this.clock();
     while (true) {
       await this.sleep(5);
+      if (this.gravity && this.ready.size && this.clock() - this.lastMonitorAt >= this.monitorIntervalMs)
+        await this.monitor(this.onTelemetry);
       const s = await this.follower.arm.feedback(id, this.options);
       this.checkHealth(id, s);
       if (!s.armed || s.session !== this.session) throw new Error(`Follower ${id}: startup ownership lost`);
@@ -204,6 +230,7 @@ class ArmController {
   async send(frame) {
     if (this.stopping) return;
     this.fresh(frame);
+    this.checkGravityAge();
     if (this.config.protocol === 'legacy') {
       const entries = frame.targets.map(t => {
         const data = Buffer.alloc(6); word(t.position).copy(data);
@@ -226,6 +253,7 @@ class ArmController {
       const sent = await this.follower.protocol.transaction(async wire => {
         if (this.stopping) return false;
         this.fresh(frame); // Recheck after acquiring the bus queue.
+        this.checkGravityAge();
         await wire.armCommand(254, Instruction.ARM_TARGETS, payload, this.options);
         return true;
       }, this.options);
@@ -246,28 +274,112 @@ class ArmController {
       throw new Error(`Follower ${id}: host 60 C validated temperature guard (${sample.temperatureValidated} C)`);
   }
 
-  async monitor(onTelemetry = () => {}) {
-    // A target updates acceptance; C1 publishes it on the next fresh control pair.
-    if (this.clock() < this.captureNotBefore)
-      await this.sleep(this.captureNotBefore - this.clock());
-    for (const id of this.enabled) {
-      const telemetry = await this.follower.arm.feedback(id, this.options);
-      this.checkHealth(id, telemetry);
-      const previous = this.lastFeedback.get(id);
-      if (previous && (telemetry.sampleSequence === previous.sampleSequence ||
-          telemetry.sampleMs === previous.sampleMs))
-        throw new Error(`Follower ${id}: feedback sample did not advance`);
-      if (this.config.protocol === 'extension' &&
-          (!telemetry.selected || !telemetry.armed ||
-           telemetry.session !== this.session || !telemetry.fresh || !telemetry.driveEnabled ||
-           !telemetry.outputReady || telemetry.acceptedSequence !== this.sequence))
-        throw new Error(`Follower ${id}: extension tracking/session fault`);
-      this.lastFeedback.set(id, telemetry);
-      await onTelemetry({ timestamp: this.clock(), id, telemetry });
+  measuredPosition(id, sample) {
+    if (!Number.isInteger(sample.measuredPositionQ8)) throw new Error(`Follower ${id}: invalid measured position`);
+    return sample.measuredPositionQ8 / 256;
+  }
+
+  checkGravityAge() {
+    if (this.failure) throw this.failure;
+    if (this.gravity) for (const [id, sent] of this.gravitySent)
+      if (this.clock() - sent.measuredAt > this.gravityMaxAgeMs)
+        throw new Error(`Follower ${id}: gravity update deadline missed`);
+  }
+
+  async service(onTelemetry = this.onTelemetry) {
+    this.checkGravityAge();
+    if (this.clock() - this.lastMonitorAt >= this.monitorIntervalMs) await this.monitor(onTelemetry);
+  }
+
+  async waitUntil(due, onTelemetry, shouldStop = () => false) {
+    while (this.clock() < due && !this.stopping && !shouldStop()) {
+      await this.service(onTelemetry);
+      await this.sleep(Math.max(0, Math.min(20, due - this.clock(),
+        this.lastMonitorAt + this.monitorIntervalMs - this.clock())));
     }
   }
 
-  // Explicit failure cleanup; ordinary extension exit sends no motor command.
+  async monitor(onTelemetry = () => {}, updateGravity = true) {
+    this.checkGravityAge();
+    // Acceptance is published on the next fresh control pair after a write.
+    if (this.clock() < this.captureNotBefore)
+      await this.sleep(this.captureNotBefore - this.clock());
+    const started = this.clock(), captures = [];
+    // During startup, unpowered coupled axes are also measured. Ownership checks
+    // apply only to axes whose control output has become ready.
+    const ids = this.gravity ? this.joints.map(j => j.followerId) : [...this.enabled];
+    for (const id of ids) {
+      const measuredAt = this.clock(); // Conservative: includes request/response time.
+      const telemetry = await this.follower.arm.feedback(id, this.options);
+      this.checkHealth(id, telemetry);
+      const previous = this.lastFeedback.get(id);
+      if (previous && (telemetry.sampleSequence === previous.sampleSequence || telemetry.sampleMs === previous.sampleMs))
+        throw new Error(`Follower ${id}: feedback sample did not advance`);
+      const active = this.gravity ? this.ready.has(id) : this.enabled.has(id);
+      if (active && this.config.protocol === 'extension' &&
+          (!telemetry.selected || !telemetry.armed || telemetry.session !== this.session || !telemetry.fresh ||
+           !telemetry.driveEnabled || !telemetry.outputReady || telemetry.acceptedSequence !== this.sequence))
+        throw new Error(`Follower ${id}: extension tracking/session fault`);
+      const sent = this.gravitySent.get(id);
+      if (sent && (!telemetry.gravityReceived || telemetry.gravitySequence !== sent.sequence))
+        throw new Error(`Follower ${id}: gravity acceptance mismatch`);
+      this.lastFeedback.set(id, telemetry);
+      captures.push({ timestamp: measuredAt, id, telemetry });
+    }
+    // Back-to-back completion/startup reads must observe a new control sample,
+    // even when the preceding pass only confirmed acceptance without a write.
+    this.captureNotBefore = this.clock() + 3;
+    if (this.gravity && updateGravity) {
+      const positions = Object.fromEntries(captures.map(c => [c.id, this.measuredPosition(c.id, c.telemetry)]));
+      // Validate all results before writing any axis. Never use desired positions.
+      const efforts = this.gravity.evaluate(positions, ids, this.profiles);
+      for (const id of this.ready) {
+        const sequence = ((this.gravitySent.get(id)?.sequence ?? 0) + 1) & 0xffff;
+        const payload = ArmCodec.encodeGravity({ session: this.session, sequence, gravityEffort: efforts[id] });
+        await this.follower.protocol.transaction(async wire => {
+          this.checkGravityAge();
+          if (this.clock() - started > this.gravityMaxAgeMs) throw new Error('Stale coupled gravity measurements');
+          await wire.armCommand(id, Instruction.ARM_GRAVITY, payload, this.options);
+        }, this.options);
+        const previous = this.gravitySent.get(id);
+        const change = Math.abs(efforts[id] - (previous?.effort ?? 0));
+        // Conservative bound on outstanding firmware slew. Identical updates do
+        // not restart the wait; changing effort includes any unfinished slew.
+        const settledAt = change ? Math.max(this.clock(), previous?.settledAt ?? 0) +
+          change * 1000 / this.profiles[id].gravitySlewEffortPerS : previous?.settledAt ?? this.clock();
+        this.gravitySent.set(id, { sequence, effort: efforts[id], measuredAt: started, settledAt });
+        this.captureNotBefore = this.clock() + 3;
+      }
+    }
+    this.lastMonitorAt = started;
+    for (const capture of captures) await onTelemetry({ ...capture,
+      ...(this.gravity ? { gravity: this.gravitySent.get(capture.id) } : {}) });
+    this.checkGravityAge();
+  }
+
+  async finishGravity() {
+    if (!this.gravity || !this.ready.size) return;
+    const deadline = this.clock() + 30000;
+    let quietSince, previous;
+    // Input may have stopped, but compensation must follow the remaining motion.
+    // Confirm 200 ms of rest, not a particular tracking error (friction may remain).
+    while (true) {
+      await this.monitor(this.onTelemetry);
+      const samples = [...this.ready].map(id => this.lastFeedback.get(id));
+      const slewComplete = [...this.gravitySent.values()].every(sent => this.clock() >= sent.settledAt + 3);
+      const quiet = slewComplete && samples.every((s, i) => !s.running && Number.isInteger(s.measuredVelocityQ8PerS) &&
+        Math.abs(s.measuredVelocityQ8PerS) <= 10 * 256 && previous &&
+        Math.abs(s.measuredPositionQ8 - previous[i]) <= 256);
+      quietSince = quiet ? quietSince ?? this.clock() : undefined;
+      if (quietSince !== undefined && this.clock() - quietSince >= 200) break;
+      if (this.clock() >= deadline) throw new Error('Gravity completion timeout');
+      previous = samples.map(s => s.measuredPositionQ8);
+      await this.sleep(this.monitorIntervalMs);
+    }
+    await this.monitor(this.onTelemetry, false); // Final retained effort acknowledged.
+  }
+
+  // Failures turn torque off; ordinary extension exit retains target and gravity.
   async disableTorque() {
     const failures = [];
     for (const id of new Set([...this.enabled, ...this.prepared])) {
@@ -299,9 +411,11 @@ class ArmController {
     try {
       if (this.failure) throw this.failure;
       if (this.stopping || shouldStop()) return;
+      this.onTelemetry = onTelemetry;
       await this.initialize();
       const callbacks = { onFrame, onTelemetry, onCommand, shouldStop };
       await this.source.play(this, callbacks);
+      await this.finishGravity();
       if (this.failure) throw this.failure;
     } catch (e) { error = e; }
     this.stopping = true;
