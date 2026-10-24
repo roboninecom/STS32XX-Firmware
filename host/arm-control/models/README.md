@@ -6,7 +6,10 @@ have explicit zero compensation. It assumes the original upright mounting,
 unchanged encoder offsets and an empty gripper. It is not a universal servo
 model. Recheck it on hardware before using it with a different setup.
 
-The file contains signed PWM effort coefficients, not gains or motion settings.
+The file contains signed PWM effort coefficients and the encoder settings they
+were fitted against. `encoderCalibration` lists signed position corrections,
+unit resolution and encoder reversal for each motor. Preflight requires them to
+match the connected arm. Limits and gains are separate settings.
 Its source hash records the original model; offline reference tests cover 24
 poses. Verification with the shared v9 controller is still pending.
 

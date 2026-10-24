@@ -24,7 +24,11 @@ The supplied [arm model](models/README.md) preserves the existing upright,
 empty-gripper arm calibration. Its coefficients for motors 2–4 use their measured
 encoder counts, including coupled joints; motors 1, 5 and 6 explicitly use zero.
 Every controlled follower needs a model, and all joints used by its terms must
-be controlled and measured. For the six-motor arm, include IDs 1–6 and all six
+be controlled and measured. Angle-dependent models also declare `encoderCalibration`
+for each input: signed `positionCorrection`, `resolution: 1`, and `reverse`
+(the encoder reversal flag). Preflight compares these with the motor registers
+and rejects a mismatch before setup or torque enable. Restore the matching
+calibration or update and validate the model after recalibrating an arm. For the six-motor arm, include IDs 1–6 and all six
 profiles. Do not reuse the model after changing encoder offsets, mounting,
 geometry or payload without checking the calibration.
 

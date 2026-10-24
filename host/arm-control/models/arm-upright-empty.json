@@ -157,5 +157,37 @@
       "maxEffort": 0,
       "note": "Explicit zero compensation in the original upright, empty-gripper setup; no model fitted for this axis."
     }
+  },
+  "encoderCalibration": {
+    "1": {
+      "positionCorrection": -1082,
+      "resolution": 1,
+      "reverse": false
+    },
+    "2": {
+      "positionCorrection": 1113,
+      "resolution": 1,
+      "reverse": false
+    },
+    "3": {
+      "positionCorrection": 489,
+      "resolution": 1,
+      "reverse": false
+    },
+    "4": {
+      "positionCorrection": -534,
+      "resolution": 1,
+      "reverse": false
+    },
+    "5": {
+      "positionCorrection": -619,
+      "resolution": 1,
+      "reverse": false
+    },
+    "6": {
+      "positionCorrection": 1586,
+      "resolution": 1,
+      "reverse": false
+    }
   }
 }

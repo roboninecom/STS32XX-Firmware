@@ -35,6 +35,16 @@ class GravityModel {
         check(term.fn !== 'constant' || Object.keys(term.weights).length === 0, 'constant terms cannot depend on encoder inputs');
       }
     }
+    const calibration = document.encoderCalibration ?? {};
+    check(calibration && typeof calibration === 'object' && !Array.isArray(calibration), 'invalid encoderCalibration');
+    for (const [id, settings] of Object.entries(calibration)) {
+      check(idKey(id) && settings && Number.isInteger(settings.positionCorrection) &&
+        finite(settings.positionCorrection, -4095, 4095) && settings.resolution === 1 &&
+        typeof settings.reverse === 'boolean', `invalid encoder calibration for ${id}`);
+    }
+    for (const model of Object.values(document.models)) for (const term of model.terms)
+      for (const input of Object.keys(term.weights))
+        check(calibration[input], `encoderCalibration required for measured motor ${input}`);
     this.document = structuredClone(document);
     this.identity = { ...identity, name: document.name, calibration: document.calibration,
       mounting: document.mounting, payload: document.payload };
@@ -46,6 +56,16 @@ class GravityModel {
       check(model, `missing explicit model for motor ${id}`);
       for (const term of model.terms) for (const input of Object.keys(term.weights))
         check(ids.includes(Number(input)), `motor ${id} requires measured motor ${input}`);
+    }
+  }
+
+  validateCalibration(ids, settings) {
+    for (const id of ids) {
+      const expected = this.document.encoderCalibration?.[id];
+      if (!expected) continue; // Constant/zero-only models need no encoder angle.
+      for (const key of ['positionCorrection', 'resolution', 'reverse'])
+        check(settings[id]?.encoderCalibration?.[key] === expected[key],
+          `motor ${id} calibration mismatch: ${key} expected ${expected[key]}, got ${settings[id]?.encoderCalibration?.[key]}`);
     }
   }
 

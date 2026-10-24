@@ -40,3 +40,12 @@ test('loader records the exact model identity', async () => {
   const model = await GravityModel.load(require('node:path').join(__dirname, '../models/arm-upright-empty.json'));
   assert.match(model.identity.sha256, /^[a-f0-9]{64}$/); assert.equal(model.identity.name, document.name);
 });
+
+test('angle-dependent models require explicit encoder calibration for every input', () => {
+  const missing = structuredClone(document); delete missing.encoderCalibration[3];
+  assert.throws(() => new GravityModel(missing), /encoderCalibration required.*3/);
+  for (const mutate of [s => { s.positionCorrection = 5000; }, s => { s.resolution = 2; }, s => { s.reverse = 0; }]) {
+    const bad = structuredClone(document); mutate(bad.encoderCalibration[2]);
+    assert.throws(() => new GravityModel(bad), /invalid encoder calibration/);
+  }
+});

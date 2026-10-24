@@ -8,6 +8,7 @@ const { Instruction } = require('../../../host/servo-driver');
 const { profile, configuration, poses, session, rig, targets, torqueOff } = require('./fake-arm');
 const model = (ids = [1]) => new GravityModel({ format: 'sts-gravity', version: 1, units: 'pwm-effort',
   name: 'test', calibration: 'counts', mounting: 'test', payload: 'empty',
+  encoderCalibration: Object.fromEntries(ids.map(id => [id, { positionCorrection: 0, resolution: 1, reverse: false }])),
   models: Object.fromEntries(ids.map(id => [id, { maxEffort: 100, note: 'test',
     terms: [{ fn: 'sin', coefficient: 50, offsetRad: 0, weights: { [id]: 0.001 } }] }])) });
 const gravityCalls = r => r.calls.filter(c => c.type === 'gravity');
@@ -149,6 +150,13 @@ test('gravity preview validates dependencies without motor writes and logs model
   const config = configuration(); delete config.joints;
   config.profiles = Object.fromEntries([1, 2, 3, 4, 5, 6].map(id => [id, { ...profile, effortLimit: 1000 }]));
   const r = rig(poses([1500], [1, 2, 3, 4, 5, 6]), config, g), logs = [];
+  const read = r.follower.protocol.read;
+  r.follower.protocol.read = async (id, address, length) => {
+    const bytes = await read(id, address, length);
+    if (address === 0) require('../../../host/servo-driver').RegisterCodec.encode('positionCorrection',
+      g.document.encoderCalibration[id].positionCorrection).copy(bytes, 31);
+    return bytes;
+  };
   await run(config, { replay: r.replay, gravity: g, createServo: () => r.follower,
     createController: () => r.controller, output: () => {},
     createLog: async () => ({ filename: 'test', write: async e => logs.push(e), close: async () => {} }) });
@@ -206,4 +214,17 @@ for (const failure of ['broadcast', 'last motor']) test(`group enable ${failure}
   }
   await assert.rejects(r.controller.run(), /uncertain transmission|startup ownership/);
   assert.equal(targets(r).length, 0); assert.deepEqual(torqueOff(r).map(c => c.id), ids);
+});
+
+test('calibration mismatch prevents all setup and motion writes', async () => {
+  for (const address of [31, 18]) {
+    const r = rig(poses(), configuration(), model()), read = r.follower.protocol.read;
+    r.follower.protocol.read = async (id, start, length) => {
+      const bytes = await read(id, start, length);
+      if (start === 0) bytes[address] = address === 18 ? 0x80 : 1;
+      return bytes;
+    };
+    await assert.rejects(r.controller.preflight(), /calibration mismatch/);
+    assert.equal(r.calls.length, 0);
+  }
 });

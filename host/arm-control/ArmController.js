@@ -2,7 +2,7 @@
 
 const { randomInt } = require('node:crypto');
 const { performance } = require('node:perf_hooks');
-const { ArmCodec, Instruction } = require('../servo-driver');
+const { ArmCodec, Instruction, RegisterCodec } = require('../servo-driver');
 const integer = (v, lo, hi, name) => {
   if (!Number.isInteger(v) || v < lo || v > hi) throw new Error(`Invalid ${name}`);
   return v;
@@ -86,7 +86,9 @@ class ArmController {
       if (role === 'Follower' && this.source.kind === 'poses' && this.config.protocol === 'legacy')
         speedScale = b[18] & 4 ? 1 : (await servo.protocol.read(id, 82, 1, this.options))[0] || 1;
       result[id] = { min, max, speedScale, responseStatusLevel: b[8], torque: b[40],
-        position: signed(b.subarray(56, 58)), acceleration: b[41] };
+        position: signed(b.subarray(56, 58)), acceleration: b[41],
+        encoderCalibration: { positionCorrection: RegisterCodec.decode('positionCorrection', b.subarray(31, 33)),
+          resolution: b[30] || 1, reverse: !!(b[18] & 0x80) } };
     }
     return result;
   }
@@ -115,6 +117,7 @@ class ArmController {
     if (this.gravity) {
       const ids = this.joints.map(j => j.followerId);
       this.gravity.validateIds(ids);
+      this.gravity.validateCalibration(ids, this.limits.follower);
       this.gravity.evaluate(Object.fromEntries(ids.map(id => [id, this.measuredPosition(id, this.limits.follower[id].feedback)])), ids, this.profiles);
     }
     this.sourceSummary = this.source.describe(this);
