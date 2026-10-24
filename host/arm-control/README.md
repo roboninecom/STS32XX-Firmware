@@ -107,10 +107,30 @@ controller and use its serviced waits, so long pauses continue feedback updates.
 
 Run `npm run test:arm` for model tests and `npm run test:teleoperation` for live,
 replay and failure-path tests. The reference fixture covers 24 historical arm
-poses. The integration tests use simulated serial responses; hardware verification
-of this refactoring is pending.
+poses. The integration tests use simulated serial responses.
 
-For the next hardware check: preview with the actual model and tested profiles,
-verify low-speed motion and gravity direction, check startup and normal exit,
-then compare live input, pose holds and session gaps. Inspect update spacing,
-feedback freshness and arrival error before increasing speed or payload.
+## Hardware verification
+
+Basic checks passed on six v9 motors at 1 Mbaud on October 24, 2026, with the
+encoder calibration and saved settings matching the original gravity model:
+
+- Three-pose replay near rest, moving M1–M4 by 20–30 counts while holding M5/M6.
+  Speed 100 counts/s, acceleration 500 counts/s², ramp time 100 ms.
+- Timed-session replay with 2.5 s gaps, plus normal interruption after one target.
+- Signed gravity readback matched the requested effort, and firmware output
+  matched the sum of its controller terms. Gravity continued during holds.
+- Calibration mismatch blocked read-only preflight. An injected logging failure
+  and cancellation during startup both removed output from all six motors.
+- Final errors were within 8 counts on this small path. Feedback gaps stayed
+  below 76 ms, sensor age was 0–1 ms, and recorded temperature peaked at 40 °C.
+  No reported motor faults, saturation or control overruns occurred in the
+  completed validation runs.
+
+Normal completion retained powered hold as designed. Test teardown then verified
+all six motors off, settings locked and persistent settings unchanged from the
+restored backup. Power-cycle persistence was not separately tested. Raw logs
+remain local and are excluded from Git.
+
+These checks do not establish tuning accuracy over the full travel, higher
+speeds, different payloads or live leader-following operation. Validate those
+conditions separately before extending the operating range.

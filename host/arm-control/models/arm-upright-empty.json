@@ -6,7 +6,7 @@
   "calibration": "October 4 encoder mapping: 4096 counts/turn; at count 2048, M2=87°, M3=−75°, M4=15°; directions M2/M3 −1, M4 +1. Mapping is embedded in term weights and offsets.",
   "mounting": "Original arm mounted upright; unchanged joint directions, encoder offsets and link geometry.",
   "payload": "Empty gripper; no added payload. M1/M5/M6 compensation is explicitly zero.",
-  "status": "Historical coefficients preserved; current v9 host integration awaits hardware verification.",
+  "status": "Historical coefficients preserved. Basic six-motor v9 replay and gravity readback verified on 2026-10-24 with matching encoder calibration; full-travel and payload validation remain separate.",
   "source": {
     "filename": "arm-gravity-model-2026-10-04.json",
     "sha256": "f40cec4b598a4399aa26b714a545e3b3fe5c43ccc328adbb24970adf4e374c00"

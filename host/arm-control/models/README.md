@@ -11,7 +11,9 @@ were fitted against. `encoderCalibration` lists signed position corrections,
 unit resolution and encoder reversal for each motor. Preflight requires them to
 match the connected arm. Limits and gains are separate settings.
 Its source hash records the original model; offline reference tests cover 24
-poses. Verification with the shared v9 controller is still pending.
+poses. Basic replay and signed gravity readback with the shared v9 controller passed
+on the six-motor arm on October 24, 2026, after restoring matching calibration.
+This small near-rest check does not qualify the full travel or additional loads.
 
 Each motor has a `maxEffort`, an explanatory `note` and a list of `terms`.
 A term contributes `coefficient * sin(angle)` or `coefficient * cos(angle)`,
