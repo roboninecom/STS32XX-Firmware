@@ -75,6 +75,7 @@ class StsBus extends EventEmitter {
     this.#ids.delete(currentId);
     this.#devices.delete(currentId);
     this.#ids.add(nextId);
+    this.emit('idChanged', { previousId: currentId, id: nextId });
   }
 
   read(id, registers, options = {}) {

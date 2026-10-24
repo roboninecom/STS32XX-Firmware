@@ -12,6 +12,12 @@ class BusTimeouts {
     return Math.max(this.minimumMs, Math.ceil(wireTimeMs + this.responseMarginMs));
   }
 
+  discovery() {
+    // Broadcast PING replies are slotted by numeric ID, not motor count.
+    // A six-byte reply occupies a nine-byte slot, rounded per byte by firmware.
+    return Math.ceil(254 * 9 * Math.ceil(10_000_000 / this.baudRate) / 1000) + 100;
+  }
+
   single(requestBytes, parameterBytes = 0) {
     return this.forBytes(requestBytes + parameterBytes + 6);
   }

@@ -11,7 +11,7 @@ class StsProtocol extends EventEmitter {
   constructor(scheduler, {
     baudRate = 1_000_000,
     timing,
-    discoveryTimeoutMs = 25,
+    discoveryTimeoutMs,
     discoverySilenceMs = 3,
   } = {}) {
     super();
@@ -29,7 +29,7 @@ class StsProtocol extends EventEmitter {
     if (id === BROADCAST_ID) {
       const result = await this.scheduler.collect(packet, {
         match: response => response.id <= MAX_SERVO_ID && response.parameters.length === 0,
-        timeoutMs: options.timeoutMs ?? this.discoveryTimeoutMs,
+        timeoutMs: options.timeoutMs ?? this.discoveryTimeoutMs ?? this.timeouts.discovery(),
         // Factory broadcast-ping replies are slotted by numeric servo ID. A
         // short quiet gap is therefore not evidence that discovery is done.
         silenceMs: options.silenceMs ?? null,

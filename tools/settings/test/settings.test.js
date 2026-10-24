@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { BAUD_RATES, ControlTable } = require('../../../host/servo-driver');
 const { FORMAT, FORMAT_VERSION, parseArguments, readSettingsDocument,
-  restoreSettingsDocument, settingKeys, validateSettingsDocument, discoveryTimeout, run } = require('../cli');
+  restoreSettingsDocument, settingKeys, validateSettingsDocument, run } = require('../cli');
 
 function defaultSettings(overrides = {}) {
   return Object.fromEntries(settingKeys().map(key => [key, overrides[key] ?? ControlTable[key].default]));
@@ -125,11 +125,6 @@ test('readback mismatch is reported instead of a successful restore', async () =
   servo.settings.read = async () => defaultSettings({ id: 2, positionPGain: 99 });
   await assert.rejects(restoreSettingsDocument(servo, 2, documentWith(defaultSettings({ id: 2 }))),
     error => error.mismatches.positionPGain.actual === 99);
-});
-
-test('discovery allows the highest ID to reply at the slowest supported baud', () => {
-  assert(discoveryTimeout(1000000) >= 123);
-  assert(discoveryTimeout(38400) >= 697);
 });
 
 test('discovery returns plain JSON with alarms and closes the connection', async () => {

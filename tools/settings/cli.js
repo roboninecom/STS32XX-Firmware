@@ -202,19 +202,12 @@ async function restoreSettingsDocument(servo, currentId, document, sleep = delay
   };
 }
 
-// Broadcast PING replies are delayed by numeric ID. Allow for ID 253 at the
-// selected baud, plus USB overhead, rather than using the old fixed 30 ms window.
-function discoveryTimeout(baudRate) {
-  return Math.ceil(254 * 9 * Math.ceil(10000000 / baudRate) / 1000) + 100;
-}
-
 async function run(options, { createServo = config => new StsServo(config) } = {}) {
   // Reject malformed backups before touching a serial port.
   const input = options.command === 'restore' ? path.resolve(options.file) : undefined;
   const document = input ? validateSettingsDocument(JSON.parse(await fs.readFile(input, 'utf8'))) : undefined;
   const servo = createServo({
     serial: { path: options.port, baudRate: options.baudRate },
-    protocol: { discoveryTimeoutMs: discoveryTimeout(options.baudRate) },
   });
   try {
     const discovery = await servo.connect();
@@ -262,7 +255,6 @@ if (require.main === module) main().catch(error => {
 module.exports = {
   FORMAT,
   FORMAT_VERSION,
-  discoveryTimeout,
   parseArguments,
   readSettingsDocument,
   restoreSettingsDocument,

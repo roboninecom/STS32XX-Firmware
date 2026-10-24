@@ -11,6 +11,7 @@ class ArmExtension {
   constructor(bus) {
     this.bus = bus;
     bus.on?.('discovery', () => this.invalidate());
+    bus.on?.('idChanged', () => this.invalidate());
     bus.protocol.on?.('reset', id => this.invalidate(id === BROADCAST_ID ? undefined : id));
     const transport = bus.protocol.scheduler?.transport;
     for (const event of ['connect', 'disconnect', 'fault'])
