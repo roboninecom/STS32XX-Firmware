@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from recording import Frames, follow_recording, load_recording, validate_calibration
+from recording import Frames, follow_recording, load_recording
 
 
 def telemetry(motor, timestamp=1000, reference=None):
@@ -47,7 +47,6 @@ class RecordingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             file = Path(folder) / 'events.ndjson'
             file.write_text(json.dumps(pre) + '\n')
-            validate_calibration(file, mapping)
             reader = follow_recording(file, mapping)
             self.assertIsNone(next(reader))
             raw = '\n'.join(json.dumps(telemetry(i)) for i in range(1, 5)) + '\n'
@@ -58,9 +57,9 @@ class RecordingTests(unittest.TestCase):
                 stream.write(raw[-6:])
             self.assertEqual(next(reader)['measured']['4'], 2004)
             reader.close()
-            self.assertEqual(len(load_recording(file)), 1)
+            self.assertEqual(len(load_recording(file, mapping)), 1)
             with self.assertRaisesRegex(ValueError, 'calibration'):
-                validate_calibration(file, {'encoderCalibration': {'1': {**settings, 'positionCorrection': 20}}})
+                load_recording(file, {'encoderCalibration': {'1': {**settings, 'positionCorrection': 20}}})
 
     def test_backwards_and_nonfinite_times_are_rejected(self):
         f = Frames('test')
@@ -72,6 +71,76 @@ class RecordingTests(unittest.TestCase):
             f.accept(telemetry(4, 999))
         with self.assertRaises(ValueError):
             f.accept(telemetry(1, float('nan')))
+
+    def test_live_and_playback_share_frames_and_terminal_state(self):
+        events = [{'type': 'preflight', 'limits': {'follower': {}}}]
+        events += [telemetry(i) for i in range(1, 5)]
+        events += [{'type': 'stopped', 'timestamp': 1100}]
+        with tempfile.TemporaryDirectory() as directory:
+            file = Path(directory) / 'events.ndjson'
+            file.write_text(''.join(json.dumps(e) + '\n' for e in events))
+            reader = follow_recording(file, {})
+            try:
+                self.assertEqual(next(reader), load_recording(file, {})[-1])
+                self.assertEqual(next(reader)['status'], 'complete')
+            finally:
+                reader.close()
+
+    def test_missing_calibration_and_invalid_json_fail_both_readers(self):
+        for content, message in [
+            (json.dumps(telemetry(1)) + '\n', 'calibration preflight'),
+            ('{broken}\n', 'property name'),
+            ('[]\n', 'event object'),
+            ('{"type":"preflight"}\n{"type":"preflight"}\n', 'more than one session'),
+        ]:
+            with self.subTest(content=content), tempfile.TemporaryDirectory() as directory:
+                file = Path(directory) / 'events.ndjson'
+                file.write_text(content)
+                with self.assertRaisesRegex(ValueError, message):
+                    load_recording(file, {})
+                reader = follow_recording(file, {})
+                try:
+                    with self.assertRaisesRegex(ValueError, message):
+                        next(reader)
+                finally:
+                    reader.close()
+
+    def test_live_replacement_or_truncation_rejected(self):
+        for replace in (False, True):
+            with self.subTest(replace=replace), tempfile.TemporaryDirectory() as directory:
+                file = Path(directory) / 'events.ndjson'
+                file.write_text(json.dumps({'type': 'preflight', 'limits': {'follower': {}}}) + '\n')
+                reader = follow_recording(file, {})
+                self.assertIsNone(next(reader))
+                if replace:
+                    other = Path(directory) / 'new.ndjson'
+                    other.write_text('')
+                    other.replace(file)
+                else:
+                    file.write_text('')
+                try:
+                    with self.assertRaisesRegex(ValueError, 'replaced or truncated'):
+                        next(reader)
+                finally:
+                    reader.close()
+
+    def test_command_updates_do_not_make_old_measurements_fresh(self):
+        from telemetry_display import feed_status
+        frames = Frames('test')
+        for i in range(1, 5):
+            frames.accept(telemetry(i))
+        frame = frames.accept({'type': 'command', 'timestamp': 5000, 'targets': [{'id': 1, 'position': 2500}]})
+        self.assertTrue(feed_status(frame, 5000).startswith('STALE MOTOR'))
+
+    def test_boolean_and_out_of_range_positions_are_rejected(self):
+        for value in [True, 32768 * 256]:
+            frames = Frames('test')
+            for i in range(1, 4):
+                frames.accept(telemetry(i))
+            event = telemetry(4)
+            event['telemetry']['measuredPositionQ8'] = value
+            with self.assertRaises(ValueError):
+                frames.accept(event)
 
 
 if __name__ == '__main__':

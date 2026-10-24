@@ -1,4 +1,4 @@
-"""The checked-in model must work without the old workspace or generated files."""
+"""The checked-in model must work without external assets or prepared files."""
 import contextlib
 import hashlib
 import io
@@ -11,9 +11,9 @@ import xml.etree.ElementTree as ET
 import mujoco
 import numpy as np
 
-from prepare_so102 import SOURCE, prepare
-from run_demo import build_demo, check
-from model import HERE, build_model, apply_pose
+from model import HERE, prepare, build_model, apply_pose
+
+SOURCE = HERE / "urdf"
 
 
 class BundledModelTests(unittest.TestCase):
@@ -27,20 +27,20 @@ class BundledModelTests(unittest.TestCase):
         for name in mesh_names:
             self.assertTrue((SOURCE / 'meshes' / name).is_file())
 
-    def test_clean_import_and_twenty_second_demo(self):
+    def test_clean_import_and_jaw_coupling(self):
         with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
             build = Path(directory)
             preview = prepare(build=build)
-            model, _ = build_model(preview)
+            model, data = build_model(preview)
             self.assertEqual(model.njnt, 7)
             # MuJoCo's XML export rounds inertial values to six significant digits.
             self.assertAlmostEqual(float(model.body_mass.sum()), 0.8885166973026, delta=2e-6)
             self.assertEqual(model.ngeom, 8)  # Visual meshes only, no collision boxes.
-            model, data = build_demo(build=build)
-            check(model, data, build)
-            report = json.loads((build / 'demo-check.json').read_text())
-            self.assertEqual(report['warnings'], 0)
-            self.assertAlmostEqual(report['seconds'], 20, places=6)
+            self.assertEqual(model.neq, 1)
+            for _ in range(1000):
+                mujoco.mj_step(model, data)
+            self.assertTrue(np.isfinite(data.qpos).all())
+            self.assertFalse(any(w.number for w in data.warning))
 
     def test_recorded_poses_keep_joint_locations_after_cad_zero_change(self):
         # World joint locations captured from the previous model and confirmed

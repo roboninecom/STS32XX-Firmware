@@ -9,7 +9,7 @@ npm package built from this repository. Replay and teleoperation share the
 | Tool | Purpose |
 | --- | --- |
 | [Automated tuning](tuning/README.md) | Compare bounded batches of settings with repeated moves and longer validation holds. |
-| [Simulation and viewer](simulation/README.md) | Display current motion logs and view the bundled SO-ARM-102 model without bus access. |
+| [Simulation and viewer](simulation/README.md) | View live telemetry and play recordings with the bundled SO-ARM-102 model; no bus access. |
 | [Teleoperation](teleoperation/README.md) | Control a follower by hand or replay a recorded session. |
 | [Pose recorder](pose-recorder/README.md) | Record named positions with torque off and replay them on a follower. |
 | [Discovery and settings](settings/README.md) | Find motors and back up or restore their persistent settings. |

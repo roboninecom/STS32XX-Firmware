@@ -9,31 +9,15 @@ import numpy as np
 from model import JOINTS, apply_pose
 
 
-def number(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
-
-
-def validate_frame(frame):
-    if not isinstance(frame, dict):
-        raise ValueError("Expected telemetry object")
-    for mode in ("measured", "reference"):
-        for motor in ("1", "2", "3", "4"):
-            value = frame[mode][motor]
-            if not number(value) or not -32768 <= value <= 32767:
-                raise ValueError("Invalid pose stream")
-    if not number(frame.get("publishedUnixMs")):
-        raise ValueError("Missing publication time")
-    if not isinstance(frame.get("telemetry", {}), dict):
-        raise ValueError("Invalid telemetry")
-    return frame
+from recording import number
 
 
 def feed_status(frame, now_ms=None, stale_ms=1500):
     now_ms = time.time() * 1000 if now_ms is None else now_ms
     if frame.get("playback"):
         return "RECORDED PLAYBACK FINISHED" if frame.get("playbackFinished") else "RECORDED PLAYBACK"
-    if frame.get("finished") or frame.get("status") in ("complete", "interrupted", "failed"):
-        return f"TEST FINISHED ({frame.get('status', 'unknown')})"
+    if frame.get("status") in ("complete", "interrupted", "failed"):
+        return f"SESSION FINISHED ({frame.get('status', 'unknown')})"
     motor_times = [frame.get("measuredUnixMs", {}).get(str(i)) for i in range(1, 5)]
     if any(number(stamp) and now_ms - stamp > stale_ms for stamp in motor_times):
         return "STALE MOTOR DATA - showing last received pose"
@@ -87,7 +71,6 @@ class Display:
         self.history_revision = 0
         self.chart_cache_key = None
         self.chart_rebuilds = 0
-        self.diagnostics = "VIEWER TIMING | collecting samples (not GPU FPS)"
         self.submitted_chart_key = None
         self.last_text_at = -math.inf
         self.last_text_key = None
@@ -216,24 +199,19 @@ class Display:
         return [mujoco.MjrRect(viewport.left + viewport.width - width,
                              viewport.bottom + i * height, width, height) for i in range(3)]
 
-    def texts(self, frame, read_error=None):
+    def texts(self, frame):
         status = feed_status(frame)
-        if read_error:
-            status = "FEED UNAVAILABLE - retained last pose"
         age = max(0, time.time() * 1000 - frame["publishedUnixMs"])
         age_text = "no robot connection" if frame.get("playback") else f"feed age {age / 1000:.1f}s"
         reference_label = frame.get("referenceLabel", "controller reference")
         heading = (f"{status} | {age_text}\n{frame.get('label', '')[:85]}\n"
                    f"Solid: {self.mode} | cyan ghost: {reference_label}\n"
                    "M5/jaws: fixed geometry; counts in table remain available\n\n" + self.shortcuts())
-        heading += "\n\n" + self.diagnostics
         rows = ["Motor     Actual     Ref     Target     Error     Effort     Temp     State"]
         now = time.time() * 1000
         for motor in range(1, 7):
             s = sample(frame, motor)
-            temp = s.get("temperatureValidated") if s.get("temperatureValid", True) else None
-            if temp is None and s.get("temperatureValid", True):
-                temp = frame.get("temperatures", {}).get(str(motor))
+            temp = s.get("temperatureValidated") if s.get("temperatureValid", False) else None
             rows.append(f"{'>' if motor == self.selected else ' '}M{motor}    "
                         f"{fmt(value(frame,'measured',motor)):>7}  {fmt(value(frame,'reference',motor)):>7}  "
                         f"{fmt(value(frame,'target',motor)):>7}  {fmt(error_counts(frame,motor)):>7}  "
@@ -311,7 +289,7 @@ class Display:
         self.chart_cache_key = cache_key
         return self.figures
 
-    def update(self, viewer, data, frame, read_error=None):
+    def update(self, viewer, data, frame):
         self.observe(frame)
         if self.render_cache_key != self.fast_view:
             with viewer.lock():
@@ -326,9 +304,9 @@ class Display:
             self.pose_cache_key = pose_key
         now = time.monotonic()
         text_key = (self.selected, self.help, self.charts, self.markers, self.ghost, self.mode, self.fast_view,
-                    feed_status(frame), bool(read_error))
+                    feed_status(frame))
         if text_key != self.last_text_key or now - self.last_text_at >= 0.25:
-            viewer.set_texts(self.texts(frame, read_error))
+            viewer.set_texts(self.texts(frame))
             self.last_text_at, self.last_text_key = now, text_key
         if self.charts:
             # Native viewport access can contend with rendering. Resize responsiveness

@@ -3,21 +3,44 @@ import copy
 import datetime
 import json
 import math
+import os
 from pathlib import Path
+
+
+def number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def validate_frame(frame):
+    if not isinstance(frame, dict):
+        raise ValueError("Expected telemetry object")
+    for mode in ("measured", "reference"):
+        for motor in ("1", "2", "3", "4"):
+            value = frame[mode][motor]
+            if not number(value) or not -32768 <= value <= 32767:
+                raise ValueError("Invalid pose stream")
+    if not number(frame.get("publishedUnixMs")):
+        raise ValueError("Missing publication time")
+    if not isinstance(frame.get("telemetry", {}), dict):
+        raise ValueError("Invalid telemetry")
+    return frame
 
 
 def timestamp(event, fallback=None):
     value = event.get('wallTime')
     if value:
+        if not isinstance(value, str):
+            raise ValueError('Invalid recording wall time')
         return datetime.datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp() * 1000
-    value = event.get('timestamp', event.get('hostMs', fallback))
-    if not isinstance(value, (int, float)) or not math.isfinite(value):
+    value = event.get('timestamp', fallback)
+    if not number(value):
         raise ValueError('Recording event lacks a timestamp')
     return value
 
 
 class Frames:
-    def __init__(self, directory):
+    def __init__(self, directory, mapping=None):
+        self.mapping = mapping
         self.directory = str(directory)
         self.samples, self.measured_at, self.targets = {}, {}, {}
         self.pending = {}
@@ -27,11 +50,19 @@ class Frames:
         self.last_time = None
 
     def accept(self, event):
+        if not isinstance(event, dict):
+            raise ValueError('Expected a recording event object')
         kind = event.get('type')
         if kind == 'preflight':
+            if self.calibration is not None:
+                raise ValueError('Recording contains more than one session preflight')
             self.calibration = {str(k): v.get('encoderCalibration') for k, v in event.get('limits', {}).get('follower', {}).items()}
+            if self.mapping is not None:
+                check_calibration(self.calibration, self.mapping)
             self.required.update(self.calibration)
             return None
+        if self.mapping is not None and self.calibration is None and kind in ('command', 'telemetry'):
+            raise ValueError('Recording lacks calibration preflight')
         if kind == 'trial-start':
             self.label = f"{event['trial']['candidate']} | {event['trial']['split']} | trial {event['trial']['id']}"
             return None
@@ -40,8 +71,9 @@ class Frames:
         elif kind == 'telemetry':
             motor = str(event['id'])
             sample = event['telemetry']
-            if not math.isfinite(sample['measuredPositionQ8']):
-                raise ValueError('Nonfinite measured position')
+            for field in ('measuredPositionQ8', 'referencePositionQ8'):
+                if field in sample and not number(sample[field]):
+                    raise ValueError(f'Invalid {field}')
             self.pending[motor] = {**sample, 'capturedUnixMs': timestamp(event)}
             if not self.required.issubset(self.pending):
                 return None
@@ -65,17 +97,17 @@ class Frames:
         # C2 (the tuning probe) retains the actual planner reference.
         reference = {i: s['referencePositionQ8'] / 256 if 'referencePositionQ8' in s else self.targets.get(i, measured[i])
                      for i, s in self.samples.items()}
-        return copy.deepcopy({'version': 2, 'publishedUnixMs': now, 'measuredUnixMs': self.measured_at,
-            'measured': measured, 'reference': reference, 'target': self.targets, 'goal': {},
+        return validate_frame(copy.deepcopy({'publishedUnixMs': now, 'measuredUnixMs': self.measured_at,
+            'measured': measured, 'reference': reference, 'target': self.targets,
             'referenceLabel': 'C2 planner reference / C1 destination',
             'referenceKind': {i: 'planner' if 'referencePositionQ8' in s else 'destination' for i, s in self.samples.items()},
-            'telemetry': self.samples, 'liveIds': [int(i) for i in self.samples],
+            'telemetry': self.samples,
             'label': self.label + ' | C1: destination; C2: planner reference',
-            'directory': self.directory, 'status': self.status, 'encoderCalibration': self.calibration})
+            'directory': self.directory, 'status': self.status}))
 
 
-def load_recording(file):
-    frames, adapter = [], Frames(Path(file).resolve())
+def load_recording(file, mapping):
+    frames, adapter = [], Frames(Path(file).resolve(), mapping)
     with Path(file).open() as stream:
         for line in stream:
             frame = adapter.accept(json.loads(line))
@@ -93,32 +125,22 @@ def check_calibration(actual, mapping):
             raise ValueError(f'Motor {motor}: recorded encoder calibration differs from display mapping')
 
 
-def validate_calibration(file, mapping):
-    with Path(file).open() as stream:
-        for line in stream:
-            event = json.loads(line)
-            if event.get('type') == 'preflight':
-                actual = {str(k): v.get('encoderCalibration') for k, v in event['limits']['follower'].items()}
-                check_calibration(actual, mapping)
-                return
-    raise ValueError('Recording lacks calibration preflight')
-
-
 def follow_recording(file, mapping):
     """Read only new complete lines. Keep a partial trailing write for next poll."""
-    adapter, pending, frame = Frames(Path(file).resolve()), '', None
+    adapter, pending, frame = Frames(Path(file).resolve(), mapping), '', None
     with Path(file).open() as stream:
+        opened = os.fstat(stream.fileno())
         while True:
+            # A restarted writer must use a new recording; do not combine sessions.
+            stat = Path(file).stat()
+            if stat.st_ino != opened.st_ino or stat.st_size < stream.tell():
+                raise ValueError('Live recording was replaced or truncated; reopen the new recording')
             pending += stream.read()
             lines = pending.split('\n')
             pending = lines.pop()
             for line in lines:
                 event = json.loads(line)
                 updated = adapter.accept(event)
-                if event.get('type') == 'preflight':
-                    check_calibration(adapter.calibration, mapping)
                 if updated:
-                    if adapter.calibration is None:
-                        raise ValueError('Recording lacks calibration preflight')
                     frame = updated
             yield frame

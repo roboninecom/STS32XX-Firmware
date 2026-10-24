@@ -1,6 +1,7 @@
 """Read-only live/recorded telemetry viewer; never connect to the arm."""
 import argparse
 import json
+import math
 from pathlib import Path
 import time
 
@@ -8,9 +9,23 @@ import mujoco
 import numpy as np
 
 from model import apply_pose, build_model, camera, HERE, write_png
-from telemetry_display import Display, validate_frame, feed_status
-from viewer_timing import Pacer, Timing
-from recording import load_recording, follow_recording, validate_calibration
+from telemetry_display import Display
+from recording import load_recording, follow_recording
+
+
+class Pacer:
+    def __init__(self, start, hz=60):
+        self.period = 1 / hz
+        self.deadline = start + self.period
+
+    def remaining(self, now):
+        # Skip elapsed slots instead of running catch-up bursts.
+        if now > self.deadline:
+            slots = math.floor((now - self.deadline) / self.period) + 1
+            self.deadline += slots * self.period
+        delay = max(0, self.deadline - now)
+        self.deadline += self.period
+        return delay
 
 
 def render(display, data, frame, path):
@@ -43,98 +58,87 @@ def render(display, data, frame, path):
         write_png(path, np.flipud(rgb))
 
 
-def main():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--recording', type=Path, required=True, help='Current replay, teleoperation or tuning events.ndjson')
-    parser.add_argument('--check', action='store_true')
-    parser.add_argument('--render', type=Path)
-    parser.add_argument('--motor', type=int, choices=range(1, 7), default=2)
-    parser.add_argument('--quality', action='store_true', help='Start with shadows and reflections; F toggles fast view')
-    parser.add_argument('--duration', type=float, help='Close this display after N seconds (hardware is unaffected)')
-    parser.add_argument('--model', type=Path, required=True, help='Prepared SO-102 MJCF')
-    parser.add_argument('--mapping', type=Path, default=HERE / 'encoder-angle-map.json')
-    parser.add_argument('--follow', action='store_true', help='Follow an actively growing recording without touching the bus')
-    args = parser.parse_args()
-    if args.follow and (args.check or args.render):
-        parser.error('--follow requires --recording and a live window')
+    commands = parser.add_subparsers(dest='command', required=True)
+    for command, help_text in [('live', 'Watch an active controller log'),
+                               ('play', 'Replay a saved controller log')]:
+        sub = commands.add_parser(command, help=help_text)
+        sub.add_argument('recording', type=Path, help='Replay, teleoperation or tuning events.ndjson')
+        sub.add_argument('--mapping', type=Path, default=HERE / 'encoder-angle-map.json')
+        if command == 'play':
+            sub.add_argument('--render', type=Path, help='Save a preview PNG instead of opening a window')
+    return parser.parse_args(argv)
+
+
+class Playback:
+    """Select recorded frames by elapsed time, preserving gaps without catch-up renders."""
+    def __init__(self, frames):
+        self.frames, self.index = frames, 0
+        self.start = frames[0]['publishedUnixMs']
+
+    def at(self, elapsed_ms, observe):
+        while self.index + 1 < len(self.frames) and self.frames[self.index + 1]['publishedUnixMs'] - self.start <= elapsed_ms:
+            observe(self.frames[self.index])
+            self.index += 1
+        return {**self.frames[self.index], 'playback': True,
+                'playbackFinished': self.index + 1 == len(self.frames)}
+
+
+def view(display, data, recording, mapping, frames=None, duration=None):
+    import mujoco.viewer
+    follower = follow_recording(recording, mapping) if frames is None else None
+    playback = Playback(frames) if frames is not None else None
+    try:
+        with mujoco.viewer.launch_passive(display.model, data, key_callback=display.key,
+                                         show_left_ui=False, show_right_ui=False) as viewer:
+            with viewer.lock():
+                display.render_settings(viewer.user_scn)
+                cam = camera()
+                viewer.cam.lookat[:] = cam.lookat
+                viewer.cam.distance, viewer.cam.azimuth, viewer.cam.elevation = cam.distance, cam.azimuth, cam.elevation
+            print('1–6 motor; G ghost; C charts; J labels; F quality; H help; M/R measured/reference.', flush=True)
+            start = time.monotonic()
+            pacer = Pacer(start)
+            while viewer.is_running():
+                elapsed = time.monotonic() - start
+                if duration is not None and elapsed >= duration:
+                    break
+                # Invalid log data terminates the view instead of displaying a frozen
+                # pose as live or retrying an exhausted generator.
+                frame = playback.at(elapsed * 1000, display.observe) if playback else next(follower)
+                if frame:
+                    display.update(viewer, data, frame)
+                else:
+                    viewer.set_texts((None, mujoco.mjtGridPos.mjGRID_TOPLEFT,
+                                      'WAITING FOR TELEMETRY | no robot connection\n\n' + display.shortcuts(), ''))
+                viewer.sync()
+                time.sleep(pacer.remaining(time.monotonic()))
+    finally:
+        if follower is not None:
+            follower.close()
+
+
+def main(argv=None):
+    args = parse_args(argv)
     mapping = json.loads(args.mapping.read_text())
-    if args.recording and not args.follow:
-        validate_calibration(args.recording, mapping)
-    model, data = build_model(args.model)
+    frames = load_recording(args.recording, mapping) if args.command == 'play' else None
+    model, data = build_model()
     model.vis.global_.offwidth, model.vis.global_.offheight = 1440, 900
     display = Display(model, mapping)
-    display.selected = args.motor
-    display.fast_view = not args.quality
-    frames = load_recording(args.recording) if args.recording and not args.follow else None
-    follower = follow_recording(args.recording, mapping) if args.follow else None
-    if args.check or args.render:
-        checked = frames
-        for frame in checked:
-            apply_pose(model, data, frame['measured'], mapping)
-            apply_pose(model, display.reference, frame['reference'], mapping)
-            assert np.isfinite(data.xpos).all() and np.isfinite(display.reference.xpos).all()
+    if args.command == 'play' and args.render:
+        motor = str(display.selected)
+        index = max(range(len(frames)), key=lambda i: abs(frames[i]['reference'].get(motor, 0) - frames[i]['measured'].get(motor, 0)))
+        for frame in frames[:index + 1]:
             display.observe(frame)
-        display.chart_data()
-        frame = {**checked[-1], "playback": True} if frames else checked[-1]
-        if args.render:
-            motor = str(display.selected)
-            frame = max(checked, key=lambda f: abs(f['reference'].get(motor, 0) - f['measured'].get(motor, 0)))
-            frame = {**frame, "playback": True} if frames else frame
-            # Populate history preceding the preview sample, not from unrelated later poses.
-            display.history.clear(); display.last_key = None
-            for prior in checked:
-                if prior['publishedUnixMs'] > frame['publishedUnixMs']:
-                    break
-                display.observe(prior)
-            render(display, data, frame, args.render)
-        print(json.dumps({'frames': len(checked), 'connected_to_robot': False,
-                          'physics_stepped': False, 'status': feed_status(frame),
-                          'detailed_motors': list(frame.get('telemetry', {})),
-                          'render': str(args.render) if args.render else None}))
-        return
-    import mujoco.viewer
-    with mujoco.viewer.launch_passive(model, data, key_callback=display.key,
-                                     show_left_ui=False, show_right_ui=False) as viewer:
-        with viewer.lock():
-            display.render_settings(viewer.user_scn)
-            cam = camera()
-            viewer.cam.lookat[:] = cam.lookat
-            viewer.cam.distance, viewer.cam.azimuth, viewer.cam.elevation = cam.distance, cam.azimuth, cam.elevation
-        print('Telemetry display: 1-6 motor; G ghost; C charts; J labels; F fast view; H help; M/R measured/reference. No serial connection.', flush=True)
-        frame, start = None, time.monotonic()
-        pacer, timing = Pacer(start), Timing()
-        index = 0
-        if frames:
-            relative = [f['publishedUnixMs'] - frames[0]['publishedUnixMs'] for f in frames]
-        while viewer.is_running():
-            loop_started = time.monotonic()
-            if args.duration is not None and time.monotonic() - start >= args.duration:
-                break
-            read_error = None
-            if frames:
-                elapsed = (time.monotonic() - start) * 1000
-                while index + 1 < len(frames) and relative[index + 1] <= elapsed:
-                    display.observe(frames[index])
-                    index += 1
-                frame = {**frames[index], 'playback': True, 'playbackFinished': index + 1 == len(frames)}
-            else:
-                try:
-                    frame = next(follower)
-                except (OSError, ValueError, KeyError, TypeError) as error:
-                    read_error = str(error)
-            if frame:
-                display.diagnostics = timing.summary(loop_started, pacer.missed)
-                display.update(viewer, data, frame, read_error)
-            else:
-                viewer.set_texts((None, mujoco.mjtGridPos.mjGRID_TOPLEFT,
-                                  'WAITING FOR TELEMETRY | no robot connection\n' + (read_error or '') + '\n\n' + display.shortcuts(), ''))
-            prepared = time.monotonic()
-            viewer.sync()
-            synced = time.monotonic()
-            timing.record(loop_started, prepared, synced)
-            time.sleep(pacer.remaining(synced))
-        print(timing.summary(time.monotonic() + 0.5, pacer.missed), flush=True)
+        render(display, data, {**frames[index], 'playback': True}, args.render)
+        print(f'Saved {args.render} ({len(frames)} recorded frames)')
+    else:
+        view(display, data, args.recording, mapping, frames)
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise SystemExit(f'Viewer: {error}') from error

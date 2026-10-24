@@ -12,8 +12,9 @@ import mujoco
 import numpy as np
 
 from model import build_model, camera
-from telemetry_display import Display, feed_status, validate_frame
-from viewer_timing import Pacer, Timing
+from telemetry_display import Display, feed_status
+from recording import validate_frame
+from viewer import Pacer
 
 HERE = Path(__file__).resolve().parent
 
@@ -31,7 +32,7 @@ class TelemetryTests(unittest.TestCase):
         f = frame()
         self.assertEqual(feed_status(f, 10500), 'LIVE')
         self.assertTrue(feed_status(f, 13000).startswith('STALE'))
-        f['finished'], f['status'] = True, 'interrupted'
+        f['status'] = 'interrupted'
         self.assertIn('interrupted', feed_status(f, 10500))
         self.assertEqual(feed_status({**f, 'playback': True}), 'RECORDED PLAYBACK')
         self.assertTrue(feed_status({**frame(), 'measuredUnixMs': {'2': 7000}}, 10500).startswith('STALE MOTOR'))
@@ -54,11 +55,11 @@ class TelemetryTests(unittest.TestCase):
         f3 = copy.deepcopy(f2); f3['directory'] = 'run-b'
         d.observe(f3)
         self.assertEqual(len(d.history), 1)
-        d.observe({**f3, 'finished': True, 'publishedUnixMs': 99999})
+        d.observe({**f3, 'status': 'complete', 'publishedUnixMs': 99999})
         self.assertEqual(len(d.history), 1)
 
     def test_finished_feed_initializes_snapshot_charts(self):
-        d = self.make_display(); f = frame(); f.update(finished=True, status='stopped')
+        d = self.make_display(); f = frame(); f.update(status='complete')
         d.observe(f)
         self.assertEqual(len(d.history), 1)
         figures = d.chart_data()
@@ -93,7 +94,6 @@ class TelemetryTests(unittest.TestCase):
         p = Pacer(0)
         self.assertAlmostEqual(p.remaining(0.006), 1 / 60 - 0.006)
         wait = p.remaining(0.0501)
-        self.assertGreater(p.missed, 0)
         self.assertGreater(wait, 0)
         self.assertLessEqual(wait, p.period)
         self.assertGreater(p.deadline, 0.0501 + wait)
@@ -130,16 +130,6 @@ class TelemetryTests(unittest.TestCase):
         self.assertEqual(v.clears, 1)
         d.key(67); d.update(v, data, f)
         self.assertEqual(v.submissions, 4)
-
-    def test_diagnostics_rate_limited_and_separate_sync_from_prep(self):
-        t = Timing(); t.record(1, 1.002, 1.005); t.record(1.02, 1.022, 1.025)
-        text = t.summary(1.03, 3)
-        self.assertIn('50.0 Hz', text)
-        self.assertIn('2.00/2.00', text)
-        self.assertIn('3.00/3.00', text)
-        self.assertIn('missed deadlines 3', text)
-        self.assertEqual(t.summary(1.1, 8), text)
-        self.assertIn('missed deadlines 8', t.summary(2, 8))
 
     def test_current_c1_destinations_are_not_labelled_tracking_error(self):
         d = self.make_display(); f = frame()
