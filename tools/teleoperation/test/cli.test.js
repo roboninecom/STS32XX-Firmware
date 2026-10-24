@@ -6,7 +6,9 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { parse, validatePorts, run } = require('../cli');
-const { Teleoperation } = require('../Teleoperation');
+const { TeleoperationInput } = require('../Teleoperation');
+const { ArmController } = require('../../../host/arm-control/ArmController');
+function Teleoperation(options) { return new ArmController({ ...options, source: new TeleoperationInput(options) }); }
 const { ArmCodec } = require('../../../host/servo-driver');
 
 function fixture() {
@@ -19,7 +21,7 @@ function fixture() {
   };
   const config = { leaderPort: 'COM3', followerPort: 'COM4', protocol: 'extension' };
   const options = {
-    output: () => {}, createTeleoperation: () => teleop,
+    output: () => {}, createController: () => teleop,
     createServo: () => {
       const servo = new EventEmitter();
       servo.open = async () => { events.push('open'); };

@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const { Replay } = require('../Replay');
-const { Teleoperation } = require('../Teleoperation');
+const { ArmController } = require('../../../host/arm-control/ArmController');
 const { run, parse } = require('../cli');
 const { argumentsForReplay } = require('../../pose-recorder/replay');
 
@@ -74,7 +74,7 @@ function rig(raw = poses(), config = configuration()) {
         measuredPositionQ8: motor.position * 256, running: false };
     },
   };
-  const controller = new Teleoperation({ follower, config, replay, clock: () => now, sleep: async ms => { now += ms; } });
+  const controller = new ArmController({ follower, config, source: replay, clock: () => now, sleep: async ms => { now += ms; } });
   return { replay, controller, follower, calls, config, motors, advance: ms => { now += ms; } };
 }
 const targets = r => r.calls.filter(call => call.type === 'target');
@@ -82,7 +82,7 @@ const torqueOff = r => r.calls.filter(call => call.type === 'write' && call.addr
 
 test('pose replay caps targets to saved limits and sends each pose once with configured speed', async () => {
   const r = rig(poses([10, 5000])); await r.controller.preflight();
-  assert.equal(r.controller.replaySummary.cappedTargets, 2);
+  assert.equal(r.controller.sourceSummary.cappedTargets, 2);
   assert.equal(r.calls.length, 0);
   await r.controller.run();
   assert.deepEqual(targets(r).map(t => [t.position, t.speed, t.sequence]), [[100, 300, 1], [4000, 300, 2]]);
@@ -187,7 +187,7 @@ test('recording validation rejects malformed paths and incompatible mappings bef
 test('replay CLI accepts only a follower and preview opens no leader or motor control', async () => {
   const r = rig(), logs = []; let clients = 0;
   await run(r.config, { replay: r.replay, createServo: () => { clients++; return r.follower; },
-    createTeleoperation: () => r.controller, output: () => {},
+    createController: () => r.controller, output: () => {},
     createLog: async () => ({ filename: 'test', write: async event => logs.push(event), close: async () => {} }) });
   assert.equal(clients, 1); assert.equal(targets(r).length, 0);
   assert.deepEqual(r.calls.map(c => c.type), ['open', 'close']);
@@ -241,5 +241,5 @@ test('published pose replay example passes read-only preflight without a joints 
   const config = require('../../pose-recorder/replay.example.json');
   const r = rig(poses(), config); await r.controller.preflight();
   assert.equal(r.calls.length, 0); assert.equal(r.controller.profiles[1].velocityLimit, 500);
-  assert.equal(r.controller.replaySummary.speed, 500);
+  assert.equal(r.controller.sourceSummary.speed, 500);
 });

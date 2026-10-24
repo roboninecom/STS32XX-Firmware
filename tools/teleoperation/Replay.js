@@ -71,6 +71,10 @@ class Replay {
     }
   }
 
+  preflight() { return this.leaderLimits; }
+
+  sample(controller) { return this.frame(controller); }
+
   frame(controller, index = 0) {
     const source = this.frames[index];
     const targets = this.joints.map(joint => {

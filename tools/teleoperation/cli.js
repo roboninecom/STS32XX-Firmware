@@ -5,7 +5,8 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { StsServo, BAUD_RATES } = require('../../host/servo-driver');
-const { Teleoperation } = require('./Teleoperation');
+const { TeleoperationInput } = require('./Teleoperation');
+const { ArmController } = require('../../host/arm-control/ArmController');
 const { Replay } = require('./Replay');
 
 const USAGE = 'npm run teleoperate -- CONFIG.json [--replay RECORDING] [--run]\nWithout --run: read-only preflight and preview.';
@@ -48,11 +49,11 @@ async function openLog() {
 
 async function run(config, { move = false, replay, signal, output = console.log,
   createServo = options => new StsServo(options), createLog = openLog,
-  createTeleoperation = options => new Teleoperation(options) } = {}) {
+  createController = options => new ArmController({ ...options, source: options.replay ?? new TeleoperationInput(options) }) } = {}) {
   await validatePorts(config, !!replay);
   const leader = replay ? null : createServo({ serial: { path: config.leaderPort, baudRate: config.baudRate ?? 1000000 } });
   const follower = createServo({ serial: { path: config.followerPort, baudRate: config.baudRate ?? 1000000 } });
-  const teleop = createTeleoperation({ leader, follower, config, replay });
+  const teleop = createController({ leader, follower, config, replay });
   let log, error, runEntered = false, runCompleted = false;
   const cleanupErrors = [], listeners = [];
   const stop = () => { teleop.stopping = true; };
@@ -73,7 +74,7 @@ async function run(config, { move = false, replay, signal, output = console.log,
       await leader?.open(); checkFault();
       await follower.open(); checkFault();
       const preflight = { type: 'preflight', config, session: teleop.session, limits: await teleop.preflight() };
-      if (replay) preflight.replay = teleop.replaySummary;
+      if (replay) preflight.replay = teleop.sourceSummary;
       checkFault(); await log.write(preflight); output(JSON.stringify(preflight));
       const preview = { type: 'preview', frame: await teleop.sample() };
       checkFault(); await log.write(preview); output(JSON.stringify(preview));

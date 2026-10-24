@@ -1,7 +1,9 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { Teleoperation, mapPosition } = require('../Teleoperation');
+const { TeleoperationInput, mapPosition } = require('../Teleoperation');
+const { ArmController } = require('../../../host/arm-control/ArmController');
+function Teleoperation(options) { return new ArmController({ ...options, source: new TeleoperationInput(options) }); }
 const { Instruction } = require('../../../host/servo-driver');
 const profile = {gravitySlewEffortPerS:1000,velocityFeedforward:{positiveGainQ8:0,negativeGainQ8:0,effortLimit:0},kpQ8:256,kdQ8:32,kiQ8:0,integralLimit:0,effortLimit:100,velocityFilterQ8:64};
 function rig(protocol='legacy') {
