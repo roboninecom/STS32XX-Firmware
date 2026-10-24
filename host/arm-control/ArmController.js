@@ -7,17 +7,8 @@ const integer = (v, lo, hi, name) => {
   if (!Number.isInteger(v) || v < lo || v > hi) throw new Error(`Invalid ${name}`);
   return v;
 };
-// Legacy position registers use sign-magnitude words, unlike extension Q8 values.
-function signed(bytes) {
-  const value = bytes.readUInt16LE();
-  return value & 0x8000 ? -(value & 0x7fff) : value;
-}
-
-function word(value) {
-  const bytes = Buffer.alloc(2);
-  bytes.writeUInt16LE(value < 0 ? (-value | 0x8000) : value);
-  return bytes;
-}
+const signed = bytes => RegisterCodec.decode('presentPosition', bytes);
+const word = value => RegisterCodec.encode('targetPosition', value);
 
 class ArmController {
   constructor({ follower, config, source, gravity, clock = () => performance.now(), sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
@@ -31,7 +22,9 @@ class ArmController {
     if (gravity && config.protocol !== 'extension') throw new Error('Gravity requires extension mode');
     for (const key of ['gravity', 'startupGravity', 'tunedSettingsFile', 'profileSets'])
       if (key in config) throw new Error(`${key} is obsolete; use gravityModel and profiles`);
-    this.monitorIntervalMs = gravity ? 50 : 250;
+    this.monitorIntervalMs = integer(source.feedbackIntervalMs ?? (gravity ? 50 : 250),
+      20, gravity ? 50 : 250, 'feedback interval');
+    this.expectedSequences = new Map();
     this.gravityMaxAgeMs = 100;
     this.gravitySent = new Map();
     this.ready = new Set();
@@ -103,7 +96,7 @@ class ArmController {
       const id = j.followerId, limits = this.limits.follower[id];
       const caps = await this.follower.arm.capabilities(id, this.options);
       if (caps?.major !== 9) throw new Error(`Follower ${id}: rewrite arm v9 required`);
-      limits.feedback = await this.follower.arm.feedback(id, this.options);
+      limits.feedback = await this.feedback(id);
       this.checkHealth(id, limits.feedback);
       if (this.config.protocol === 'extension') {
         const supplied = this.config.profiles?.[id];
@@ -122,6 +115,56 @@ class ArmController {
     }
     this.sourceSummary = this.source.describe(this);
     return this.limits;
+  }
+
+  feedback(id) {
+    // Tuning replaces the probe's normal feedback read with the detailed packet;
+    // supporting motors retain compact feedback. There is still only one reader.
+    return id === this.source.feedbackId
+      ? this.follower.arm.tuning(id, this.options)
+      : this.follower.arm.feedback(id, this.options);
+  }
+
+  async changeProfile(id, profile) {
+    if (this.config.protocol !== 'extension' || !this.ready.has(id)) throw new Error('Profile change requires a ready extension motor');
+    if (this.sequence >= 32767) throw new Error('Start a new session before another profile change');
+    ArmCodec.encodeConfig(profile); // Validate before releasing any output.
+    if (this.gravity) {
+      const profiles = { ...this.profiles, [id]: profile };
+      this.gravity.evaluate(Object.fromEntries([...this.lastFeedback].map(([key, s]) =>
+        [key, this.measuredPosition(key, s)])), this.joints.map(j => j.followerId), profiles);
+    }
+    await this.finishGravity();
+    await this.monitor(this.onTelemetry);
+    if ([...this.lastFeedback.values()].some(s => s.running || Math.abs(s.measuredVelocityQ8PerS) > 10 * 256))
+      throw new Error('Profile change requires stationary motors');
+    const check = async () => {
+      if (this.stopping) throw this.failure ?? new Error('Profile change cancelled');
+      await this.service(this.onTelemetry);
+    };
+    await check();
+    // v9 configuration is writable only with torque off. Keep every supporting
+    // joint powered and continue its measured-gravity service throughout.
+    await this.write(id, 40, Buffer.from([0]));
+    this.ready.delete(id); this.enabled.delete(id); this.gravitySent.delete(id);
+    if ((await this.follower.protocol.read(id, 40, 1, this.options))[0] !== 0)
+      throw new Error(`Follower ${id}: profile torque-off verification failed`);
+    await check();
+    await this.follower.arm.select(id, false, 0, this.options);
+    await check();
+    await this.follower.arm.configure(id, profile, this.options);
+    this.profiles[id] = profile;
+    await check();
+    await this.follower.arm.select(id, true, this.session, this.options);
+    this.expectedSequences.set(id, 0); // This motor's counters reset on torque enable.
+    this.lastFeedback.delete(id);
+    await check();
+    this.enabled.add(id); // An uncertain enable must still be included in cleanup.
+    await this.write(id, 40, Buffer.from([1]));
+    await this.waitUntilOutputReady(id);
+    this.ready.add(id);
+    await this.monitor(this.onTelemetry);
+    if (this.gravity) await this.monitor(this.onTelemetry, false);
   }
 
   async positions(servo, ids) {
@@ -232,7 +275,7 @@ class ArmController {
       if (this.stopping) throw this.failure ?? new Error('Startup cancelled');
       if (this.gravity && this.ready.size && this.clock() - this.lastMonitorAt >= this.monitorIntervalMs)
         await this.monitor(this.onTelemetry);
-      const s = await this.follower.arm.feedback(id, this.options);
+      const s = await this.feedback(id);
       this.checkHealth(id, s);
       if (!s.armed || s.session !== this.session) {
         const q = s.measuredPositionQ8 / 256, limits = this.limits.follower[id];
@@ -277,6 +320,7 @@ class ArmController {
       }, this.options);
       if (!sent) return;
       this.sequence = sequence;
+      for (const target of frame.targets) this.expectedSequences.set(target.id, sequence);
       this.captureNotBefore = this.clock() + 3;
     }
   }
@@ -328,7 +372,7 @@ class ArmController {
     const ids = this.gravity ? this.joints.map(j => j.followerId) : [...this.enabled];
     for (const id of ids) {
       const measuredAt = this.clock(); // Conservative: includes request/response time.
-      const telemetry = await this.follower.arm.feedback(id, this.options);
+      const telemetry = await this.feedback(id);
       this.checkHealth(id, telemetry);
       const previous = this.lastFeedback.get(id);
       if (previous && (telemetry.sampleSequence === previous.sampleSequence || telemetry.sampleMs === previous.sampleMs))
@@ -336,7 +380,7 @@ class ArmController {
       const active = this.gravity ? this.ready.has(id) : this.enabled.has(id);
       if (active && this.config.protocol === 'extension' &&
           (!telemetry.selected || !telemetry.armed || telemetry.session !== this.session || !telemetry.fresh ||
-           !telemetry.driveEnabled || !telemetry.outputReady || telemetry.acceptedSequence !== this.sequence))
+           !telemetry.driveEnabled || !telemetry.outputReady || telemetry.acceptedSequence !== (this.expectedSequences.get(id) ?? this.sequence)))
         throw new Error(`Follower ${id}: extension tracking/session fault`);
       const sent = this.gravitySent.get(id);
       if (sent && (!telemetry.gravityReceived || telemetry.gravitySequence !== sent.sequence))

@@ -102,7 +102,14 @@ conservative host estimate of when the requested gravity slew can finish.
 `GravityModel` instance. Load models with `await GravityModel.load(filename)`;
 the CLI resolves the configuration-relative path. Input sources provide
 `joints`, `preflight`, `describe`, `sample` and `play`; live input additionally
-checks that its leader is unpowered. Sources submit positions through the
+checks that its leader is unpowered. Automated tuning can request detailed feedback for its probe motor through the
+same reader. `changeProfile` verifies stationary control, releases only that
+motor, configures and re-enables it, then confirms gravity again. Supporting
+motors stay powered. The changed motor briefly loses torque and captures its
+measured position on restart; use a supported or mechanically safe pose for
+profile changes. Profile errors use the normal all-motor failure cleanup.
+
+Sources submit positions through the
 controller and use its serviced waits, so long pauses continue feedback updates.
 
 Run `npm run test:arm` for model tests and `npm run test:teleoperation` for live,
