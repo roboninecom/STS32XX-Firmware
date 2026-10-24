@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test host/servo-driver/test/*.test.js host/teleoperation/*.test.js tools/diagnostics/test/*.test.js tools/hw-diff-tests/test/*.test.js tools/settings/test/*.test.js",
+    "test": "node --test host/servo-driver/test/*.test.js host/teleoperation/*.test.js tools/diagnostics/test/*.test.js tools/hw-diff-tests/test/*.test.js tools/settings/test/*.test.js tools/pose-recorder/test/*.test.js",
     "test:diff": "node --test tools/hw-diff-tests/test/*.test.js",
     "diff": "node tools/hw-diff-tests/src/cli.js",
     "test:diagnostics": "node --test tools/diagnostics/test/*.test.js",
@@ -17,7 +17,9 @@
     "settings": "node tools/settings/cli.js",
     "test:settings": "node --test tools/settings/test/*.test.js",
     "test:driver": "npm test --workspace sts32xx-servo-driver",
-    "test:driver-package": "npm run test:package --workspace sts32xx-servo-driver"
+    "test:driver-package": "npm run test:package --workspace sts32xx-servo-driver",
+    "record-poses": "node tools/pose-recorder/cli.js",
+    "test:poses": "node --test tools/pose-recorder/test/*.test.js"
   },
   "dependencies": {
     "serialport": "^13.0.0"
