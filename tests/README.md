@@ -44,6 +44,10 @@ benchmarks and stationary telemetry checks; their offline tests run with
 `npm run test:diagnostics` and are included in `make host-verify`.
 The public tools work with ordinary firmware; no timing build is needed.
 
+The [settings tool](../tools/settings/README.md) tests discovery, backup validation,
+restore ordering and failure cleanup with `npm run test:settings`. They are also
+included in `make host-verify`.
+
 ## Hardware differential tests
 
 The [servo comparison suite](../tools/hw-diff-tests/README.md) compares factory
