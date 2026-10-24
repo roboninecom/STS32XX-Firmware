@@ -1,0 +1,39 @@
+{
+  "name": "sts32xx-servo-driver",
+  "version": "0.1.0",
+  "description": "Node.js driver for STS servos and the STS32XX firmware v9 motion extension",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "StsServo.js",
+    "bus/",
+    "protocol/",
+    "registers/",
+    "session/",
+    "transport/",
+    "examples/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "serialport": "^13.0.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:package": "node scripts/check-package.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/roboninecom/STS32XX-Firmware.git",
+    "directory": "host/servo-driver"
+  }
+}

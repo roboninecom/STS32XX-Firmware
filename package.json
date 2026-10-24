@@ -15,9 +15,14 @@
     "bus-benchmark": "node tools/diagnostics/bus-benchmark.js",
     "telemetry": "node tools/diagnostics/telemetry.js",
     "settings": "node tools/settings/cli.js",
-    "test:settings": "node --test tools/settings/test/*.test.js"
+    "test:settings": "node --test tools/settings/test/*.test.js",
+    "test:driver": "npm test --workspace sts32xx-servo-driver",
+    "test:driver-package": "npm run test:package --workspace sts32xx-servo-driver"
   },
   "dependencies": {
     "serialport": "^13.0.0"
-  }
+  },
+  "workspaces": [
+    "host/servo-driver"
+  ]
 }

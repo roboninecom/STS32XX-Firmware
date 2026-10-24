@@ -1,4 +1,13 @@
-# Servo driver
+# STS32XX servo driver
+
+Installable Node.js package `sts32xx-servo-driver` (Node.js 20+). From the repository
+root, run `npm pack --workspace sts32xx-servo-driver --pack-destination /tmp`.
+In another project, install the resulting `.tgz` with `npm install /path/to/archive.tgz`.
+No npm registry publication is required.
+
+Licensed under [MIT](LICENSE). This license applies to this driver directory,
+including its examples and tests, not to firmware or vendor code elsewhere.
+Dependencies retain their own licenses.
 
 CommonJS host interface for STS serial framing, scheduled requests, discovery,
 register access, settings, and the opt-in arm v9 extension. Install the root
