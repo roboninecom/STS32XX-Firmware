@@ -122,10 +122,7 @@ class ArmController {
       this.gravity.evaluate(Object.fromEntries([...this.lastFeedback].map(([key, s]) =>
         [key, this.measuredPosition(key, s)])), this.joints.map(j => j.followerId), profiles);
     }
-    await this.finishGravity();
-    await this.monitor(this.onTelemetry);
-    if ([...this.lastFeedback.values()].some(s => s.running || Math.abs(s.measuredVelocityQ8PerS) > 10 * 256))
-      throw new Error('Profile change requires stationary motors');
+    await this.waitForRest(() => this.stopping);
     const check = async () => {
       if (this.stopping) throw this.failure ?? new Error('Profile change cancelled');
       await this.service(this.onTelemetry);
@@ -362,24 +359,38 @@ class ArmController {
 
   async finishGravity() {
     if (!this.gravity || !this.ready.size) return;
+    await this.waitForRest();
+  }
+
+  async waitForRest(shouldStop = () => false) {
     const deadline = this.clock() + 30000;
-    let quietSince, previous;
+    let quietSince, ranges;
     // Input may have stopped, but compensation must follow the remaining motion.
     // Confirm 200 ms of rest, not a particular tracking error (friction may remain).
     while (true) {
+      if (shouldStop()) throw this.failure ?? new Error('Settling cancelled');
       await this.monitor(this.onTelemetry);
       const samples = [...this.ready].map(id => this.lastFeedback.get(id));
       const slewComplete = [...this.gravitySent.values()].every(sent => this.clock() >= sent.settledAt + 3);
-      const quiet = slewComplete && samples.every((s, i) => !s.running && Number.isInteger(s.measuredVelocityQ8PerS) &&
-        Math.abs(s.measuredVelocityQ8PerS) <= 10 * 256 && previous &&
-        Math.abs(s.measuredPositionQ8 - previous[i]) <= 256);
-      quietSince = quiet ? quietSince ?? this.clock() : undefined;
+      // A one-count encoder transition can create a large filtered velocity.
+      // Bound total position travel over the whole interval instead of using
+      // that instantaneous derivative or just comparing adjacent samples.
+      const stopped = slewComplete && samples.every(s => !s.running);
+      ranges = samples.map((s, i) => ({
+        min: Math.min(ranges?.[i].min ?? s.measuredPositionQ8, s.measuredPositionQ8),
+        max: Math.max(ranges?.[i].max ?? s.measuredPositionQ8, s.measuredPositionQ8),
+      }));
+      if (!stopped || ranges.some(r => r.max - r.min > 256)) {
+        quietSince = undefined;
+        ranges = undefined;
+      } else quietSince ??= this.clock();
       if (quietSince !== undefined && this.clock() - quietSince >= 200) break;
-      if (this.clock() >= deadline) throw new Error('Gravity completion timeout');
-      previous = samples.map(s => s.measuredPositionQ8);
-      await this.sleep(this.monitorIntervalMs);
+      if (this.clock() >= deadline) throw new Error('Motion completion timeout: waiting for stationary motors');
+      await this.sleep(Math.max(0, this.lastMonitorAt + this.monitorIntervalMs - this.clock()));
     }
-    await this.monitor(this.onTelemetry, false); // Final retained effort acknowledged.
+    // Confirm the final effort without a second, instantaneous settling decision:
+    // encoder quantization can produce a brief velocity spike at a fixed pose.
+    if (this.gravity) await this.monitor(this.onTelemetry, false);
   }
 
   // Failures turn torque off; ordinary extension exit retains target and gravity.

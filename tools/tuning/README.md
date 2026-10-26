@@ -79,7 +79,10 @@ the run. There is no separate polling process for tuning or visualization.
 **Changing a profile briefly removes torque from the motor being tuned.** v9
 requires this. Supporting motors stay controlled and gravity updates continue.
 Use a supported or mechanically safe pose; a loaded joint can move during this
-interval. Profile changes require stationary feedback. Firmware retains its last target if commands stop.
+interval. Before changing a profile, the controller waits for the planners to
+stop and measured positions to stay within one encoder count for 200 ms. Gravity
+updates continue during this wait; failure to settle within 30 seconds stops the
+batch. Firmware retains its last target if commands stop.
 
 Normal completion restores the configured baseline and retains powered hold
 with final gravity compensation. Ctrl+C interrupts the tuning batch and attempts
