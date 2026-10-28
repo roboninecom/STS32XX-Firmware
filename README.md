@@ -1,5 +1,8 @@
 # STS32XX Firmware
 
+Start with the **[Quick start](QUICKSTART.md)** guide for flashing, testing, replay and
+gravity compensation. See [tools](tools/README.md) for individual command guides.
+
 Firmware for GD32F130-based STS3215 servos, with two ways to control the motor:
 
 - **Legacy mode** uses the standard STS commands for position, speed, and motor
@@ -631,9 +634,9 @@ Git. Verification builds and
 tests offline; it does not flash a servo or open a serial port. See
 [tests/README.md](tests/README.md) for the available regression coverage.
 
-An [encoded-firmware upload and recovery tool](tools/flash/README.md) is included.
-It accepts publisher-supplied encoded releases and contains no firmware encoder
-or encryption key. Follow its setup and verification guide before using hardware.
+A [firmware upload and recovery tool](tools/flash/README.md) is included.
+It accepts publisher-supplied firmware releases. Follow its setup and
+verification guide before using hardware.
 
 ## Repository layout
 
@@ -650,7 +653,7 @@ or encryption key. Follow its setup and verification guide before using hardware
 | [`tools/settings/`](tools/settings/README.md) | Motor discovery and settings backup/restore |
 | [`tools/hw-diff-tests/`](tools/hw-diff-tests/README.md) | Hardware comparison tests for factory and custom firmware |
 | [`tools/diagnostics/`](tools/diagnostics/README.md) | Bus latency benchmarks and stationary telemetry checks |
-| [`tools/flash/`](tools/flash/README.md) | Encoded firmware flashing and settings recovery |
+| [`tools/flash/`](tools/flash/README.md) | Firmware flashing and settings recovery |
 
 For implementation details, see the
 [extension commands](app/arm_extension.c),

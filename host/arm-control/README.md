@@ -62,8 +62,8 @@ path and SHA-256 hash are included in the session log.
    firmware retains the last target and gravity effort.
 
 Ctrl+C stops new targets and follows the same completion sequence. It is not an
-emergency stop. Rest means the planner has stopped, measured speed is at most
-10 counts/s and position changes by no more than one count per observation.
+emergency stop. Rest means the planners have stopped and each measured position
+stays within a one-count range over the full 200 ms interval.
 It does not prove zero tracking error; pose/session replay also applies its
 configured arrival tolerance.
 
