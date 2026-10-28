@@ -28,19 +28,27 @@ npm run settings -- discover --port "$SERVO_PORT"
 npm run settings -- backup --port "$SERVO_PORT" --id 1
 ```
 
-Obtain a compatible firmware image and its matching `release.json` from
-the publisher. Keep both files together in `tools/flash/releases/`.
+Download the **custom firmware ZIP** from the
+[v0.1-preview release](https://github.com/roboninecom/STS32XX-Firmware/releases/tag/v0.1-preview)
+under **Assets**. Extract its firmware image and `release.json` together into
+`tools/flash/releases/custom/`. Do not use GitHub's **Source code** archives for
+flashing.
 
 ```sh
 tools/flash/.venv/bin/python tools/flash/flash.py inspect \
-  --manifest tools/flash/releases/release.json
+  --manifest tools/flash/releases/custom/release.json
 tools/flash/.venv/bin/python tools/flash/flash.py flash \
-  --manifest tools/flash/releases/release.json --port "$SERVO_PORT" --id 1
+  --manifest tools/flash/releases/custom/release.json --port "$SERVO_PORT" --id 1
 ```
 
 Type `FLASH` when prompted and keep power connected until verification finishes.
 Repeat separately for each motor. See [flashing and recovery](tools/flash/README.md)
 if verification fails.
+
+The **factory firmware ZIP** is for returning to factory firmware, not for the
+motion tools below. Extract it into a separate folder and follow
+[factory settings restoration](tools/flash/README.md#restore-factory-settings)
+after flashing. Keep each firmware image with its own `release.json`.
 
 ## 3. Check communication
 
