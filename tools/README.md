@@ -15,8 +15,7 @@ npm package built from this repository. Replay and teleoperation share the
 | [Discovery and settings](settings/README.md) | Find motors and back up or restore their persistent settings. |
 | [Hardware comparison tests](hw-diff-tests/README.md) | Compare factory and custom firmware behaviour on a dedicated servo bench. |
 | [Bus benchmark and telemetry](diagnostics/README.md) | Measure communication latency and check stationary readings for unusual values. |
-| [Firmware flashing](flash/README.md) | Upload published encoded firmware images and recover interrupted uploads. |
-| [Settings recovery](flash/FACTORY_RECOVERY.md) | Back up, verify and restore servo settings when returning to factory firmware. |
+| [Firmware flashing and recovery](flash/README.md) | Flash custom or bundled factory firmware, recover interrupted uploads and repair factory settings. |
 
 Node.js tools require Node.js 20 or newer. Flashing and
 settings recovery require Python 3.10 or newer. Simulation uses Python 3.12. Run commands from the repository

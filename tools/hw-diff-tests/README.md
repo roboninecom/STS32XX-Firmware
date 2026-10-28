@@ -106,7 +106,7 @@ These focused tests also have lasting effects:
 
 Other persistence cases attempt to restore the settings they changed. Always
 inspect cleanup errors before another run. See the [settings backup and recovery
-guide](../flash/FACTORY_RECOVERY.md) for backup commands and factory recovery.
+guide](../flash/README.md#restore-factory-settings) for backup commands and factory recovery.
 
 **Ctrl+C does not guarantee cleanup or a saved report.** The runner has no graceful
 interruption handler. If motion must stop immediately, disconnect motor power;

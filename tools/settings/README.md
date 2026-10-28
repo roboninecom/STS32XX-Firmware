@@ -50,7 +50,7 @@ restore may leave some settings changed; inspect the error before retrying.
 
 These backups cover legacy settings, not extension configuration or the factory
 reset template. For repair after flashing factory firmware over custom firmware,
-use the [factory settings recovery tool](../flash/FACTORY_RECOVERY.md). Its backup
+use the [factory settings recovery tool](../flash/README.md#restore-factory-settings). Its backup
 files use a different format and are not interchangeable with this tool's JSON.
 
 ## Help and tests

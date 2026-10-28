@@ -1,0 +1,10 @@
+{
+  "format": "sts-gd32-encoded-v1",
+  "release": "factory-3.10",
+  "image": "factory_SCServo21-GD32-TTL.enc",
+  "size": 16816,
+  "sha256": "1e267ff0117eff318d30d8ba6c29651a567fa55da3849d5af616dae0a7256a35",
+  "target": "gd32f130-sts-ttl",
+  "model_bytes": [[9, 3]],
+  "factory": {"major": 3, "minor": 10}
+}

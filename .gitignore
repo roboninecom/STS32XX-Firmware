@@ -9,7 +9,7 @@ __pycache__/
 # Keep developer notes and generated material out of the repository.
 *.md
 !README.md
-!/tools/flash/FACTORY_RECOVERY.md
+!/QUICKSTART.md
 **/archive/
 **/archives/
 **/backup/

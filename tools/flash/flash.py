@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect, upload and recover publisher-supplied encoded STS firmware."""
+"""Inspect, flash or recover factory and custom STS firmware releases."""
 
 import argparse
 import hashlib
@@ -43,8 +43,9 @@ def load_release(file):
     """Validate the complete bundle before opening a port; never transform it."""
     path = Path(file).resolve()
     manifest = json.loads(path.read_text(), object_pairs_hook=unique_object)
+    application = "factory" if isinstance(manifest, dict) and "factory" in manifest else "extension"
     exact_keys(manifest, ("format", "release", "image", "size", "sha256",
-                          "target", "model_bytes", "extension"), "Manifest")
+                          "target", "model_bytes", application), "Manifest")
     if manifest["format"] != FORMAT or manifest["target"] != "gd32f130-sts-ttl":
         raise ValueError("Unsupported encoded format or hardware target")
     if not isinstance(manifest["release"], str) or not manifest["release"].strip():
@@ -67,10 +68,15 @@ def load_release(file):
             raise ValueError("Each model-byte pair needs registers 3 and 4")
         for value in pair:
             integer(value, 0, 255, "model byte")
-    exact_keys(manifest["extension"], ("major", "minor"), "Extension")
-    if type(manifest["extension"]["major"]) is not int or manifest["extension"]["major"] != 9:
-        raise ValueError("This uploader verifies extension v9 images only")
-    integer(manifest["extension"]["minor"], 0, 255, "extension minor")
+    version = manifest[application]
+    exact_keys(version, ("major", "minor"), application)
+    integer(version["major"], 0, 255, "application major")
+    integer(version["minor"], 0, 255, "application minor")
+    if application == "factory":
+        if version != {"major": 3, "minor": 10}:
+            raise ValueError("Factory verification supports firmware 3.10 only")
+    elif version["major"] != 9:
+        raise ValueError("Custom firmware verification supports extension v9 only")
     image_path = path.parent / name
     # Bound reads even if the supplied file is larger than its declared size.
     with image_path.open("rb") as source:
@@ -99,8 +105,31 @@ def check_device(table, manifest, servo_id, baud):
         raise RuntimeError("Requires torque off (40=0), persistence locked (55=1), no alarm (65=0)")
 
 
+def verify_factory(ser, servo_id, table):
+    """Check legacy identity and reject custom firmware with identical version bytes."""
+    if len(table) != 87 or table[:4] != bytes([3, 10, 0, 9]) or table[8] not in (0, 1):
+        raise RuntimeError("Expected factory firmware 3.10 with a valid response level")
+    ser.reset_input_buffer()
+    bootloader.send(ser, servo_id, 0x90, bytes([0x90, 8]))
+    reply = bootloader.receive(ser, 0.3)
+    if reply and reply[0] == servo_id and reply[2].startswith(b"\x00ARMC"):
+        raise RuntimeError("Custom firmware detected; install factory firmware before repair")
+    # Factory responds to unknown instructions with an empty status packet, or
+    # stays silent at response level zero. Custom extension reads still reply.
+    if reply != (servo_id, 0, b"") and (reply is not None or table[8] == 1):
+        raise RuntimeError("Cannot establish factory protocol; no valid unsupported-command reply")
+    # Prove the application still responds after the unsupported instruction.
+    fresh = bootloader.registers(ser, servo_id)
+    if (len(fresh) != 87 or fresh[:4] != table[:4] or persistent(fresh) != persistent(table)
+            or fresh[40] != 0 or fresh[55] != 1 or fresh[65] != 0):
+        raise RuntimeError("Factory application settings or safety state changed during verification")
+
+
 def verify_application(ser, manifest, servo_id, baud, table, before=None):
     check_device(table, manifest, servo_id, baud)
+    if "factory" in manifest:
+        verify_factory(ser, servo_id, table)
+        return None
     if before is not None and persistent(table) != persistent(before):
         raise RuntimeError("Persistent settings changed; inspect the saved before/after snapshots")
     # Extension replies add a result byte before the eight capability bytes.
@@ -110,6 +139,21 @@ def verify_application(ser, manifest, servo_id, baud, table, before=None):
             or caps[8] != 1):
         raise RuntimeError("Application extension capabilities do not match the release")
     return caps
+
+
+def read_application(ser, manifest, servo_id, baud):
+    """Factory startup may use defaults when the saved settings header is invalid."""
+    connections = [(servo_id, baud)]
+    if "factory" in manifest and (servo_id, baud) != (1, 1_000_000):
+        connections.append((1, 1_000_000))
+    for index, (current_id, current_baud) in enumerate(connections):
+        ser.baudrate = current_baud
+        try:
+            return bootloader.registers(ser, current_id), current_id, current_baud
+        except RuntimeError:
+            if index == len(connections) - 1:
+                raise
+            print("No valid reply at the previous connection; checking factory ID 1 at 1000000 baud.")
 
 
 def save_report(directory, report):
@@ -170,12 +214,24 @@ def execute(args, manifest, image):
             # Retain the actual post-upload table even if a subsequent check fails.
             ser.baudrate = args.baud
             time.sleep(1.0)
-            after = bootloader.registers(ser, args.id)
+            after, current_id, current_baud = read_application(ser, manifest, args.id, args.baud)
+            report["connection"] = {"id": current_id, "baud": current_baud}
             report["after_registers_hex"] = after.hex()
             save_report(directory, report)
-            caps = verify_application(ser, manifest, args.id, args.baud, after, before)
-            report["capabilities_hex"] = caps.hex()
-            report["settings_verification"] = "unavailable in recovery" if recovery else "unchanged"
+            caps = verify_application(ser, manifest, current_id, current_baud, after, before)
+            report["application_verified"] = True
+            if caps is not None:
+                report["capabilities_hex"] = caps.hex()
+            changed = before is not None and persistent(after) != persistent(before)
+            report["settings_verification"] = ("unavailable in recovery" if recovery else
+                                               "changed" if changed else "unchanged")
+            if "factory" in manifest:
+                print(f"Factory firmware 3.10 responds at ID {current_id}, baud {current_baud}.")
+                print("Restore this servo's settings with settings.py, then power-cycle and verify before use.")
+                if changed:
+                    report["status"] = "settings-recovery-required"
+                    print("Settings changed. The saved before snapshot can be used with settings.py restore.")
+                    return 2
             report["status"] = "verified"
             print("Upload and application checks passed. This is not firmware hash readback.")
             return 0

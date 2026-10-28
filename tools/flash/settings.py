@@ -11,7 +11,7 @@ import time
 import serial
 
 import bootloader
-from flash import BAUD_RATES, persistent, save_report, unique_object
+from flash import BAUD_RATES, persistent, save_report, unique_object, verify_factory
 
 FORMAT = 'sts-settings-v1'
 ADDRESSES = tuple(range(4, 40)) + tuple(range(78, 87))
@@ -55,20 +55,8 @@ def compare(table, expected):
 
 
 def require_factory(ser, servo_id, table):
-    if table[:4] != bytes([3, 10, 0, 9]):
-        raise RuntimeError('Restore supports factory firmware 3.10 only')
-    # Custom firmware retains the legacy version bytes. An explicit unsupported
-    # instruction reply distinguishes factory firmware from a missing response.
-    ser.reset_input_buffer()
-    bootloader.send(ser, servo_id, 0x90, bytes([0x90, 8]))
-    reply = bootloader.receive(ser, 0.3)
-    if reply and reply[0] == servo_id and reply[2].startswith(b'\x00ARMC'):
-        raise RuntimeError('Custom firmware detected; install factory firmware before repair')
-    if table[8] == 1 and (not reply or reply[0] != servo_id or reply[2]):
-        raise RuntimeError('Cannot establish factory protocol; no valid unsupported-command reply')
-    # Response level zero suppresses unknown-command replies. Reads must still
-    # work, and a responding custom extension above is always rejected.
-    ready(bootloader.registers(ser, servo_id), servo_id, ser.baudrate)
+    verify_factory(ser, servo_id, table)
+    ready(table, servo_id, ser.baudrate)
 
 
 class Device:
