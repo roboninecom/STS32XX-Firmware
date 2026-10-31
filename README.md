@@ -20,6 +20,7 @@ compatible.
 - [Legacy mode](#legacy-mode)
 - [How extension mode works](#how-extension-mode-works)
 - [S-curve motion](#s-curve-motion)
+- [Calibration reference poses](#calibration-reference-poses)
 - [PID controller](#pid-controller)
 - [Velocity feedforward](#velocity-feedforward)
 - [Gravity compensation](#gravity-compensation)
@@ -163,6 +164,21 @@ of −32767 to 32767 counts.
 An accepted write to either limit ends an active extension session and turns
 motor power off, including writes that are only applied in RAM. Arm a new session
 to use the changed values. Normal legacy settings persistence still applies.
+
+## Calibration reference poses
+
+For a new SO-101 or SO-102 calibration, use the illustrated joint positions.
+Center the base and wrist roll between their stops and leave the gripper halfway
+open. The calibration tool saves this manually placed pose as 2048 for each
+motor. Keep an existing verified calibration when reusing its recordings and
+gravity model.
+
+| SO-101 | SO-102 |
+| --- | --- |
+| ![SO-101 reference pose with six labeled joints](tools/settings/images/so101-reference-pose.png) | ![SO-102 reference pose with six labeled joints](tools/settings/images/so102-reference-pose.png) |
+
+Open an image for a larger view. Follow the [calibration guide](tools/settings/README.md#reference-pose-images)
+for the two-step procedure and model-mapping requirements.
 
 ## PID controller
 

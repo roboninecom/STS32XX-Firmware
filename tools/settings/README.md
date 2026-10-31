@@ -81,6 +81,27 @@ pose each time. If the mechanism has a documented reference pose, follow it.
 For SO-101, the [LeRobot calibration guide and video](https://huggingface.co/docs/lerobot/so101#calibrate)
 show the mid-travel placement followed by an end-to-end sweep.
 
+### Reference pose images
+
+For a **new calibration**, use the guides below. Labels assume the usual motor
+IDs 1–6. Place the base upright, the upper arm upright, and the forearm and
+gripper pointing forward as shown. Center the base rotation and wrist roll
+between their mechanical stops; set the gripper halfway between closed and open.
+Use the physical travel to find these positions, not the uncalibrated counts.
+
+#### SO-101
+
+![SO-101 calibration reference: side and top views with all six joints labeled, upper arm upright, forearm forward, centered wrist roll and half-open gripper](images/so101-reference-pose.png)
+
+#### SO-102
+
+![SO-102 calibration reference: side and top views with all six joints labeled, upper arm upright, forearm forward, centered wrist roll and half-open parallel gripper](images/so102-reference-pose.png)
+
+The images illustrate manual placement for new offsets. They do not establish
+compatibility with an existing tuned gravity model. The default viewer maps also
+use different wrist/gripper reference values: update the mapping if you calibrate
+to these poses. [Image sources and model angles](images/README.md).
+
 The full travel must fit within 0–4095 after the reference becomes 2048: at most
 2048 counts below the reference and 2047 above it. A joint with nearly a full
 turn of travel needs particularly careful centering. A repeatable pose near an

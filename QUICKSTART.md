@@ -64,7 +64,9 @@ npm run settings -- calibrate --port "$SERVO_PORT" --ids 1,2,3 \
 ```
 
 Replace the example IDs with yours; omit `--ids` to use all discovered motors
-(up to six). The command has two steps:
+(up to six). For SO-101 and SO-102, see the
+[labeled reference pose images](tools/settings/README.md#reference-pose-images).
+The command has two steps:
 
 1. Place every selected joint, including wrist roll and gripper, in the mechanism's
    reference pose. For a new setup without one, choose a repeatable pose near the
