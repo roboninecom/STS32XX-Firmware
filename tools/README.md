@@ -6,6 +6,10 @@ commands and hardware requirements. For application development, use the
 npm package built from this repository. Replay and teleoperation share the
 [arm controller and gravity model](../host/arm-control/README.md).
 
+For a new mechanism: [calibrate offsets and limits](settings/README.md#choose-the-reference-pose),
+record poses, then tune and validate compensation. Keep verified calibration when
+reusing existing poses and gravity models.
+
 | Tool | Purpose |
 | --- | --- |
 | [Automated tuning](tuning/README.md) | Compare bounded batches of settings with repeated moves and longer validation holds. |

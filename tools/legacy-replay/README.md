@@ -20,6 +20,9 @@ npm run replay-legacy -- POSES.json --port /dev/ttyUSB0 --run
 Motor IDs come from the pose file. Other motors on the adapter are left alone.
 Custom firmware switches to legacy control automatically. Setup briefly disables
 and re-enables each selected motor, seeding its current position first.
+Use the same encoder calibration as when the poses were recorded. Pose files
+do not contain calibration settings, so replay cannot detect an offset change.
+Re-record after [calibration](../settings/README.md#calibrate-joint-offsets-and-limits).
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -42,9 +45,11 @@ failures. Firmware motor protection remains active.
 Logs are saved in `logs/motion/`. Start the simulator once to follow new replays:
 
 ```sh
-tools/simulation/.venv/bin/python tools/simulation/viewer.py live logs/motion --model MODEL
+mkdir -p logs/motion
+tools/simulation/.venv/bin/python tools/simulation/viewer.py live logs/motion --model so102
 ```
 
-Choose a model and encoder mapping matching your mechanism; see the
+Use `--model so101` for the other bundled model. Choose an encoder mapping
+matching your mechanism; see the
 [simulation guide](../simulation/README.md). For tuned PID and compensation, use
 [extension replay](../pose-recorder/README.md#replay-poses).

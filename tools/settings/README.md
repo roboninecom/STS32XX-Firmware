@@ -68,6 +68,33 @@ Replace the example IDs with your motors. Omit `--ids` to calibrate all discover
 motors, up to six. An explicit selection leaves other connected motors unchanged.
 No joint names, arm geometry or standard reference pose are assumed.
 
+### Choose the reference pose
+
+The **calibration reference pose** is the physical pose you capture in step 1.
+The tool makes each selected motor report **2048 at that pose**. It does not
+recognize the pose, infer joint angles, or calculate it from the later sweep.
+
+For a new calibration, place each joint near the middle of its mechanical travel
+and choose a position you can reproduce. Include wrist roll and the gripper;
+do not assume the gripper should be fully open or closed. Use the same physical
+pose each time. If the mechanism has a documented reference pose, follow it.
+For SO-101, the [LeRobot calibration guide and video](https://huggingface.co/docs/lerobot/so101#calibrate)
+show the mid-travel placement followed by an end-to-end sweep.
+
+The full travel must fit within 0–4095 after the reference becomes 2048: at most
+2048 counts below the reference and 2047 above it. A joint with nearly a full
+turn of travel needs particularly careful centering. A repeatable pose near an
+end stop may not leave enough room, even when total travel is less than a turn.
+
+If you intend to use a simulator or gravity model, its angle convention must
+match this physical pose. **2048 is not automatically zero degrees in the
+model.** See the [viewer mapping](../simulation/README.md#models-and-calibration)
+and [gravity model requirements](../../host/arm-control/models/README.md).
+Keep an already verified calibration when reusing its recordings and model;
+a firmware flash that preserves settings does not require recalibration.
+
+### Capture offsets, then limits
+
 One command guides both steps:
 
 1. **Reference pose:** place the selected joints in a repeatable pose chosen for
@@ -79,9 +106,9 @@ One command guides both steps:
    maximum, midpoint and travel counts, then press **Enter**. The tool writes
    limits with **10 counts of clearance** inside each measured endpoint.
 
-Choose a reference that keeps each joint's full travel within 0–4095 after its
-reference is set to 2048. Record the physical reference angles separately if
-needed for simulation or gravity compensation; calibration does not infer them.
+The table's **Middle** is `(Min + Max) / 2`, rounded to a whole count. It is
+informational: saving limits does not move 2048 to that midpoint or change the
+offsets. Asymmetric limits are valid.
 
 If motors are powered at startup, the tool asks you to support the mechanism before
 releasing torque. Otherwise there are only the two prompts above. No motion is
@@ -112,9 +139,10 @@ torque pause its settings writes until cleared; lost connections are retried.
 The session remains open and retains completed work. During automatic retries,
 press Ctrl+C to cancel.
 
-The output file is overwritten on each run. Motor backups are kept separately
-under its `backups/` directory and can be used with `settings restore`. The
-report records reference readings, offsets, measured ranges and completed writes.
+The output file is overwritten on each run. Motor backups are kept in a unique
+directory under `backups/` beside that file and can be used with `settings restore`.
+The report records reference readings, offsets, measured ranges and completed
+writes; it does not store a photograph or physical joint angles.
 Only `status: "verified"` means both steps completed.
 
 Type `cancel` or press Ctrl+C to stop. **Offsets already saved in step 1 remain
@@ -136,8 +164,10 @@ as warnings; pressing Enter accepts the measured range. Omitted joints have no
 expected-range check.
 
 Finish calibration before recording poses or fitting gravity compensation.
-Changed offsets invalidate previous count-based poses and gravity models.
-Use a gravity model matched to the mechanism, mounting, payload and saved offsets.
+After changing offsets, record poses again and update or refit the gravity model
+and simulator mapping. Neither is updated by this command. Copying another arm's
+offsets, or changing only a model's calibration-check fields, does not establish
+the correct relationship between counts and angles.
 
 ## Help and tests
 

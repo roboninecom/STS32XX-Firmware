@@ -11,14 +11,18 @@ From the repository root, install Node.js 20+ dependencies with `npm install`.
 Copy `controller.example.json` and `example.json`, then edit the port, motor IDs,
 profiles, safe joint travel pairs and limits for your mechanism. Example gains and poses
 are illustrative. Include every supporting motor in the controller configuration.
+Complete [calibration](../settings/README.md#choose-the-reference-pose) before
+choosing test positions. Positions use corrected encoder counts; a new offset
+changes their physical meaning. Update test pairs, recordings and the gravity
+model after recalibration.
 For gravity, add `gravityModel` exactly as described in the
 [shared controller guide](../../host/arm-control/README.md).
 
 The plan's `config` path is relative to the plan. The controller's `gravityModel`
 path is relative to that controller file. The same controller configuration can
 be used for pose replay. Omit `durationMs` for tuning: the plan owns the batch
-budget. Secure the mechanism for startup and profile changes, which briefly
-release one motor at a time.
+budget. Secure the mechanism for startup and profile changes. Changing a profile
+briefly releases that motor; fresh setup can release all configured followers.
 
 ```sh
 npm run tune -- inspect tools/tuning/example.json
@@ -63,11 +67,13 @@ path. A pair collapsed to one position cannot be used as a tuning exercise.
    well as long holds. Include small reversals: long sweeps alone can miss an
    integral limit that prevents a stationary joint from overcoming friction.
    Keep integral zero unless the result supports enabling it.
-6. **Combined motion:** replay a recorded path that exercises every joint and
+6. **Acceleration and ramp time:** with gains fixed, use `stage: "motion"` to
+   compare acceleration and smoothing at the required speeds.
+7. **Combined motion:** replay a recorded path that exercises every joint and
    includes both folded and extended configurations. A gain that works with
    supporting joints stationary can oscillate when the whole mechanism moves.
    Recheck the changed joints on this same path before accepting their settings.
-7. **Validation:** freeze the selected configuration, repeat the path at every
+8. **Validation:** freeze the selected configuration, repeat the path at every
    required speed and acceleration, then hold representative poses for longer.
    Record accuracy, overshoot, settling, temperature and output saturation for
    each motor. Recheck after changing payload or calibration.

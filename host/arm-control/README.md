@@ -40,8 +40,11 @@ Every controlled follower needs a model, and all joints used by its terms must
 be controlled and measured. Angle-dependent models also declare `encoderCalibration`
 for each input: signed `positionCorrection`, `resolution: 1`, and `reverse`
 (the encoder reversal flag). Preflight compares these with the motor registers
-and rejects a mismatch before setup or torque enable. Restore the matching
-calibration or update and validate the model after recalibrating an arm. For the six-motor arm, include IDs 1–6 and all six
+and rejects a mismatch before setup or torque enable. Restore a matching backup
+from that same arm, or update and validate the model after recalibration. A
+reference capture at 2048 does not itself establish the model's physical angles;
+see the [calibration guide](../../tools/settings/README.md#choose-the-reference-pose).
+For either supplied six-motor model, include IDs 1–6 and all six
 profiles. Do not reuse the model after changing encoder offsets, mounting,
 geometry or payload without checking the calibration.
 
@@ -74,8 +77,9 @@ path and SHA-256 hash are included in the session log.
    completion timeout, then confirms the final gravity update. Torque stays on;
    firmware retains the last target and gravity effort.
 
-Ctrl+C stops new targets and follows the same completion sequence. It is not an
-emergency stop. Rest means the planners have stopped and each measured position
+For replay and teleoperation, Ctrl+C stops new targets and follows the same
+completion sequence. Tuning instead interrupts the batch and attempts torque-off.
+Ctrl+C is not an emergency stop. Rest means the planners have stopped and each measured position
 stays within a one-count range over the full 200 ms interval.
 It does not prove zero tracking error; pose/session replay also applies its
 configured arrival tolerance.
@@ -103,6 +107,11 @@ Health checks run with gravity updates, or approximately every 250 ms without
 gravity. Model errors, rejected updates, missing/stale feedback, lost ownership,
 alarms and temperatures at or above 60 °C attempt verified torque-off on every
 prepared follower. Cleanup failures are reported.
+
+One exception is a missed gravity-update deadline during an established hold:
+the controller retains torque only if two fresh feedback passes confirm healthy,
+stationary motors in the same session. The run still fails and reports
+`holdRetained: true`; it does not resume automatically.
 
 Telemetry log records include measured feedback and the latest requested
 gravity effort/sequence. Firmware feedback confirms that request on a subsequent

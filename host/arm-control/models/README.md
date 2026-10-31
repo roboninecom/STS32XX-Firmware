@@ -16,6 +16,14 @@ were fitted against. `encoderCalibration` lists signed position corrections,
 unit resolution and encoder reversal for each motor. Preflight requires them to
 match the connected arm. Limits and gains are separate settings.
 
+Calibration makes the captured physical pose read 2048; it does not identify
+the joint angles used by these models. Those angles are already embedded in
+the term weights and offsets. Reproducing the same pose on another arm can
+produce different motor offsets. Fit or adapt the model to that arm and verify
+its output; do not copy offsets from the supplied model into the motors.
+Changing only `encoderCalibration` does not update the gravity calculation.
+See [choosing a reference pose](../../../tools/settings/README.md#choose-the-reference-pose).
+
 Each motor has a `maxEffort`, an explanatory `note` and a list of `terms`.
 A term contributes `coefficient * sin(angle)` or `coefficient * cos(angle)`,
 where `angle = offsetRad + sum(measuredEncoderCounts[id] * weights[id])`.

@@ -25,8 +25,9 @@ npm run teleoperate -- CONFIG.json --run
 
 Each bus must contain exactly its configured IDs. Both mechanisms need saved,
 nonempty position limits and ordinary position mode with unit resolution.
-Follower settings must be locked with no deferred write pending. Torque must
-already be off on both buses; this tool never writes to the leader.
+Follower settings must be locked with no deferred write pending. Leader torque
+must already be off; this tool never writes to the leader. Follower startup
+handles powered and unpowered motors automatically.
 
 The examples run for 10 seconds. Remove `durationMs` to run until Ctrl+C.
 **A normal stop leaves the follower powered.** It finishes its last target
@@ -50,6 +51,12 @@ Each `joints` entry contains `leaderId`, `followerId` and `mapping`:
 Targets are capped to the follower's saved limits. `angle` operates in encoder
 counts, so it assumes compatible encoder scales and gearing.
 
+The mapping center is the midpoint of the saved limits, which may differ from
+the calibration reference at 2048. Matching calibration poses alone therefore
+does not guarantee matching targets when leader and follower limits are
+asymmetric. Preview the mapping before moving. `leaderMiddle` and
+`followerMiddle` override centers only for `range` mapping.
+
 The follower uses the firmware's PID controller and S-curves. It needs
 `acceleration` in counts/s² (1–30000), `rampTimeMs` in milliseconds (1–255), and
 one `profiles` entry per follower ID:
@@ -65,13 +72,14 @@ one `profiles` entry per follower ID:
 
 See the [firmware register guide](../../README.md) for gain units and field
 ranges. Profiles are configuration entries for individual motors, not switchable
-firmware profiles. Acceleration and ramp time are shared by all followers.
+firmware profiles. Top-level acceleration and ramp time are defaults; a motor's
+`accelerationLimit` and `rampTimeMs` profile fields override them.
 Startup handles torque and applies the supplied settings automatically, reusing
 an existing extension session when possible. Persistent settings are unchanged.
 
 For gravity compensation, add `gravityModel` to the configuration. See the
-[shared controller guide](../../host/arm-control/README.md) for the existing arm
-model, configuration-relative paths and startup checks. Gravity uses measured
+[shared controller guide](../../host/arm-control/README.md) for the supplied arm
+models, configuration-relative paths and startup checks. Gravity uses measured
 follower positions and continues during live input and replay pauses. With it
 enabled, normal exit waits for the final motion and gravity slew to settle before
 retaining a powered hold. After exit, the retained gravity effort no longer

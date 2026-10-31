@@ -35,3 +35,9 @@ offsets to satisfy this check.** Calibrate your arm, fit or adapt its model, and
 validate the result at modest speed before full-speed use. Changes to mounting,
 link geometry or payload also require validation. See the [gravity model
 format](../models/README.md) and [tuning procedure](../../../tools/tuning/README.md).
+
+These files do not define a universal physical calibration pose. Follow the
+[reference-pose guide](../../../tools/settings/README.md#choose-the-reference-pose)
+before creating a new calibration. Setting all motors to 2048 reproduces the
+pose captured on that arm, subject to its saved limits and tracking error; it
+does not automatically reproduce either bundled model's zero pose.

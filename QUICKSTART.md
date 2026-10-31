@@ -66,15 +66,19 @@ npm run settings -- calibrate --port "$SERVO_PORT" --ids 1,2,3 \
 Replace the example IDs with yours; omit `--ids` to use all discovered motors
 (up to six). The command has two steps:
 
-1. Place the selected joints in a repeatable reference pose for your mechanism.
-   Hold still and press **Enter** to save offsets so they read 2048.
+1. Place every selected joint, including wrist roll and gripper, in the mechanism's
+   reference pose. For a new setup without one, choose a repeatable pose near the
+   middle of each joint's travel. Hold still and press **Enter** to save offsets
+   so they read 2048 at that pose.
 2. Move each selected joint end to end, pausing briefly at the ends.
    Review the live table and press **Enter** to save limits.
 
 Support the mechanism throughout; do not force stops. Torque remains off. The file is
 updated automatically and motor backups are retained. If the second step fails,
 the first step's offsets remain saved: finish calibration before enabling motion.
-See the [calibration guide](tools/settings/README.md#calibrate-joint-offsets-and-limits).
+The measured midpoint does not replace the captured reference. 2048 is only an
+encoder reference; it does not establish a physical angle for simulation or gravity.
+See [choosing the reference pose](tools/settings/README.md#choose-the-reference-pose).
 Do this before recording poses or fitting gravity compensation. Existing arms
 with verified calibration do not need recalibration after a settings-preserving flash.
 
@@ -169,7 +173,8 @@ npm run tune -- run PLAN.json
 ```
 
 Only `run` moves hardware. Follow the [tuning order](tools/tuning/README.md#tuning-order):
-baseline → gravity → velocity feedforward → P/D → integral if needed → validation.
+baseline → gravity → velocity feedforward → P/D and filtering → integral if needed
+→ acceleration/ramp time → combined motion → validation.
 
 For visualization, install the [simulation viewer](tools/simulation/README.md),
 then use the event-log path printed by replay or tuning:

@@ -19,6 +19,7 @@ Launch once to watch the newest session and automatically switch when another
 replay or teleoperation run creates a log:
 
 ```sh
+mkdir -p logs/motion
 tools/simulation/.venv/bin/python tools/simulation/viewer.py live logs/motion --model so101
 ```
 
@@ -70,6 +71,35 @@ it is not inferred from the saved travel limits.
 
 SO-102 keeps its existing encoder-calibration checks and fixed jaw coupling.
 Changing the model does not change the hardware controller or its gravity model.
+
+### Match the calibration reference
+
+The [calibration tool](../settings/README.md#choose-the-reference-pose) sets 2048
+at the pose you capture. The viewer separately converts those counts to angles:
+
+```text
+angle = referenceRadians + (counts − referenceCount) × radiansPerCount
+```
+
+| Bundled map | Displayed joint angles when counts are 2048 |
+| --- | --- |
+| SO-101 | 0° for all six URDF joints; this is an assumption, not a detected physical pose. |
+| SO-102 | M1 0°, M2 −3°, M3 1°, M4 1°; M5 and jaws use fixed display positions. |
+
+A mid-travel calibration pose, including the one shown in LeRobot's guide,
+does not by itself establish that every URDF angle is zero. At your captured
+reference, set each map entry's `referenceRadians` to that joint's angle in the
+URDF. Check a small hand movement to confirm the sign of `radiansPerCount`,
+including wrist roll and the gripper. Check a second pose as well; matching one
+pose cannot confirm direction or scale. The tool does not derive these angles
+from the minimum and maximum counts.
+
+SO-101's default map has no exact offset binding. SO-102's map is bound to the
+original arm's saved offsets. After recalibration, update the physical angle
+mapping as well as its calibration fields; changing only those fields bypasses
+the check without correcting the display. Calibration reports are not imported
+automatically. The cyan overlay shows the firmware's planned pose, or the
+destination with compact feedback; it is separate from the calibration pose.
 
 To adjust or bind a map to a particular arm, copy `so101-encoder-map.json` or
 `encoder-angle-map.json`, edit it, and pass `--mapping YOUR_MAP.json` with either

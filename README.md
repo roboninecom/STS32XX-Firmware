@@ -143,6 +143,13 @@ contain the minimum and **11–12** the maximum. Each is an unsigned 16-bit valu
 in corrected encoder counts, including the servo's configured direction and
 position correction. There are no separate extension position-limit settings.
 
+Calibration assigns encoder counts to physical positions. The [calibration
+tool](tools/settings/README.md#choose-the-reference-pose) makes the captured
+reference pose read 2048, then measures travel limits. That count is not
+automatically a zero-degree joint angle, and the measured travel midpoint does
+not replace the captured reference. Gravity models and visualizations need a
+matching count-to-angle mapping.
+
 The firmware reads these registers when starting control. With limits enabled,
 the minimum must be below the maximum, the maximum must be at most 32767, and the measured
 position must be inside the range. Otherwise startup fails without moving the
@@ -650,7 +657,10 @@ verification guide before using hardware.
 | [`host/servo-driver/`](host/servo-driver/README.md) | Installable Node.js driver for legacy commands and the v9 extension |
 | [`tools/teleoperation/`](tools/teleoperation/README.md) | Control a follower from a hand-operated leader |
 | [`tools/pose-recorder/`](tools/pose-recorder/README.md) | Record and replay named motor positions |
-| [`tools/settings/`](tools/settings/README.md) | Motor discovery and settings backup/restore |
+| [`tools/legacy-replay/`](tools/legacy-replay/README.md) | Replay poses with saved legacy settings |
+| [`tools/settings/`](tools/settings/README.md) | Motor discovery, joint calibration and settings backup/restore |
+| [`tools/tuning/`](tools/tuning/README.md) | Compare controller settings in batches |
+| [`tools/simulation/`](tools/simulation/README.md) | View live motion and play recorded telemetry |
 | [`tools/hw-diff-tests/`](tools/hw-diff-tests/README.md) | Hardware comparison tests for factory and custom firmware |
 | [`tools/diagnostics/`](tools/diagnostics/README.md) | Bus latency benchmarks and stationary telemetry checks |
 | [`tools/flash/`](tools/flash/README.md) | Firmware flashing and settings recovery |

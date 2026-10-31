@@ -17,6 +17,10 @@ npm run record-poses -- --port /dev/ttyUSB0 --ids 1,2,3
 Replace the port and IDs for your setup. Optional flags are `--baud` (default
 1000000), `--output DIR`, and `--timeout-ms` (default 1000).
 
+Finish [offset and limit calibration](../settings/README.md#calibrate-joint-offsets-and-limits)
+first. Recorded poses are movement waypoints; capturing a pose named `home` or
+`reference` does not change motor calibration.
+
 1. Support the mechanism so it cannot fall when torque is released.
 2. Press Enter at the confirmation prompt. The recorder disables torque on the
    selected motors and verifies it is off. Other motors are not changed.
@@ -56,9 +60,12 @@ The `sts-poses` version 1 format identifies positions by motor ID, not array ord
 ```
 
 Files also include session time, serial port and baud rate. Pose timestamps mark
-when reading starts; `durationMs` measures the full acquisition. Counts are raw
-signed encoder values, without conversion to angles. The file deliberately has
-no speed, acceleration or playback timing settings.
+when reading starts; `durationMs` measures the full acquisition. Counts are signed
+reported positions, already including the motor's offset and direction setting,
+without conversion to angles. The file has no speed, acceleration or playback
+timing settings, and no calibration snapshot. Re-record poses after changing
+encoder calibration; replay cannot detect that an old pose file uses different
+offsets.
 
 ## Replay poses
 
@@ -112,7 +119,8 @@ the run with an error. Manually recorded timestamps do not set playback speed.
 | `toleranceCounts` | 10 | Allowed measured position error, 0–32767 counts. |
 
 The controller uses S-curves and explicit gains. Top-level
-`acceleration` and `rampTimeMs` control acceleration smoothing;
+`acceleration` and `rampTimeMs` provide defaults for acceleration smoothing.
+A motor's `accelerationLimit` and `rampTimeMs` profile fields override them;
 `profiles[ID].velocityLimit` also caps speed. Replay automatically scales joint
 speeds by their travel distances, accounting for each motor's speed limit, and
 sends one group command per pose. The first move starts from the current hold
@@ -121,8 +129,8 @@ Arrival timing is approximate: acceleration, ramp time and integer speed limits
 still differ between joints. This does not blend motion through waypoints.
 To enable gravity compensation, add
 `gravityModel` to the configuration as described in the
-[shared controller guide](../../host/arm-control/README.md). The existing arm
-model is included. Compensation uses measured follower positions and continues
+[shared controller guide](../../host/arm-control/README.md). Models for both
+bundled arm types are included. Compensation uses measured follower positions and continues
 through movement, holds and normal completion. After exit, firmware retains the
 final effort, but it no longer adapts to position or load changes.
 
