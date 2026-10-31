@@ -2,7 +2,7 @@
 import unittest
 import mujoco
 import numpy as np
-from model import build_model, JOINTS
+from model import build_model, load_mapping
 
 
 def holding_basis(q):
@@ -16,7 +16,9 @@ class GravityGeometryTests(unittest.TestCase):
         model, data = build_model()
         model.opt.gravity[:] = [0, 0, -9.81]
         model.body_gravcomp[:] = 0
-        ids = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name) for name in JOINTS]
+        mapping = load_mapping("so102")
+        names = [e["joint"] for e in mapping["joints"].values()] + list(mapping["fixedJoints"])
+        ids = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name) for name in names]
         qadr, dadr = model.jnt_qposadr[ids], model.jnt_dofadr[ids]
         rng = np.random.default_rng(20261004)
         poses = rng.uniform(np.deg2rad([5, -170, -90]), np.deg2rad([185, 5, 20]), (160, 3))

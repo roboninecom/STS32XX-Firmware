@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "model": "so101",
+  "note": "Assumes standard assembly and encoder count 2048 at each URDF joint zero. Verify reference pose, directions and gripper angle on your arm.",
+  "joints": {
+    "1": {
+      "joint": "shoulder_pan",
+      "referenceCount": 2048,
+      "referenceRadians": 0,
+      "radiansPerCount": 0.0015339807878856412
+    },
+    "2": {
+      "joint": "shoulder_lift",
+      "referenceCount": 2048,
+      "referenceRadians": 0,
+      "radiansPerCount": 0.0015339807878856412
+    },
+    "3": {
+      "joint": "elbow_flex",
+      "referenceCount": 2048,
+      "referenceRadians": 0,
+      "radiansPerCount": 0.0015339807878856412
+    },
+    "4": {
+      "joint": "wrist_flex",
+      "referenceCount": 2048,
+      "referenceRadians": 0,
+      "radiansPerCount": 0.0015339807878856412
+    },
+    "5": {
+      "joint": "wrist_roll",
+      "referenceCount": 2048,
+      "referenceRadians": 0,
+      "radiansPerCount": 0.0015339807878856412
+    },
+    "6": {
+      "joint": "gripper",
+      "referenceCount": 2048,
+      "referenceRadians": 0,
+      "radiansPerCount": 0.0015339807878856412
+    }
+  },
+  "fixedJoints": {},
+  "encoderCalibration": {}
+}

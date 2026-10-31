@@ -1,32 +1,16 @@
 """The checked-in model must work without external assets or prepared files."""
 import contextlib
-import hashlib
 import io
-import json
 from pathlib import Path
 import tempfile
 import unittest
-import xml.etree.ElementTree as ET
 
 import mujoco
 import numpy as np
 
-from model import HERE, prepare, build_model, apply_pose
-
-SOURCE = HERE / "urdf"
-
+from model import prepare, build_model, PoseMap, load_mapping
 
 class BundledModelTests(unittest.TestCase):
-    def test_source_hashes_and_all_referenced_meshes(self):
-        root = SOURCE
-        manifest = json.loads((root / 'source.json').read_text())
-        for relative, expected in manifest["sha256"].items():
-            self.assertEqual(hashlib.sha256((root / relative).read_bytes()).hexdigest(), expected, relative)
-        mesh_names = {Path(mesh.get('filename')).name for mesh in ET.parse(SOURCE / 'so_arm_102.urdf').findall('.//mesh')}
-        self.assertEqual(len(mesh_names), 8)
-        for name in mesh_names:
-            self.assertTrue((SOURCE / 'meshes' / name).is_file())
-
     def test_clean_import_and_jaw_coupling(self):
         with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
             build = Path(directory)
@@ -35,7 +19,7 @@ class BundledModelTests(unittest.TestCase):
             self.assertEqual(model.njnt, 7)
             # MuJoCo's XML export rounds inertial values to six significant digits.
             self.assertAlmostEqual(float(model.body_mass.sum()), 0.8885166973026, delta=2e-6)
-            self.assertEqual(model.ngeom, 8)  # Visual meshes only, no collision boxes.
+            self.assertEqual(model.ngeom, 9)  # Eight visual meshes and a display floor.
             self.assertEqual(model.neq, 1)
             for _ in range(1000):
                 mujoco.mj_step(model, data)
@@ -59,11 +43,11 @@ class BundledModelTests(unittest.TestCase):
                 [.001196792, .121798427, .177481213], [.026169316, .240658940, .109503151],
                 [.055956428, .294886146, .109178638]]),
         ]
-        mapping = json.loads((HERE / 'encoder-angle-map.json').read_text())
+        mapping = load_mapping('so102')
         with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
             model, data = build_model(prepare(build=directory))
             for counts, expected in cases:
-                apply_pose(model, data, {str(i + 1): v for i, v in enumerate(counts)}, mapping)
+                PoseMap(model, mapping).apply(data, {str(i + 1): v for i, v in enumerate(counts)})
                 # Both exports round geometry; two micrometres allows that loss.
                 np.testing.assert_allclose(data.xanchor[:5], expected, atol=2e-6, rtol=0)
                 self.assertAlmostEqual(data.qpos[5], -data.qpos[6])

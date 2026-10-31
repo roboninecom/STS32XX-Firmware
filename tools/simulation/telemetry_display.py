@@ -6,10 +6,18 @@ import time
 import mujoco
 import numpy as np
 
-from model import JOINTS, apply_pose
-
+from model import PoseMap
 
 from recording import number
+
+
+def copy_geom(source, dest, rgba=None):
+    """Copy native geometry consistently for the ghost and saved previews."""
+    mujoco.mjv_initGeom(dest, source.type, source.size, source.pos,
+                      source.mat.reshape(-1), source.rgba if rgba is None else np.asarray(rgba))
+    for name in ("dataid", "matid", "texid", "texcoord", "texuniform", "modelrbound",
+                 "transparent", "label", "category", "objtype", "objid"):
+        setattr(dest, name, getattr(source, name))
 
 
 def feed_status(frame, now_ms=None, stale_ms=1500):
@@ -18,7 +26,7 @@ def feed_status(frame, now_ms=None, stale_ms=1500):
         return "RECORDED PLAYBACK FINISHED" if frame.get("playbackFinished") else "RECORDED PLAYBACK"
     if frame.get("status") in ("complete", "interrupted", "failed"):
         return f"SESSION FINISHED ({frame.get('status', 'unknown')})"
-    motor_times = [frame.get("measuredUnixMs", {}).get(str(i)) for i in range(1, 5)]
+    motor_times = [frame.get("measuredUnixMs", {}).get(i) for i in frame.get("measured", {})]
     if any(number(stamp) and now_ms - stamp > stale_ms for stamp in motor_times):
         return "STALE MOTOR DATA - showing last received pose"
     if now_ms - frame["publishedUnixMs"] > stale_ms:
@@ -63,6 +71,7 @@ def state_text(s):
 class Display:
     def __init__(self, model, mapping):
         self.model, self.mapping = model, mapping
+        self.pose = PoseMap(model, mapping)
         self.reference = mujoco.MjData(model)
         self.ref_scene = mujoco.MjvScene(model, maxgeom=200)
         self.history = deque(maxlen=3000)
@@ -143,7 +152,7 @@ class Display:
     def overlay_scene(self, data, frame, scene, cam, opt):
         scene.ngeom = 0
         if self.ghost and self.mode == "measured":
-            apply_pose(self.model, self.reference, frame["reference"], self.mapping)
+            self.pose.apply(self.reference, frame["reference"])
             mujoco.mjv_updateScene(self.model, self.reference, opt, None, cam,
                                   mujoco.mjtCatBit.mjCAT_ALL, self.ref_scene)
             for i in range(self.ref_scene.ngeom):
@@ -155,18 +164,14 @@ class Display:
                 if self.model.geom_group[gid] != 1 or self.model.geom_bodyid[gid] <= 1:
                     continue
                 dest = scene.geoms[scene.ngeom]
-                mujoco.mjv_initGeom(dest, source.type, source.size, source.pos,
-                                  source.mat.reshape(-1), np.array([0.1, 0.85, 1.0, 0.28]))
-                for name in ("dataid", "matid", "texid", "texcoord", "texuniform", "modelrbound"):
-                    setattr(dest, name, getattr(source, name))
+                copy_geom(source, dest, [0.1, 0.85, 1.0, 0.28])
                 dest.transparent = True
                 dest.category = mujoco.mjtCatBit.mjCAT_DECOR
                 dest.objtype, dest.objid = mujoco.mjtObj.mjOBJ_UNKNOWN, -1
                 scene.ngeom += 1
         if self.markers:
-            for motor in range(1, 5):
-                jid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, JOINTS[motor - 1])
-                selected = motor == self.selected
+            for motor, jid in zip(self.pose.motors, self.pose.joint_ids):
+                selected = int(motor) == self.selected
                 color = [1, 0.65, 0.15, 1] if selected else [0.35, 0.75, 0.95, 0.8]
                 pos = data.xanchor[jid].copy()
                 geom = scene.geoms[scene.ngeom]
@@ -174,6 +179,8 @@ class Display:
                                   [0.008 if selected else 0.004, 0, 0], pos,
                                   np.eye(3).reshape(-1), color)
                 scene.ngeom += 1
+                if not selected:
+                    continue
                 geom = scene.geoms[scene.ngeom]
                 mujoco.mjv_initGeom(geom, mujoco.mjtGeom.mjGEOM_LABEL, [0, 0, 0],
                                   pos + [0, 0, 0.02], np.eye(3).reshape(-1), color)
@@ -187,10 +194,10 @@ class Display:
             return summary
         return (summary + "\n1-6  Select motor for charts and details\n"
                 f"G    Reference ghost {'ON' if self.ghost else 'OFF'}\n"
-                f"J    Joint labels {'ON' if self.markers else 'OFF'}\n"
+                f"J    Joint markers {'ON' if self.markers else 'OFF'}\n"
                 "F    Toggle fast view (shadows/reflections off)\n"
                 "M/R  Measured / reference main pose\n"
-                "Mouse drag: orbit | scroll: zoom\nClose window: display only; hardware keeps running")
+                "Mouse drag: orbit | scroll: zoom\nClose window: hardware keeps running")
 
     def chart_layout(self, viewport):
         # Viewer viewport coordinates are framebuffer pixels (Retina can be 2x).
@@ -201,12 +208,13 @@ class Display:
 
     def texts(self, frame):
         status = feed_status(frame)
+        bound = set(self.pose.motors).issubset(self.mapping.get("encoderCalibration", {}))
         age = max(0, time.time() * 1000 - frame["publishedUnixMs"])
         age_text = "no robot connection" if frame.get("playback") else f"feed age {age / 1000:.1f}s"
-        reference_label = frame.get("referenceLabel", "controller reference")
         heading = (f"{status} | {age_text}\n{frame.get('label', '')[:85]}\n"
-                   f"Solid: {self.mode} | cyan ghost: {reference_label}\n"
-                   "M5/jaws: fixed geometry; counts in table remain available\n\n" + self.shortcuts())
+                   f"Solid: {self.mode} | cyan: reference\n"
+                   f"{self.mapping['model'].upper()} | {len(self.pose.motors)} joints mapped"
+                   f" | {'calibration checked' if bound else 'reference pose assumed'}\n\n" + self.shortcuts())
         rows = ["Motor     Actual     Ref     Target     Error     Effort     Temp     State"]
         now = time.time() * 1000
         for motor in range(1, 7):
@@ -230,9 +238,9 @@ class Display:
                   f"P / I / D: {fmt(s.get('pTerm'),0)} / {fmt(s.get('iTerm'),0)} / {fmt(s.get('dTerm'),0)}\n"
                   f"Gravity / velocity FF: {fmt(s.get('gravityEffort'),0)} / "
                   f"{fmt(s.get('velocityFeedforward'),0)}\n"
-                  f"Current ADC delta: {fmt(s.get('currentAdcDelta'),0)} | voltage raw: {fmt(s.get('voltageRaw'),0)}\n"
+                  f"Current raw: {fmt(s.get('currentAdcDelta'),0)} | voltage raw: {fmt(s.get('voltageRaw'),0)}\n"
                   f"Overruns (cumulative): {fmt(s.get('overrunCount'),0)}\n"
-                  "Position/error: encoder counts | effort: controller units | current: raw ADC")
+                  "Position: counts | effort: PWM | current: raw ADC")
         font = mujoco.mjtFontScale.mjFONTSCALE_100
         return [(font, mujoco.mjtGridPos.mjGRID_TOPLEFT, heading, ""),
                 (font, mujoco.mjtGridPos.mjGRID_TOPRIGHT, "\n".join(rows), ""),
@@ -299,7 +307,7 @@ class Display:
                     tuple(sorted(frame['measured'].items())), tuple(sorted(frame['reference'].items())))
         if pose_key != self.pose_cache_key:
             with viewer.lock():
-                apply_pose(self.model, data, frame[self.mode], self.mapping)
+                self.pose.apply(data, frame[self.mode])
                 self.overlay_scene(data, frame, viewer.user_scn, viewer.cam, viewer.opt)
             self.pose_cache_key = pose_key
         now = time.monotonic()

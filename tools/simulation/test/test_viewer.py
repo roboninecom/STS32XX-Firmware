@@ -1,7 +1,8 @@
 import contextlib
 import io
 import unittest
-from viewer import parse_args, Playback
+from unittest.mock import patch
+from viewer import parse_args, Playback, launch_macos
 
 
 class ViewerTests(unittest.TestCase):
@@ -25,3 +26,28 @@ class ViewerTests(unittest.TestCase):
         self.assertEqual([f['index'] for f in history], [0, 1, 2])
         play.at(3000, history.append)
         self.assertEqual(len(history), 3)
+
+
+class LauncherTests(unittest.TestCase):
+    def test_macos_paths_with_spaces_are_separate_arguments(self):
+        argv = ['play', '/path with spaces/log.ndjson', '--model', 'so101']
+        executable = '/venv with spaces/bin/python'
+        with patch('viewer.sys.platform', 'darwin'), patch('viewer.sys.executable', executable), \
+             patch.dict('viewer.os.environ', {}, clear=True), patch('viewer.Path.is_file', return_value=True), \
+             patch('viewer.os.execv') as execute:
+            launch_macos(parse_args(argv), argv)
+            binary, arguments = execute.call_args.args
+            self.assertEqual(binary, executable)
+            self.assertEqual(arguments[1], '/venv with spaces/bin/mjpython')
+            self.assertEqual(arguments[3:], argv)
+
+    def test_render_other_platforms_and_existing_launcher_do_not_relaunch(self):
+        for platform, environment, argv in [
+            ('linux', {}, ['live', 'log.ndjson']),
+            ('darwin', {'MJPYTHON_BIN': 'native launcher'}, ['play', 'log.ndjson']),
+            ('darwin', {}, ['play', 'log.ndjson', '--render', 'out.png']),
+        ]:
+            with self.subTest(platform=platform, argv=argv), patch('viewer.sys.platform', platform), \
+                 patch.dict('viewer.os.environ', environment, clear=True), patch('viewer.os.execv') as execute:
+                launch_macos(parse_args(argv), argv)
+                execute.assert_not_called()

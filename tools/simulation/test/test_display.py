@@ -1,12 +1,11 @@
 """Offline checks for freshness, unavailable fields, pose overlays and plot history."""
 import copy
-import json
 from pathlib import Path
 import unittest
 import contextlib
 import tempfile
 import xml.etree.ElementTree as ET
-from model import JOINTS
+from model import load_mapping
 
 import mujoco
 import numpy as np
@@ -156,7 +155,9 @@ class TelemetryTests(unittest.TestCase):
         root = ET.Element('mujoco')
         world = ET.SubElement(root, 'worldbody')
         body = ET.SubElement(world, 'body')
-        for i, name in enumerate(JOINTS):
+        mapping = load_mapping("so102")
+        names = [e["joint"] for e in mapping["joints"].values()] + list(mapping["fixedJoints"])
+        for i, name in enumerate(names):
             body = ET.SubElement(body, 'body', pos='0 0 0.05')
             ET.SubElement(body, 'joint', name=name, type='hinge' if i < 5 else 'slide', axis='0 1 0')
             for x in ('0', '0.02'):
@@ -165,7 +166,6 @@ class TelemetryTests(unittest.TestCase):
             file = Path(folder) / 'model.xml'
             ET.ElementTree(root).write(file)
             model, _ = build_model(file)
-        mapping = json.loads((HERE.parent / 'encoder-angle-map.json').read_text())
         return Display(model, mapping)
 
     def test_signed_error_ghost_and_missing_effort(self):
