@@ -39,4 +39,4 @@ __pycache__/
 *.swp
 
 # Regression fixtures are required test inputs.
-!tests/fixtures/**
+!firmware/tests/fixtures/**

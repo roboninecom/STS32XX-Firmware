@@ -652,10 +652,11 @@ For a toolchain outside PATH, set `ARM_PREFIX` to its full executable prefix:
 make verify ARM_PREFIX=/path/to/toolchain/bin/arm-none-eabi-
 ```
 
-Images and build records are generated under `build/`, which is excluded from
+Firmware sources, tests and build rules are in [`firmware/`](firmware/README.md).
+The root Makefile delegates there. Images and build records are generated under `build/`, which is excluded from
 Git. Verification builds and
 tests offline; it does not flash a servo or open a serial port. See
-[tests/README.md](tests/README.md) for the available regression coverage.
+[firmware tests](firmware/tests/README.md) for the available regression coverage.
 
 A [firmware upload and recovery tool](tools/flash/README.md) is included.
 It accepts publisher-supplied firmware releases. Follow its setup and
@@ -665,11 +666,7 @@ verification guide before using hardware.
 
 | Directory | Responsibility |
 | --- | --- |
-| `core/` | Portable control, sensing, protocol, register mapping, and storage |
-| `include/` | Shared C declarations and data types |
-| `app/` | Main firmware loop and coordination between components |
-| `platform/gd32f130/` | Hardware drivers, startup code, and build support for the microcontroller |
-| `tests/` | Regression tests and required fixtures |
+| [`firmware/`](firmware/README.md) | C sources, headers, hardware drivers, linker script, build rules and firmware tests |
 | [`host/servo-driver/`](host/servo-driver/README.md) | Installable Node.js driver for legacy commands and the v9 extension |
 | [`tools/teleoperation/`](tools/teleoperation/README.md) | Control a follower from a hand-operated leader |
 | [`tools/pose-recorder/`](tools/pose-recorder/README.md) | Record and replay named motor positions |
@@ -682,11 +679,11 @@ verification guide before using hardware.
 | [`tools/flash/`](tools/flash/README.md) | Firmware flashing and settings recovery |
 
 For implementation details, see the
-[extension commands](app/arm_extension.c),
-[motion planner](core/control/arm_motion.c),
-[arm controller](core/control/arm_control.c), and
-[runtime](app/runtime.c). Vendor redistribution notices are retained in the
-headers and [vendor README](platform/gd32f130/vendor/README.md).
+[extension commands](firmware/app/arm_extension.c),
+[motion planner](firmware/core/control/arm_motion.c),
+[arm controller](firmware/core/control/arm_control.c), and
+[runtime](firmware/app/runtime.c). Vendor redistribution notices are retained in the
+headers and [vendor README](firmware/platform/gd32f130/vendor/README.md).
 
 ## Current limits
 
