@@ -31,29 +31,34 @@ class PoseCapture {
     for (const id of this.ids) {
       try {
         const state = await this.bus.read(id, ['torqueEnable'], this.options);
-        if (state.torqueEnable !== 0) throw new Error(`Servo ${id}: torque-off verification failed`);
+        if (state?.torqueEnable !== 0) throw new Error(`Servo ${id}: torque-off verification failed`);
       } catch (error) { failures.push(new Error(`Servo ${id}: ${error.message}`, { cause: error })); }
     }
     if (failures.length) throw new AggregateError(failures, 'Could not confirm torque off on all selected motors');
   }
 
-  async read({ signal } = {}) {
+  async read({ signal, tolerateReadErrors = false } = {}) {
     signal?.throwIfAborted();
-    const capturedAt = new Date().toISOString(), start = performance.now(), positions = {};
+    const capturedAt = new Date().toISOString(), start = performance.now(), positions = {}, errors = {};
     for (const id of this.ids) {
       signal?.throwIfAborted();
-      let state;
       try {
-        state = await this.bus.read(id, ['torqueEnable', 'presentPosition', 'servoStatus'], this.options);
-      } catch (cause) { throw new Error(`Servo ${id}: capture read failed: ${cause.message}`, { cause }); }
-      signal?.throwIfAborted();
-      if (!Number.isInteger(state?.presentPosition) || Math.abs(state.presentPosition) > 32767)
-        throw new Error(`Servo ${id}: missing or invalid encoder sample`);
-      if (state.torqueEnable !== 0) throw new Error(`Servo ${id}: torque is not off`);
-      if (state.servoStatus !== 0) throw new Error(`Servo ${id}: protection status ${state.servoStatus}`);
-      positions[id] = state.presentPosition;
+        const state = await this.bus.read(id, ['torqueEnable', 'presentPosition', 'servoStatus'], this.options);
+        signal?.throwIfAborted();
+        if (state?.torqueEnable !== 0) throw new Error('torque is not off');
+        if (state?.servoStatus !== 0) throw new Error(`protection status ${state?.servoStatus}`);
+        if (!Number.isInteger(state?.presentPosition) || Math.abs(state.presentPosition) > 32767)
+          throw new Error('invalid reading');
+        positions[id] = state.presentPosition;
+      } catch (cause) {
+        signal?.throwIfAborted();
+        if (!tolerateReadErrors) throw new Error(`Servo ${id}: ${cause.message}`, { cause });
+        // Calibration displays failures per joint and excludes their samples.
+        // Alarms and unexpected torque are never accepted as valid positions.
+        errors[id] = cause.message;
+      }
     }
-    return { capturedAt, durationMs: performance.now() - start, positions };
+    return { capturedAt, durationMs: performance.now() - start, positions, ...(tolerateReadErrors ? { errors } : {}) };
   }
 }
 

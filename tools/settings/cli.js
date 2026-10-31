@@ -13,6 +13,8 @@ const {
   StsServo,
 } = require('../../host/servo-driver');
 
+const { validateIds } = require('../pose-recorder/capture');
+
 const FORMAT = 'factory-sts-settings';
 const FORMAT_VERSION = 1;
 const COMMUNICATION_KEYS = new Set(['id', 'baudRate', 'responseStatusLevel']);
@@ -23,6 +25,8 @@ function usage() {
     '  npm run settings -- discover --port <serial-port> [--baud <rate>]',
     '  npm run settings -- backup --port <serial-port> --id <servo-id> [--baud <rate>] [--file <json>]',
     '  npm run settings -- restore --port <serial-port> --id <current-servo-id> --file <json> [--baud <rate>]',
+    '  npm run settings -- calibrate --port <serial-port> [--ids <1,2,...>] [--baud <rate>] [--file <json>] [--expected-ranges <json>]',
+    '    Save reference offsets, then measure limits for selected or discovered motors.',
     '',
     'The optional baud rate defaults to 1000000. The ID supplied to restore is',
     'the servo ID before restoration; the JSON may restore a different ID.',
@@ -32,35 +36,42 @@ function usage() {
 function parseArguments(argv) {
   const [command, ...tokens] = argv;
   if (command === '--help') return { help: true };
-  if (!['discover', 'backup', 'restore'].includes(command)) throw new Error(usage());
+  if (!['discover', 'backup', 'restore', 'calibrate'].includes(command)) throw new Error(usage());
   const values = {};
   for (let index = 0; index < tokens.length; index += 2) {
     const flag = tokens[index];
     const value = tokens[index + 1];
-    if (!['--port', '--id', '--baud', '--file'].includes(flag) || value == null || value.startsWith('--') || Object.hasOwn(values, flag.slice(2))) {
+    if (!['--port', '--id', '--ids', '--baud', '--file', '--expected-ranges'].includes(flag) || value == null || value.startsWith('--') || Object.hasOwn(values, flag.slice(2))) {
       throw new Error(`Invalid argument ${flag ?? ''}\n\n${usage()}`);
     }
     values[flag.slice(2)] = value;
   }
   if (!values.port) throw new Error(`--port is required\n\n${usage()}`);
-  const id = command === 'discover' ? undefined : parseInteger(values.id, '--id', 0, 0xFD);
+  if (command !== 'calibrate' && values['expected-ranges'] != null) throw new Error('--expected-ranges is only for calibration');
+  const id = ['discover', 'calibrate'].includes(command) ? undefined : parseInteger(values.id, '--id', 0, 0xFD);
+  if (command === 'calibrate' && values.id != null) throw new Error('Use --ids to select calibration motors');
   if (command === 'discover' && (values.id != null || values.file != null)) {
     throw new Error('Discovery accepts only --port and --baud');
   }
+  if (command !== 'calibrate' && values.ids != null) throw new Error('--ids is only for calibration');
+  const ids = values.ids == null ? undefined : validateIds(values.ids.split(',').map(value => parseInteger(value, '--ids', 1, 253)));
   const baudRate = values.baud == null
     ? 1_000_000
     : parseInteger(values.baud, '--baud', 1, Number.MAX_SAFE_INTEGER);
   if (!BAUD_RATES.includes(baudRate)) throw new Error('Unsupported baud rate');
   if (command === 'restore' && !values.file) {
-    throw new Error(`--file is required for restore\n\n${usage()}`);
+    throw new Error(`--file is required for ${command}\n\n${usage()}`);
   }
   return {
     command,
     port: values.port,
     id,
     baudRate,
-    file: command === 'discover' ? undefined : values.file ?? path.join('tools', 'settings', 'backups',
-      `servo-${id}-${new Date().toISOString().replaceAll(':', '-')}.json`),
+    ...(ids ? { ids } : {}),
+    ...(values['expected-ranges'] != null ? { expectedRanges: values['expected-ranges'] } : {}),
+    file: command === 'discover' ? undefined : values.file ?? path.join('tools', 'settings',
+      command === 'calibrate' ? 'calibrations' : 'backups',
+      `${command === 'calibrate' ? 'calibration' : `servo-${id}`}-${new Date().toISOString().replaceAll(':', '-')}.json`),
   };
 }
 
@@ -202,7 +213,11 @@ async function restoreSettingsDocument(servo, currentId, document, sleep = delay
   };
 }
 
-async function run(options, { createServo = config => new StsServo(config) } = {}) {
+async function run(options, dependencies = {}) {
+  if (options.command === 'calibrate') {
+    return require('./calibration').runCalibration(options, { ...dependencies, readSettingsDocument });
+  }
+  const { createServo = config => new StsServo(config) } = dependencies;
   // Reject malformed backups before touching a serial port.
   const input = options.command === 'restore' ? path.resolve(options.file) : undefined;
   const document = input ? validateSettingsDocument(JSON.parse(await fs.readFile(input, 'utf8'))) : undefined;
@@ -242,6 +257,24 @@ async function run(options, { createServo = config => new StsServo(config) } = {
 async function main() {
   const options = parseArguments(process.argv.slice(2));
   if (options.help) { console.log(usage()); return; }
+  if (options.command === 'calibrate') {
+    if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error('Calibration requires an interactive terminal');
+    const terminal = require('node:readline/promises').createInterface({ input: process.stdin, output: process.stdout });
+    const abort = new AbortController();
+    const stop = () => abort.abort(new Error('Calibration interrupted'));
+    process.on('SIGINT', stop); process.on('SIGTERM', stop);
+    terminal.on('SIGINT', stop); terminal.on('close', stop);
+    try {
+      console.log(JSON.stringify(await run(options, {
+        signal: abort.signal,
+        question: (text, signal = abort.signal) => terminal.question(text, { signal }),
+      }), null, 2));
+    } finally {
+      terminal.close();
+      process.off('SIGINT', stop); process.off('SIGTERM', stop);
+    }
+    return;
+  }
   const result = await run(options);
   console.log(JSON.stringify(result, null, 2));
 }

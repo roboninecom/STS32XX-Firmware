@@ -392,7 +392,7 @@ test('settings operations use the EEPROM request timeout', async () => {
   await new StsSettings(bus).save(1, { positionPGain: 40 });
 
   assert.equal(calls.length, 6);
-  assert.ok(calls.every(call => call.options.timeoutMs === 50));
+  assert.ok(calls.every(call => call.options.timeoutMs === 250));
 });
 
 test('settings do not wait for write acknowledgements when status replies are disabled', async () => {

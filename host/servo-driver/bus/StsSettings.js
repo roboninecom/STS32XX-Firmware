@@ -3,13 +3,20 @@
 const { setTimeout: delay } = require('node:timers/promises');
 const RegisterLayout = require('../registers/RegisterLayout');
 const { ControlTable, Storage } = require('../registers/ControlTable');
-const { SettingsVerificationError } = require('../protocol/errors');
+const { SettingsVerificationError, RequestTimeoutError, SerialOperationTimeoutError,
+  InvalidPacketError } = require('../protocol/errors');
 
 const GUARDED_SETTINGS = new Set(['id', 'baudRate', 'responseStatusLevel']);
-const DEFAULT_EEPROM_TIMEOUT_MS = 50;
+const DEFAULT_EEPROM_TIMEOUT_MS = 250;
 // A WRITE acknowledgment precedes flash completion. Requests sent immediately
 // after it can be lost while the motor saves its settings.
 const EEPROM_SETTLE_MS = 60;
+const REQUEST_ATTEMPTS = 3;
+
+function transient(error) {
+  return error instanceof RequestTimeoutError || error instanceof SerialOperationTimeoutError ||
+    error instanceof InvalidPacketError;
+}
 
 class StsSettings {
   constructor(bus) {
@@ -27,8 +34,16 @@ class StsSettings {
     const keys = Object.keys(values);
     RegisterLayout.encodeLayout(RegisterLayout.compileWrite(keys), values);
     return this.bus.transaction(async transaction => {
-      const { responseStatusLevel } = await transaction.read(
-        id,
+      const read = async (keys, options) => {
+        for (let attempt = 1; ; attempt++) {
+          try { return await transaction.read(id, keys, options); }
+          catch (error) {
+            if (!transient(error) || attempt === REQUEST_ATTEMPTS) throw error;
+            await delay(EEPROM_SETTLE_MS);
+          }
+        }
+      };
+      const { responseStatusLevel } = await read(
         ['responseStatusLevel'],
         { timeoutMs }
       );
@@ -36,20 +51,35 @@ class StsSettings {
         timeoutMs,
         expectResponse: responseStatusLevel !== 0,
       };
-      const before = await transaction.read(id, keys, requestOptions);
+      const before = await read(keys, requestOptions);
       const changed = keys.filter(key => values[key] !== before[key]);
       if (!changed.length) return { id, before, after: verify ? before : undefined, verified: verify };
       const ranges = RegisterLayout.compileWrite(changed).ranges;
+      const write = async (update, persistent = false) => {
+        for (let attempt = 1; ; attempt++) {
+          let failure;
+          try { await transaction.write(id, update, requestOptions); }
+          catch (error) { failure = error; }
+          finally { if (persistent) await delay(EEPROM_SETTLE_MS); }
+          if (!failure) return;
+          if (!transient(failure)) throw failure;
+          // A missing ACK does not mean the write failed. Read back before
+          // retrying so an already-applied EEPROM write is never repeated.
+          const actual = await read(Object.keys(update), requestOptions);
+          if (Object.entries(update).every(([key, value]) => actual[key] === value)) return;
+          if (attempt === REQUEST_ATTEMPTS) throw failure;
+          await delay(EEPROM_SETTLE_MS);
+        }
+      };
       let result;
       let failure;
       try {
-        await transaction.write(id, { lock: 0 }, requestOptions);
+        await write({ lock: 0 });
         for (const range of ranges) {
           const update = Object.fromEntries(range.fields.map(({ key }) => [key, values[key]]));
-          try { await transaction.write(id, update, requestOptions); }
-          finally { await delay(EEPROM_SETTLE_MS); }
+          await write(update, true);
         }
-        const after = verify ? await transaction.read(id, keys, requestOptions) : undefined;
+        const after = verify ? await read(keys, requestOptions) : undefined;
         if (verify) verifyValues(id, values, after);
         result = { id, before, after, verified: verify };
       } catch (error) {
@@ -57,7 +87,7 @@ class StsSettings {
       }
 
       try {
-        await transaction.write(id, { lock: 1 }, requestOptions);
+        await write({ lock: 1 });
       } catch (lockError) {
         if (failure) {
           throw new AggregateError(

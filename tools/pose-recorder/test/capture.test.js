@@ -106,3 +106,23 @@ test('cancellation before release does not write; disk failure still cleans up',
     assert.equal(writes.length, cancel ? 0 : 2); assert.ok(closed);
   }
 });
+
+test('calibration can skip temporary read errors per motor while default capture stays strict', async () => {
+  const { RequestTimeoutError, ServoStatusError } = require('../../../host/servo-driver');
+  const { bus } = rig();
+  bus.read = async id => {
+    if (id === 2) throw new RequestTimeoutError('timeout');
+    return { torqueEnable: 0, servoStatus: 0, presentPosition: 500 };
+  };
+  const capture = new PoseCapture(bus, [2, 5]);
+  const sample = await capture.read({ tolerateReadErrors: true });
+  assert.deepEqual(sample.positions, { 5: 500 });
+  assert.deepEqual(sample.errors, { 2: 'timeout' });
+  await assert.rejects(capture.read(), /timeout/);
+  bus.read = async () => { throw new ServoStatusError(2, 1, ['voltage']); };
+  assert.match((await capture.read({ tolerateReadErrors: true })).errors[2], /voltage/);
+  await assert.rejects(capture.read(), /voltage/);
+  bus.read = async () => ({ torqueEnable: 1, servoStatus: 0, presentPosition: 100 });
+  assert.match((await capture.read({ tolerateReadErrors: true })).errors[2], /torque is not off/);
+  await assert.rejects(capture.read(), /torque is not off/);
+});

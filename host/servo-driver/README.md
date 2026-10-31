@@ -99,6 +99,12 @@ All operations that communicate with hardware return promises.
 | `servo.settings.save(id, values)` | Unlock, save, verify and relock ordinary settings. |
 | `servo.arm` | Access the v9 methods below. |
 
+Settings saves use a 250 ms request timeout. After a lost write acknowledgement,
+the driver waits for persistence and reads the register back before retrying.
+Already-applied writes are not repeated. Temporary communication failures have
+up to three attempts; persistent failures still report an error and attempt to
+relock the motor. Pass `{ timeoutMs }` to `settings.save` to override the timeout.
+
 Legacy example, for a secured motor in position mode that is intended to move:
 
 ```js
