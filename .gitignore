@@ -34,6 +34,7 @@ __pycache__/
 *.results.json
 *-results*.json
 *_results*.json
+*.local.json
 *.bak
 *.tmp
 *.swp

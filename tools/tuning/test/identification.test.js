@@ -7,7 +7,7 @@ const path = require('node:path');
 const { extract } = require('../identification');
 const { hash } = require('../plan');
 const { fit } = require('../analysis');
-const { configuration } = require('../../teleoperation/test/fake-arm');
+const { configuration } = require('../../../host/arm-control/test/fake-arm');
 
 test('current batch evidence extracts directional steady windows and fits held-out data', t => {
   const plan = structuredClone(require('../example.json')), config = configuration();

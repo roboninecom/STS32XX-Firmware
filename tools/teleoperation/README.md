@@ -7,8 +7,12 @@ the follower requires this repository's v9 firmware.
 ## Run
 
 Install Node.js 20 or newer, then run `npm install` from the repository root.
-Copy [example.json](example.json) to your own configuration file. Set the ports, baud rate and joint IDs. Example
-gains and limits illustrate the format; use settings tested on your mechanism.
+Copy [example.json](example.json) beside the original as `controller.local.json`.
+Set the ports, baud rate and joint IDs. The example shares the
+[motor profile](../../host/arm-control/profile.example.json) with replay and tuning.
+Copy it for your own settings and update its path, or inline your profiles.
+Paths are relative to the controller file. Example gains illustrate the format;
+use settings tested on your mechanism.
 
 Preview the mapping without changing any motor settings:
 
@@ -29,13 +33,9 @@ Follower settings must be locked with no deferred write pending. Leader torque
 must already be off; this tool never writes to the leader. Follower startup
 handles powered and unpowered motors automatically.
 
-The examples run for 10 seconds. Remove `durationMs` to run until Ctrl+C.
-**A normal stop leaves the follower powered.** It finishes its last target
-and holds there. An error or interrupted startup attempts torque-off on every follower
-prepared or powered by the tool. Support the mechanism in case power is removed.
-A broken connection can prevent torque-off; failed cleanup is reported. The
-firmware has no command timeout, so a killed process or lost connection can leave
-its last target active.
+Runs continue until Ctrl+C unless you explicitly set `durationMs`.
+**Normal exit retains a powered hold.** Startup, gravity and failure cleanup
+follow the [shared controller behaviour](../../host/arm-control/README.md#control-behaviour).
 
 ## Mapping and control
 
@@ -57,33 +57,9 @@ does not guarantee matching targets when leader and follower limits are
 asymmetric. Preview the mapping before moving. `leaderMiddle` and
 `followerMiddle` override centers only for `range` mapping.
 
-The follower uses the firmware's PID controller and S-curves. It needs
-`acceleration` in counts/s² (1–30000), `rampTimeMs` in milliseconds (1–255), and
-one `profiles` entry per follower ID:
-
-| Profile field | Meaning |
-| --- | --- |
-| `kpQ8`, `kdQ8`, `kiQ8` | Controller gains multiplied by 256. |
-| `integralLimit`, `effortLimit` | Integral and total output limits in PWM effort units. |
-| `velocityLimit` | Maximum speed in counts/s; defaults to 65535. |
-| `velocityFilterQ8` | Measured velocity filter setting, 1–255. |
-| `gravitySlewEffortPerS` | Rate limit for changes to gravity effort. Required by the firmware configuration. |
-| `velocityFeedforward` | `positiveGainQ8`, `negativeGainQ8`, and `effortLimit`; set all three to zero to disable it. |
-
-See the [firmware register guide](../../README.md) for gain units and field
-ranges. Profiles are configuration entries for individual motors, not switchable
-firmware profiles. Top-level acceleration and ramp time are defaults; a motor's
-`accelerationLimit` and `rampTimeMs` profile fields override them.
-Startup handles torque and applies the supplied settings automatically, reusing
-an existing extension session when possible. Persistent settings are unchanged.
-
-For gravity compensation, add `gravityModel` to the configuration. See the
-[shared controller guide](../../host/arm-control/README.md) for the supplied arm
-models, configuration-relative paths and startup checks. Gravity uses measured
-follower positions and continues during live input and replay pauses. With it
-enabled, normal exit waits for the final motion and gravity slew to settle before
-retaining a powered hold. After exit, the retained gravity effort no longer
-adapts to position or load changes.
+Provide a profile for each follower and shared acceleration/ramp settings as
+described in [motor settings](../../host/arm-control/README.md#motor-settings-files).
+Add `gravityModel` to enable [gravity compensation](../../host/arm-control/README.md#enable-gravity).
 
 ## Timing and checks
 
@@ -94,12 +70,10 @@ adapts to position or load changes.
 | `responseTimeoutMs` | 100 | Response and transaction queue timeout, 25–10000 ms. |
 | `durationMs` | Unlimited | Run duration including control startup, 1–86400000 ms. |
 
-A frame must include all leader positions. Its age is checked again when the
-follower bus becomes available. Follower health is checked at startup and roughly
-every 250 ms during control (approximately 50 ms with gravity): alarms, invalid/stale readings, temperatures at or
-above 60 °C, and lost extension ownership or rejected targets stop the run.
-Health checks and logging share the loop, so the achieved rate depends on bus,
-computer and disk performance.
+Each frame must include every leader position and remain within `maxAgeMs`
+until sent. Missed update periods are skipped. Feedback, gravity and logging
+share the control loop; achieved speed depends on bus and computer performance.
+See [shared checks and timing](../../host/arm-control/README.md#checks-and-timing).
 
 Logs are saved in ignored `logs/motion/` as newline-delimited JSON.
 They contain configuration, the chosen session ID, preview, intended commands,
@@ -107,73 +81,7 @@ sent frames, feedback and stop/error records. A command record alone does not
 prove a target was sent or accepted. Writes are awaited without accumulating an
 unbounded log queue; slow logging may trigger the frame-age check.
 
-## Replay a recorded session
-
-Replay recorded leader positions on the follower without connecting the leader:
-
-```sh
-npm run replay -- CONFIG.json SESSION.ndjson
-npm run replay -- CONFIG.json SESSION.ndjson --run
-```
-
-The first command is a read-only preview. The second starts motion. Use the
-current configuration and tested gains. The recording must contain a `preflight`
-event with leader limits and joint mapping, followed by `command` events with
-monotonic timestamps and all leader positions. The joint mapping must match the
-current configuration. Files up to 64 MiB are supported. Truncated or malformed JSON is rejected
-before opening a port.
-
-Replay maps recorded leader positions through the recorded leader limits and
-the follower's current limits. It sends new commands using the current control
-session and sequence numbers; recorded gains, gravity efforts, targets and packets are not
-reused. A `command` event records an intended command, so a log from a failed run
-can include a position that was never sent during that run.
-
-Recorded gaps are preserved. Processing delays can stretch playback; it never
-sends catch-up bursts. Health checks continue during pauses. After the final
-frame, playback waits for arrival (default tolerance 10 counts, timeout 30 s),
-then exits with the same powered-hold behaviour as live control. Ctrl+C ends it
-early; faults attempt torque-off. The first frame can cause an initial approach
-from the follower's current pose.
-
-Optional `replay.repeat`, `replay.moveTimeoutMs` and `replay.toleranceCounts` use
-the ranges documented in the [pose replay guide](../pose-recorder/README.md#replay-poses).
-`replay.speed` and `replay.holdMs` apply only to pose files; session replay uses
-recorded timing and the configured controller limits. `hz` applies only to live
-control. Remove `durationMs` from a copied example if you want the complete
-recording instead of the example's 10-second cap.
-
-For named poses from the pose recorder, use `npm run replay` as described
-in that guide. Both recording formats share follower setup, health checks and cleanup.
-Always start replay with `npm run replay -- CONFIG.json RECORDING --run`.
-It starts unpowered motors or continues an existing extension session automatically.
-Matching settings keep torque on. Changed settings are applied one motor at a time
-while supporting motors stay powered. Omitting `gravityModel` clears any retained
-gravity effort. No separate setup command is needed.
-The installed firmware rejects extension startup when a measured position is
-outside its saved travel limits. A startup refusal reports the position and limits.
-Replay logs include the source path and SHA-256 hash. Gravity-enabled logs also
-identify the current model and record requested efforts and acceptance feedback.
-Named-pose replay automatically scales joint speeds by travel distance, respecting
-the configured replay speed and each motor's speed limit. Shorter moves slow down
-to improve arrival timing. Each motor still generates its own S-curve, so acceleration
-and braking phases are not exactly synchronized. Recorded-session replay retains
-its recorded timing and existing target behavior.
-Replay reads detailed telemetry, including the firmware's intermediate planned
-position, so the simulator shadow follows the motion profile. It replaces the
-compact feedback read rather than adding another read. Feedback is scheduled
-every 50 ms during holds and timed playback; pose arrival checks can poll faster.
-
-To reduce bus traffic, append `--compact`:
-
-```sh
-npm run replay -- CONFIG.json RECORDING --run --compact
-```
-
-This requests smaller feedback packets at the same rate. Tuned settings and
-gravity compensation remain active. Measured positions still animate in the
-simulator, but the target shadow jumps to each destination because intermediate
-planner positions are absent. PID terms and applied gravity/velocity contributions
-are also absent from compact feedback. Session setup may still read detailed feedback.
+Replay logs without a connected leader using the
+[recorded-session replay command](../poses/README.md#replay-a-recorded-session).
 
 Run offline tests with `npm run test:teleoperation`.

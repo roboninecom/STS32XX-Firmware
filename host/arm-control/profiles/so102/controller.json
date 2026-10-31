@@ -22,34 +22,22 @@
   },
   "joints": [
     {
-      "leaderId": 1,
-      "followerId": 1,
-      "mapping": "angle"
+      "followerId": 1
     },
     {
-      "leaderId": 2,
-      "followerId": 2,
-      "mapping": "angle"
+      "followerId": 2
     },
     {
-      "leaderId": 3,
-      "followerId": 3,
-      "mapping": "angle"
+      "followerId": 3
     },
     {
-      "leaderId": 4,
-      "followerId": 4,
-      "mapping": "angle"
+      "followerId": 4
     },
     {
-      "leaderId": 5,
-      "followerId": 5,
-      "mapping": "angle"
+      "followerId": 5
     },
     {
-      "leaderId": 6,
-      "followerId": 6,
-      "mapping": "angle"
+      "followerId": 6
     }
   ]
 }

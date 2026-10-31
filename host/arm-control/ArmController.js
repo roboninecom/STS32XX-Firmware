@@ -36,10 +36,8 @@ class ArmController {
     const timeoutMs = integer(config.responseTimeoutMs ?? 100, 25, 10000, 'response timeout');
     this.options = { timeoutMs, deadlineMs: timeoutMs, rejectOnAlarm: true };
     if (!Array.isArray(this.joints) || !this.joints.length || this.joints.length > 6) throw new Error('Expected 1–6 joints');
-    for (const key of ['leaderId', 'followerId']) {
-      const ids = this.joints.map(j => integer(j[key], 1, 253, key));
-      if (new Set(ids).size !== ids.length) throw new Error(`Duplicate ${key}`);
-    }
+    const ids = this.joints.map(j => integer(j.followerId, 1, 253, 'followerId'));
+    if (new Set(ids).size !== ids.length) throw new Error('Duplicate followerId');
     this.hz = integer(config.hz ?? 60, 1, 60, 'hz');
     this.maxAgeMs = integer(config.maxAgeMs ?? 100, 10, 10000, 'maxAgeMs');
     this.session = randomInt(1, 65536);

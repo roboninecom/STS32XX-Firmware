@@ -1,6 +1,6 @@
 'use strict';
 const { EventEmitter } = require('node:events');
-const { Replay } = require('../Replay');
+const { Replay } = require('../../../tools/poses/Replay');
 const { ArmController } = require('../../../host/arm-control/ArmController');
 const { Instruction } = require('../../../host/servo-driver');
 

@@ -104,7 +104,9 @@ test('already cancelled run opens no ports and still reports cleanup errors', as
 });
 
 test('published example satisfies control and profile validation', async () => {
-  const config = JSON.parse(await fs.readFile(path.join(__dirname, '..', 'example.json'), 'utf8'));
+  const { loadConfiguration } = require('../../../host/arm-control/configuration');
+  const config = await loadConfiguration(path.join(__dirname, '..', 'example.json'));
+  assert.equal(config.durationMs, undefined);
   await validatePorts(config);
   new Teleoperation({ leader: {}, follower: {}, config });
   for (const profile of Object.values(config.profiles)) {

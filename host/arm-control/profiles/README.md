@@ -27,7 +27,9 @@ npm run replay -- host/arm-control/profiles/so102/controller.json POSES.json --r
 
 Use `so101` for the other profile. The first command previews; the second moves
 the arm and leaves it holding the final pose. Replay applies the profiles to RAM.
-For teleoperation, also set `leaderPort` and review joint mappings.
+For teleoperation, also set `leaderPort` and add `leaderId`, `mapping` and any
+direction/center overrides to each joint; see the
+[mapping guide](../../../tools/teleoperation/README.md#mapping-and-control).
 
 Gravity models include the encoder calibration used during fitting. Preflight
 requires it to match the connected arm. **Do not copy another arm's encoder

@@ -22,13 +22,21 @@ function mapPosition(position, leader, follower, joint) {
   return Math.max(follower.min, Math.min(follower.max, Math.round(target)));
 }
 
+// Only live input and recorded leader playback need leader IDs and mappings.
+function validateLeaderMapping(joints) {
+  if (!Array.isArray(joints) || !joints.length || joints.length > 6) throw new Error('Expected 1–6 joints');
+  const ids = joints.map(joint => joint.leaderId);
+  if (ids.some(id => !Number.isInteger(id) || id < 1 || id > 253)) throw new Error('Invalid leaderId');
+  if (new Set(ids).size !== ids.length) throw new Error('Duplicate leaderId');
+  for (const joint of joints) mapPosition(2048, { min: 0, max: 32767 }, { min: 0, max: 32767 }, joint);
+}
+
 // Live input owns leader reads and mapping; ArmController owns every follower write.
 class TeleoperationInput {
   constructor({ leader, config }) {
     this.leader = leader;
     this.joints = config.joints;
-    if (!Array.isArray(this.joints)) throw new Error('Expected joints');
-    for (const joint of this.joints) mapPosition(2048, { min: 0, max: 32767 }, { min: 0, max: 32767 }, joint);
+    validateLeaderMapping(this.joints);
   }
 
   preflight(controller) {
@@ -78,4 +86,4 @@ class TeleoperationInput {
   }
 
 }
-module.exports = { TeleoperationInput, mapPosition };
+module.exports = { TeleoperationInput, mapPosition, validateLeaderMapping };

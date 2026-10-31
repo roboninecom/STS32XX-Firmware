@@ -2,10 +2,10 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Replay } = require('../Replay');
-const { parse } = require('../cli');
+const { parse } = require('../replay-cli');
 const { run } = require('../../../host/arm-control/session');
 
-const { profile, configuration, poses, session, rig, targets, torqueOff } = require('./fake-arm');
+const { profile, configuration, poses, session, rig, targets, torqueOff } = require('../../../host/arm-control/test/fake-arm');
 
 function coupledRig(waypoints, changes = {}) {
   const ids = Object.keys(waypoints[0]).map(Number), config = configuration();
@@ -217,11 +217,11 @@ test('replay CLI accepts only a follower and preview opens no leader or motor co
 
 test('one replay command accepts pose and session files with a read-only default', () => {
   for (const file of ['poses.json', 'session.ndjson']) {
-    assert.deepEqual(parse(['config.json', file], 'replay'), { filename: 'config.json', move: false, replayFile: file });
-    assert.equal(parse(['config.json', file, '--run'], 'replay').move, true);
+    assert.deepEqual(parse(['config.json', file]), { filename: 'config.json', move: false, replayFile: file });
+    assert.equal(parse(['config.json', file, '--run']).move, true);
   }
   for (const args of [[], ['config.json'], ['config.json', '--run'], ['config.json', 'file', '--bad'], ['config.json', 'file', '--run', '--run']])
-    assert.throws(() => parse(args, 'replay'));
+    assert.throws(() => parse(args));
   assert.throws(() => parse(['config.json', '--replay', 'file']));
 });
 
@@ -234,21 +234,21 @@ test('ordinary transport time fits inside recorded spacing instead of accumulati
 });
 
 test('replay rejects the removed resume option', () => {
-  assert.deepEqual(parse(['config.json', 'poses.json', '--run'], 'replay'),
+  assert.deepEqual(parse(['config.json', 'poses.json', '--run']),
     { filename: 'config.json', replayFile: 'poses.json', move: true });
   for (const args of [['config.json', 'poses.json', '--resume'],
     ['config.json', 'poses.json', '--run', '--resume'],
     ['config.json', 'poses.json', '--run', '--run']])
-    assert.throws(() => parse(args, 'replay'));
+    assert.throws(() => parse(args));
   assert.throws(() => parse(['config.json', '--run', '--resume']));
 });
 
 test('compact replay is optional, preserves preview, and rejects duplicate or live flags', () => {
-  assert.deepEqual(parse(['config.json', 'poses.json', '--compact'], 'replay'),
+  assert.deepEqual(parse(['config.json', 'poses.json', '--compact']),
     { filename: 'config.json', replayFile: 'poses.json', move: false, compact: true });
   for (const flags of [['--run', '--compact'], ['--compact', '--run']])
-    assert.equal(parse(['config.json', 'poses.json', ...flags], 'replay').move, true);
-  assert.throws(() => parse(['config.json', 'poses.json', '--compact', '--compact'], 'replay'));
+    assert.equal(parse(['config.json', 'poses.json', ...flags]).move, true);
+  assert.throws(() => parse(['config.json', 'poses.json', '--compact', '--compact']));
   assert.throws(() => parse(['config.json', '--compact']));
 });
 
@@ -269,8 +269,18 @@ for (const kind of ['poses', 'session']) test(`${kind} compact replay uses small
 });
 
 test('published pose replay example passes read-only preflight without a joints map', async () => {
-  const config = require('../../pose-recorder/replay.example.json');
+  const { loadConfiguration } = require('../../../host/arm-control/configuration');
+  const config = await loadConfiguration(require('node:path').resolve(__dirname, '../replay.example.json'));
   const r = rig(poses(), config); await r.controller.preflight();
   assert.equal(r.calls.length, 0); assert.equal(r.controller.profiles[1].velocityLimit, 500);
   assert.equal(r.controller.sourceSummary.speed, 500);
+});
+
+
+test('recorded leader playback still requires valid, unique leader IDs', () => {
+  for (const ids of [[undefined], [0], [254], [1, 1]]) {
+    const config = configuration();
+    config.joints = ids.map((leaderId, i) => ({ leaderId, followerId: i + 1, mapping: 'angle' }));
+    assert.throws(() => new Replay(session(config), config), /leaderId/);
+  }
 });

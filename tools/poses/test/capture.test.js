@@ -5,7 +5,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { PoseCapture, validateRecording, saveRecording } = require('../capture');
-const { parse, run } = require('../cli');
+const { parse, run } = require('../record');
 
 function rig(ids = [2, 5]) {
   const writes = [], reads = [];

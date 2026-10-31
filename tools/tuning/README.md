@@ -8,9 +8,14 @@ are written to EEPROM and no winning candidate is automatically installed.
 ## Start
 
 From the repository root, install Node.js 20+ dependencies with `npm install`.
-Copy `controller.example.json` and `example.json`, then edit the port, motor IDs,
+Copy `controller.example.json` and `example.json` beside the originals as
+`controller.local.json` and `plan.local.json`. Set the plan's `config` to
+`controller.local.json`, then edit the port, motor IDs,
 profiles, safe joint travel pairs and limits for your mechanism. Example gains and poses
-are illustrative. Include every supporting motor in the controller configuration.
+are illustrative. The controller references the shared
+[motor profile](../../host/arm-control/profile.example.json); copy it for your own
+settings and update its path, or inline the profile. Include every supporting
+motor as `{ "followerId": ID }` in `joints`; no leader mapping is needed.
 Complete [calibration](../settings/README.md#choose-the-reference-pose) before
 choosing test positions. Positions use corrected encoder counts; a new offset
 changes their physical meaning. Update test pairs, recordings and the gravity
@@ -18,16 +23,16 @@ model after recalibration.
 For gravity, add `gravityModel` exactly as described in the
 [shared controller guide](../../host/arm-control/README.md).
 
-The plan's `config` path is relative to the plan. The controller's `gravityModel`
-path is relative to that controller file. The same controller configuration can
+The plan's `config` path is relative to the plan. The controller's profile and `gravityModel`
+paths are relative to that controller file. The same controller configuration can
 be used for pose replay. Omit `durationMs` for tuning: the plan owns the batch
 budget. Secure the mechanism for startup and profile changes. Changing a profile
 briefly releases that motor; fresh setup can release all configured followers.
 
 ```sh
-npm run tune -- inspect tools/tuning/example.json
-npm run tune -- preflight tools/tuning/example.json
-npm run tune -- run tools/tuning/example.json
+npm run tune -- inspect tools/tuning/plan.local.json
+npm run tune -- preflight tools/tuning/plan.local.json
+npm run tune -- run tools/tuning/plan.local.json
 ```
 
 The tool keeps supporting joints at their existing firmware hold targets. Only
@@ -41,9 +46,9 @@ Use the same command for the first batch and every subsequent batch:
 npm run tune -- run NEXT_PLAN.json
 ```
 
-Startup automatically prepares unpowered motors or continues an existing session.
-Changed baseline settings are applied before the batch; unchanged motors retain
-their powered hold. Do not run another controller on the same bus.
+Startup and profile changes use the
+[shared controller lifecycle](../../host/arm-control/README.md#control-behaviour).
+Do not run another controller on the same bus.
 
 `inspect` does not connect. `preflight` reads firmware, calibration, saved limits,
 health and profiles without changing the motors. `run` moves them.
@@ -143,20 +148,15 @@ cover the allowed settling time and a steady observation interval.
 Acceptance limits are supplied in the plan. An unsuccessful but valid response
 can be scored; stale samples, alarms, control overruns, excessive following
 error, support motion, temperature/voltage limits or logging failures stop the
-batch and attempt verified torque-off on all prepared motors. A missed gravity deadline during an established stationary hold instead preserves torque only after two fresh, healthy, stationary feedback passes confirm session ownership; the batch still fails and supplies no recommendation.
+batch and use the [shared failure cleanup](../../host/arm-control/README.md#checks-and-timing). A failed batch supplies no recommendation.
 
-At startup, detailed C2 feedback records the existing hold targets and checks following error on every joint. During tests, one C2 read replaces the probe's C1 read. Supporting motors retain C1;
-all measurements also serve gravity updates. The plan estimates wire usage and
-rejects requests at or above 50% nominal capacity. Actual gaps are checked during
-the run. There is no separate polling process for tuning or visualization.
+Feedback and gravity use the [shared reader](../../host/arm-control/README.md#checks-and-timing).
+The plan estimates wire usage and rejects requests at or above 50% nominal
+capacity; actual gaps are checked during the run. Visualization reads the log.
 
-**Changing a profile briefly removes torque from the motor being tuned.** v9
-requires this. Supporting motors stay controlled and gravity updates continue.
-Use a supported or mechanically safe pose; a loaded joint can move during this
-interval. Before changing a profile, the controller waits for the planners to
-stop and measured positions to stay within one encoder count for 200 ms. Gravity
-updates continue during this wait; failure to settle within 30 seconds stops the
-batch. Firmware retains its last target if commands stop.
+**Changing a profile briefly removes torque from that motor.** Supporting motors
+stay controlled. The controller waits for rest before the change and confirms
+gravity afterwards; see [profile changes](../../host/arm-control/README.md#api-and-tests).
 
 An already completed endpoint hold is reused before reversing direction; the
 tool does not send a duplicate setup target or add another setup delay.

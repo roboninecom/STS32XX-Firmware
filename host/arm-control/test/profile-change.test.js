@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { rig, poses, configuration, profile } = require('../../../tools/teleoperation/test/fake-arm');
+const { rig, poses, configuration, profile } = require('./fake-arm');
 const { GravityModel } = require('../GravityModel');
 
 async function setup(gravity) {

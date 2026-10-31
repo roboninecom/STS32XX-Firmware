@@ -43,7 +43,7 @@ function analyse(file) {
 }
 function implementationIdentity() {
   const files = {};
-  for (const root of ['tools/tuning', 'host/arm-control', 'host/servo-driver', 'tools/teleoperation']) {
+  for (const root of ['tools/tuning', 'host/arm-control', 'host/servo-driver', 'tools/teleoperation', 'tools/poses']) {
     const directory = path.resolve(__dirname, '../..', root);
     function visit(folder) {
       for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {

@@ -638,29 +638,18 @@ refer to different moments; compare their timestamps and sample numbers.
 
 ## Build and verification
 
-Install an Arm GNU bare-metal toolchain providing `arm-none-eabi-gcc`, a host C
-compiler with address/undefined-behavior sanitizers, Python 3, and Make.
+Firmware sources, tests and build rules are in [`firmware/`](firmware/README.md).
+After installing the [toolchain](firmware/README.md#build-and-verify), run:
 
 ```sh
 make
 make verify
 ```
 
-For a toolchain outside PATH, set `ARM_PREFIX` to its full executable prefix:
-
-```sh
-make verify ARM_PREFIX=/path/to/toolchain/bin/arm-none-eabi-
-```
-
-Firmware sources, tests and build rules are in [`firmware/`](firmware/README.md).
-The root Makefile delegates there. Images and build records are generated under `build/`, which is excluded from
-Git. Verification builds and
-tests offline; it does not flash a servo or open a serial port. See
-[firmware tests](firmware/tests/README.md) for the available regression coverage.
-
-A [firmware upload and recovery tool](tools/flash/README.md) is included.
-It accepts publisher-supplied firmware releases. Follow its setup and
-verification guide before using hardware.
+Build output goes to ignored `build/`. Verification is offline and does not
+flash hardware. See [project checks](tools/README.md#offline-checks) for host,
+flashing-tool and viewer tests. To install a published firmware release, use the
+[flash and recovery tool](tools/flash/README.md).
 
 ## Repository layout
 
@@ -669,8 +658,7 @@ verification guide before using hardware.
 | [`firmware/`](firmware/README.md) | C sources, headers, hardware drivers, linker script, build rules and firmware tests |
 | [`host/servo-driver/`](host/servo-driver/README.md) | Installable Node.js driver for legacy commands and the v9 extension |
 | [`tools/teleoperation/`](tools/teleoperation/README.md) | Control a follower from a hand-operated leader |
-| [`tools/pose-recorder/`](tools/pose-recorder/README.md) | Record and replay named motor positions |
-| [`tools/legacy-replay/`](tools/legacy-replay/README.md) | Replay poses with saved legacy settings |
+| [`tools/poses/`](tools/poses/README.md) | Record poses and replay with legacy or extension control |
 | [`tools/settings/`](tools/settings/README.md) | Motor discovery, joint calibration and settings backup/restore |
 | [`tools/tuning/`](tools/tuning/README.md) | Compare controller settings in batches |
 | [`tools/simulation/`](tools/simulation/README.md) | View live motion and play recorded telemetry |

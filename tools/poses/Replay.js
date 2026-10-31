@@ -2,8 +2,8 @@
 
 const fs = require('node:fs/promises');
 const { createHash } = require('node:crypto');
-const { validateRecording } = require('../pose-recorder/capture');
-const { mapPosition } = require('./Teleoperation');
+const { validateRecording } = require('./capture');
+const { mapPosition, validateLeaderMapping } = require('../teleoperation/Teleoperation');
 const { coordinatedSpeeds } = require('../../host/arm-control/coordination');
 
 const MAX_FILE_BYTES = 64 * 1024 * 1024;
@@ -44,7 +44,7 @@ class Replay {
       if (!record.poses.length) throw new Error('Recording contains no poses');
       this.kind = 'poses';
       this.frames = record.poses;
-      this.joints = record.ids.map(id => ({ leaderId: id, followerId: id, mapping: 'angle' }));
+      this.joints = record.ids.map(id => ({ followerId: id }));
       if (config.joints && JSON.stringify(config.joints.map(j => j.followerId).sort((a, b) => a - b)) !==
           JSON.stringify([...record.ids].sort((a, b) => a - b))) throw new Error('Pose IDs differ from configured follower IDs');
       this.leaderLimits = {};
@@ -54,6 +54,7 @@ class Replay {
       });
       const preflight = events.find(event => event.type === 'preflight');
       if (!Array.isArray(config.joints) || !preflight?.limits?.leader) throw new Error('Recording lacks joint mapping or leader limits');
+      validateLeaderMapping(config.joints);
       if (JSON.stringify(signature(preflight.config?.joints)) !== JSON.stringify(signature(config.joints)))
         throw new Error('Replay joint mapping differs from recording');
       this.kind = 'session';

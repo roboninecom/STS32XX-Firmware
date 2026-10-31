@@ -109,25 +109,27 @@ save each pose, then type `done`. Use all required motor IDs for an arm.
 
 ```sh
 npm run record-poses -- --port "$SERVO_PORT" --ids 1
-cp tools/pose-recorder/replay.example.json controller.json
+cp tools/poses/replay.example.json tools/poses/controller.local.json
 ```
 
-Edit `controller.json`: set `followerPort`, provide a `profiles` entry for every
+Edit `tools/poses/controller.local.json`: set `followerPort`, provide a `profiles` entry for every
 motor, and choose suitable gains, effort limits, speed and acceleration. Example
-values are illustrative. Check saved calibration and position limits first.
+values are illustrative. The example references a shared profile; copy that
+profile for your own gains and update its path, or put settings inline.
+Paths are relative to the controller file. Check saved calibration and position limits first.
 The follower bus must contain exactly the configured motors. Replay handles
 powered and unpowered motors and applies changed settings automatically.
 
 Replace `POSES.json` with the recorder's saved path:
 
 ```sh
-npm run replay -- controller.json POSES.json
-npm run replay -- controller.json POSES.json --run
+npm run replay -- tools/poses/controller.local.json POSES.json
+npm run replay -- tools/poses/controller.local.json POSES.json --run
 ```
 
 The first command previews; `--run` enables motion. **Normal completion leaves
 motors powered, holding the final target. Ctrl+C is not an emergency stop.**
-See [replay settings](tools/pose-recorder/README.md#replay-poses).
+See [replay settings](tools/poses/README.md#replay-poses).
 
 To compare using the motors' saved legacy PID settings, without compensation:
 
@@ -136,14 +138,14 @@ npm run replay-legacy -- POSES.json --port "$SERVO_PORT" --run
 ```
 
 No controller file is needed. Omit `--run` for a read-only preview. See
-[legacy replay](tools/legacy-replay/README.md) for speed and acceleration settings.
+[legacy replay](tools/poses/README.md#legacy-replay) for speed and acceleration settings.
 
 ## 6. Enable gravity compensation
 
-For `controller.json` in the repository root, add this top-level field:
+For `tools/poses/controller.local.json`, add this top-level field:
 
 ```json
-"gravityModel": "host/arm-control/models/arm-upright-empty.json"
+"gravityModel": "../../host/arm-control/models/arm-upright-empty.json"
 ```
 
 The included model is for the calibrated, upright **SO-ARM-102 with an empty

@@ -1,0 +1,17 @@
+{
+  "followerPort": "/dev/ttyUSB0",
+  "baudRate": 1000000,
+  "maxAgeMs": 100,
+  "acceleration": 1000,
+  "rampTimeMs": 50,
+  "profiles": {
+    "1": "../../host/arm-control/profile.example.json"
+  },
+  "replay": {
+    "speed": 500,
+    "holdMs": 1000,
+    "repeat": 1,
+    "moveTimeoutMs": 30000,
+    "toleranceCounts": 10
+  }
+}

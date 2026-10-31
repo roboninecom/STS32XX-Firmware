@@ -21,13 +21,7 @@ function validate(plan, config) {
   assert(config.durationMs === undefined, 'Remove durationMs from tuning controller config; use batch.maxDurationMs');
   const ids = config.joints?.map(j => j.followerId);
   assert(ids?.includes(plan.probeId), 'probeId must be a configured follower');
-  keys(plan.poses, ['screen', 'validate', 'support'], 'poses');
-  // Older run logs may include a declared support pose. New execution captures
-  // the existing powered targets instead; never move the whole arm implicitly.
-  if (plan.poses.support !== undefined) {
-    keys(plan.poses.support, ids.map(String), 'poses.support');
-    for (const id of ids) number(plan.poses.support[id], 0, 32767, `support position ${id}`);
-  }
+  keys(plan.poses, ['screen', 'validate'], 'poses');
   for (const split of ['screen', 'validate']) {
     const pairs = plan.poses[split];
     assert(Array.isArray(pairs) && pairs.length >= 1 && pairs.length <= 8, `Expected 1–8 ${split} pose pairs`);

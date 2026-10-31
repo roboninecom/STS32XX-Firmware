@@ -6,7 +6,7 @@ const os=require('node:os');
 const path=require('node:path');
 const {exportSettings}=require('../bundle');
 const {loadConfiguration}=require('../../../host/arm-control/configuration');
-const {configuration,rig}=require('../../teleoperation/test/fake-arm');
+const {configuration,rig}=require('../../../host/arm-control/test/fake-arm');
 test('exported per-motor files reload and apply identical gains and motion settings',async t=>{
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'sts-settings-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));
  const config=configuration();config.profiles[1]={...config.profiles[1],accelerationLimit:15000,rampTimeMs:30};

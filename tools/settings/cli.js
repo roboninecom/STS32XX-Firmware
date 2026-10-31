@@ -13,7 +13,7 @@ const {
   StsServo,
 } = require('../../host/servo-driver');
 
-const { validateIds } = require('../pose-recorder/capture');
+const { validateIds } = require('../poses/capture');
 
 const FORMAT = 'factory-sts-settings';
 const FORMAT_VERSION = 1;

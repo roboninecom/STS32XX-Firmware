@@ -454,3 +454,12 @@ test('normal completion retains the last extension target without disabling torq
   assert.equal(sent, 1);
   assert(!r.calls.some(c => c[1] === 'write' && c[3] === 40 && c[4][0] === 0));
 });
+
+
+test('live input rejects missing, invalid or duplicate leader IDs before bus access', () => {
+  const { TeleoperationInput } = require('../Teleoperation');
+  for (const ids of [[undefined], [0], [254], [1, 1]]) {
+    const config = { joints: ids.map((leaderId, i) => ({ leaderId, followerId: i + 1, mapping: 'angle' })) };
+    assert.throws(() => new TeleoperationInput({ leader: {}, config }), /leaderId/);
+  }
+});

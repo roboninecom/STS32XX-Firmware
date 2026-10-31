@@ -2,7 +2,7 @@
 
 const { performance } = require('node:perf_hooks');
 const { RequestTimeoutError } = require('../../host/servo-driver');
-const { validateRecording } = require('../pose-recorder/capture');
+const { validateRecording } = require('./capture');
 const { coordinatedSpeeds } = require('../../host/arm-control/coordination');
 
 const SETTINGS = ['responseStatusLevel', 'minAngleLimit', 'maxAngleLimit', 'configurationFlags', 'positionPGain',

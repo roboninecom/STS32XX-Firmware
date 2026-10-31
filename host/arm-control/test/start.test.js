@@ -2,7 +2,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { ArmController } = require('../ArmController');
-const { rig, poses, configuration, profile } = require('../../../tools/teleoperation/test/fake-arm');
+const { rig, poses, configuration, profile } = require('./fake-arm');
 const { ApplySettings } = require('../../../tools/tuning/ApplySettings');
 
 async function powered() {

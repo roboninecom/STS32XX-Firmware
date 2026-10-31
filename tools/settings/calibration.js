@@ -6,7 +6,7 @@ const { randomUUID } = require('node:crypto');
 const { performance } = require('node:perf_hooks');
 const { setTimeout: delay } = require('node:timers/promises');
 const { StsServo } = require('../../host/servo-driver');
-const { PoseCapture, validateIds } = require('../pose-recorder/capture');
+const { PoseCapture, validateIds } = require('../poses/capture');
 
 const TURN = 4096, CENTER = 2048, MARGIN = 10, MIN_TRAVEL = 64;
 const REFERENCE_POSE = {

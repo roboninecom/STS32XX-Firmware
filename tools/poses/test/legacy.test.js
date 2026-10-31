@@ -6,7 +6,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { LegacyReplay, motionValues } = require('../LegacyReplay');
-const { parse, run } = require('../cli');
+const { parse, run } = require('../legacy');
 const { RequestTimeoutError } = require('../../../host/servo-driver');
 
 function record(positions = [{ 1: 2000, 2: 1250 }, { 1: 1000, 2: 1250 }]) {

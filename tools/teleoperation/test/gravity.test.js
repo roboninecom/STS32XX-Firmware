@@ -5,7 +5,7 @@ const { GravityModel } = require('../../../host/arm-control/GravityModel');
 const { ArmController } = require('../../../host/arm-control/ArmController');
 const { TeleoperationInput } = require('../Teleoperation');
 const { Instruction } = require('../../../host/servo-driver');
-const { profile, configuration, poses, session, rig, targets, torqueOff } = require('./fake-arm');
+const { profile, configuration, poses, session, rig, targets, torqueOff } = require('../../../host/arm-control/test/fake-arm');
 const model = (ids = [1]) => new GravityModel({ format: 'sts-gravity', version: 1, units: 'pwm-effort',
   name: 'test', calibration: 'counts', mounting: 'test', payload: 'empty',
   encoderCalibration: Object.fromEntries(ids.map(id => [id, { positionCorrection: 0, resolution: 1, reverse: false }])),

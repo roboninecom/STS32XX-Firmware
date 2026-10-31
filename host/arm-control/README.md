@@ -1,6 +1,6 @@
 # Shared arm controller and gravity compensation
 
-Live teleoperation, named-pose replay and timed-session replay use one follower
+Live teleoperation, tuning, named-pose replay and timed-session replay use one follower
 controller. It handles setup, targets, measured feedback, gravity and cleanup.
 The [servo driver](../servo-driver/README.md) owns packet encoding and transport.
 
@@ -15,7 +15,33 @@ and their operating limits.
 "profiles": {"1": "motor-1.json", "2": "motor-2.json"}
 ```
 
-Each motor file contains the profile fields documented in the servo driver. Optional `accelerationLimit` and `rampTimeMs` override the shared controller values. Tuning, replay and teleoperation use the same files. These are extension RAM settings; saved encoder offsets and travel limits remain separate.
+The [example profile](profile.example.json) is shared by the tool examples.
+Copy it for your own settings and update the reference, or inline the profile.
+If you move a controller file, adjust its profile and gravity paths. Files named
+`*.local.json` are ignored by Git.
+
+Set `acceleration` in counts/s² (1–30000) and `rampTimeMs` in milliseconds (1–255)
+on the controller. Each motor may override these with `accelerationLimit` and
+`rampTimeMs` in its profile. Profiles are extension RAM settings; saved encoder
+offsets and travel limits remain separate.
+
+| Profile field | Meaning |
+| --- | --- |
+| `kpQ8`, `kdQ8`, `kiQ8` | Controller gains multiplied by 256. |
+| `integralLimit`, `effortLimit` | Integral and total output limits in PWM effort units. |
+| `velocityLimit` | Maximum speed in counts/s; defaults to 65535. |
+| `velocityFilterQ8` | Measured velocity filter setting, 1–255. |
+| `gravitySlewEffortPerS` | Rate limit for gravity effort changes. |
+| `velocityFeedforward` | `positiveGainQ8`, `negativeGainQ8`, `effortLimit`; zero all three to disable. |
+
+See the [firmware register guide](../../README.md#configuration--0xa0) for full
+units and ranges. These are per-motor settings, not switchable firmware profiles.
+
+Tuning and settings application use `joints: [{ "followerId": 1 }]`; add one
+entry per controlled motor. Named-pose replay gets IDs from the recording and
+needs no `joints` array. Only live teleoperation and recorded-leader replay need
+`leaderId`, `mapping` and optional direction/centers; see
+[teleoperation mapping](../../tools/teleoperation/README.md#mapping-and-control).
 
 ## Enable gravity
 
@@ -103,8 +129,14 @@ a failure instead of silently continuing with old gravity. These are host
 checks, not firmware timeouts. Asynchronous I/O can delay detection; they do not
 make the host a real-time controller.
 
-Health checks run with gravity updates, or approximately every 250 ms without
-gravity. Model errors, rejected updates, missing/stale feedback, lost ownership,
+Live health checks run approximately every 250 ms without gravity or every
+50 ms with it. Replay uses detailed C2 feedback every 50 ms during holds and
+timed playback; arrival checks may poll faster. `--compact` substitutes smaller
+C1 packets, which omit intermediate planner positions and PID contributions.
+Tuning reads detailed feedback for all motors at startup, then C2 for the probe
+and C1 for supporting motors. Feedback always shares the gravity reader.
+
+Model errors, rejected updates, missing/stale feedback, lost ownership,
 alarms and temperatures at or above 60 °C attempt verified torque-off on every
 prepared follower. Cleanup failures are reported.
 
@@ -135,5 +167,6 @@ profile changes. Profile errors use the normal all-motor failure cleanup.
 Sources submit positions through the
 controller and use its serviced waits, so long pauses continue feedback updates.
 
-Run `npm run test:arm` for model tests and `npm run test:teleoperation` for live,
-replay and failure-path tests. Tests use simulated serial responses.
+Run `npm run test:arm` for the shared controller, `npm run test:poses` for
+recording/replay and `npm run test:teleoperation` for live control. Tests use
+simulated serial responses.

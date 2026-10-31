@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { rig, poses, configuration } = require('../../teleoperation/test/fake-arm');
+const { rig, poses, configuration } = require('../../../host/arm-control/test/fake-arm');
 const { ArmController } = require('../../../host/arm-control/ArmController');
 const { BatchSource } = require('../BatchSource');
 const { validate } = require('../plan');
@@ -12,6 +12,7 @@ const { analyse, execute, main } = require('../cli');
 const { score, fit } = require('../analysis');
 function fixture() {
   const plan = structuredClone(require('../example.json')), config = configuration();
+  config.joints = config.joints.map(({ followerId }) => ({ followerId }));
   plan.batch.screenHoldMs = 500; plan.batch.validateHoldMs = 2000;
   plan.config = 'unused'; config.acceleration = 500;
   const r = rig(poses(), config), events = [];
@@ -61,7 +62,7 @@ for (const changed of [false, true]) test(`next tuning batch automatically conti
 });
 test('plans reject obsolete fields, leaked validation and unbounded candidates', () => {
   const { plan, config } = fixture();
-  for (const change of [p => { p.heartbeat = 50; }, p => { p.poses.validate = p.poses.screen; },
+  for (const change of [p => { p.heartbeat = 50; }, p => { p.poses.support = { 1: 1000 }; }, p => { p.poses.validate = p.poses.screen; },
     p => { p.candidates[0].changes.effortLimit = 1000; }, p => { p.motion.speeds = [NaN]; },
     p => { p.candidates[0].changes.timeoutMs = 100; }]) {
     const bad = structuredClone(plan); change(bad); assert.throws(() => validate(bad, config));
@@ -242,4 +243,17 @@ test('short screening defers holding criteria, but validation enforces them afte
   const bad = score(make(2500, true), validation, plan);
   assert.equal(bad.passed, false); assert(bad.failures.includes('holdSpan'));
   assert.deepEqual(bad.deferredMetrics, []);
+});
+
+// Load the published plan through the real path resolver, including its shared profile.
+test('published tuning example needs only follower IDs', async () => {
+  const { load } = require('../cli');
+  const { plan, config } = await load(path.resolve(__dirname, '../example.json'));
+  assert.deepEqual(config.joints, [{ followerId: 1 }]);
+  assert.equal(config.profiles[1].velocityLimit, 500);
+  const r = rig(poses(), config);
+  const source = new BatchSource(plan, config);
+  const controller = new ArmController({ follower: r.follower, source, config });
+  await controller.preflight();
+  assert.equal(controller.joints[0].leaderId, undefined);
 });

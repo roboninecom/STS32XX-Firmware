@@ -1,8 +1,9 @@
-# Simulation viewer
+# Telemetry viewer
 
 View live telemetry or replay a controller recording in MuJoCo. The viewer reads
 log files; it never connects to motors or sends commands. Both models use the
-same viewer, charts and reference overlay.
+same viewer, charts and reference overlay. It displays recorded motion; it does
+not predict motor dynamics or tuning results.
 
 ## Install
 
@@ -47,7 +48,7 @@ tools/simulation/.venv/bin/python tools/simulation/viewer.py play /path/to/event
 ```
 
 The viewer accepts controller event logs, not named pose JSON files. Send pose
-files through [hardware replay](../pose-recorder/README.md#replay-poses), then
+files through [hardware replay](../poses/README.md#replay-poses), then
 view the resulting log. Playback preserves recording time and holds the final
 frame. Live display updates only after a complete motor feedback pass. Delayed
 measurements are labelled stale; commands alone cannot refresh them. A replaced

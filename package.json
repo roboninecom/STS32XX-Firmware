@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test host/servo-driver/test/*.test.js tools/teleoperation/test/*.test.js tools/diagnostics/test/*.test.js tools/hw-diff-tests/test/*.test.js tools/settings/test/*.test.js tools/pose-recorder/test/*.test.js host/arm-control/test/*.test.js tools/tuning/test/*.test.js tools/legacy-replay/test/*.test.js",
+    "test": "node --test host/servo-driver/test/*.test.js tools/teleoperation/test/*.test.js tools/diagnostics/test/*.test.js tools/hw-diff-tests/test/*.test.js tools/settings/test/*.test.js tools/poses/test/*.test.js host/arm-control/test/*.test.js tools/tuning/test/*.test.js",
     "test:diff": "node --test tools/hw-diff-tests/test/*.test.js",
     "diff": "node tools/hw-diff-tests/src/cli.js",
     "test:diagnostics": "node --test tools/diagnostics/test/*.test.js",
@@ -18,15 +18,15 @@
     "test:settings": "node --test tools/settings/test/*.test.js",
     "test:driver": "npm test --workspace sts32xx-servo-driver",
     "test:driver-package": "npm run test:package --workspace sts32xx-servo-driver",
-    "record-poses": "node tools/pose-recorder/cli.js",
-    "test:poses": "node --test tools/pose-recorder/test/*.test.js",
-    "teleoperate": "node tools/teleoperation/cli.js live",
+    "record-poses": "node tools/poses/record.js",
+    "test:poses": "node --test tools/poses/test/*.test.js",
+    "teleoperate": "node tools/teleoperation/cli.js",
     "test:teleoperation": "node --test tools/teleoperation/test/*.test.js",
     "test:arm": "node --test host/arm-control/test/*.test.js",
     "test:tuning": "node --test tools/tuning/test/*.test.js",
     "tune": "node tools/tuning/cli.js",
-    "replay": "node tools/teleoperation/cli.js replay",
-    "replay-legacy": "node tools/legacy-replay/cli.js"
+    "replay": "node tools/poses/replay-cli.js",
+    "replay-legacy": "node tools/poses/legacy.js"
   },
   "dependencies": {
     "serialport": "^13.0.0"

@@ -7,7 +7,6 @@ const { ArmCodec } = require('../../host/servo-driver');
 // targets and failure cleanup remain owned by the shared ArmController.
 class BatchSource {
   constructor(plan, config, { record = async () => {} } = {}) {
-    if (plan.poses.support !== undefined) throw new Error('Remove poses.support: tuning retains the current hold without repositioning');
     this.plan = plan; this.config = config; this.record = record;
     this.joints = config.joints;
     this.feedbackId = plan.probeId; this.feedbackIntervalMs = plan.sampling.intervalMs;
