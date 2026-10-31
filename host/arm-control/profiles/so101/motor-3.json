@@ -1,0 +1,17 @@
+{
+  "kpQ8": 2560,
+  "kdQ8": 32,
+  "kiQ8": 4096,
+  "integralLimit": 64,
+  "effortLimit": 1000,
+  "velocityLimit": 1500,
+  "velocityFilterQ8": 128,
+  "gravitySlewEffortPerS": 1000,
+  "velocityFeedforward": {
+    "positiveGainQ8": 74,
+    "negativeGainQ8": 80,
+    "effortLimit": 1000
+  },
+  "accelerationLimit": 10000,
+  "rampTimeMs": 100
+}

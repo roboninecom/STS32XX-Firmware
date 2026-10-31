@@ -1,0 +1,189 @@
+{
+  "format": "sts-gravity",
+  "version": 1,
+  "units": "pwm-effort",
+  "name": "SO-101 upright empty-gripper gravity model",
+  "calibration": "Encoder-based joint angles with the recorded per-motor calibration. Recalibrate and validate before use on another arm.",
+  "mounting": "SO-101 mounted upright, with the encoder calibration below.",
+  "payload": "Empty gripper",
+  "status": "Fitted for motors 2–4. Validate on the intended arm and motion path; the accompanying controller profile has unresolved oscillations.",
+  "models": {
+    "1": {
+      "terms": [],
+      "maxEffort": 1000,
+      "note": "Gravity compensation disabled for this motor."
+    },
+    "2": {
+      "terms": [
+        {
+          "fn": "sin",
+          "weights": {
+            "2": -0.0015339807878856412
+          },
+          "offsetRad": 0,
+          "coefficient": -76.7123370224705
+        },
+        {
+          "fn": "cos",
+          "weights": {
+            "2": -0.0015339807878856412
+          },
+          "offsetRad": 0,
+          "coefficient": 2.8611263163499925
+        },
+        {
+          "fn": "sin",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412
+          },
+          "offsetRad": 0,
+          "coefficient": 10.95198803026078
+        },
+        {
+          "fn": "cos",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412
+          },
+          "offsetRad": 0,
+          "coefficient": -64.0460212778379
+        },
+        {
+          "fn": "sin",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412,
+            "4": -0.0015339807878856412
+          },
+          "offsetRad": 0,
+          "coefficient": 2.9770598900165264
+        },
+        {
+          "fn": "cos",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412,
+            "4": -0.0015339807878856412
+          },
+          "offsetRad": 0,
+          "coefficient": 17.423772688089088
+        }
+      ],
+      "maxEffort": 1000,
+      "note": "Paired-direction fit across four coupled configurations; fourth checked independently before combining datasets."
+    },
+    "3": {
+      "terms": [
+        {
+          "fn": "sin",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412
+          },
+          "offsetRad": 0,
+          "coefficient": 2.534308907472532
+        },
+        {
+          "fn": "cos",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412
+          },
+          "offsetRad": 0,
+          "coefficient": -57.20789582684867
+        },
+        {
+          "fn": "sin",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412,
+            "4": -0.0015339807878856412
+          },
+          "offsetRad": 0,
+          "coefficient": 1.4776839652192695
+        },
+        {
+          "fn": "cos",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412,
+            "4": -0.0015339807878856412
+          },
+          "offsetRad": 0,
+          "coefficient": 18.30290690113217
+        }
+      ],
+      "maxEffort": 1000,
+      "note": "Paired 400/800 counts/s fit; checked against a third wrist configuration before combining datasets."
+    },
+    "4": {
+      "terms": [
+        {
+          "fn": "sin",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412,
+            "4": -0.0015339807878856412
+          },
+          "offsetRad": 0,
+          "coefficient": 1.7690670769827375
+        },
+        {
+          "fn": "cos",
+          "weights": {
+            "2": -0.0015339807878856412,
+            "3": -0.0015339807878856412,
+            "4": -0.0015339807878856412
+          },
+          "offsetRad": 0,
+          "coefficient": 35.59995893181378
+        }
+      ],
+      "maxEffort": 1000,
+      "note": "Paired 200/400 and 400/800 counts/s identification; independent third-configuration prediction checked before final fit."
+    },
+    "5": {
+      "terms": [],
+      "maxEffort": 1000,
+      "note": "Gravity compensation disabled for this motor."
+    },
+    "6": {
+      "terms": [],
+      "maxEffort": 1000,
+      "note": "Gravity compensation disabled for this motor."
+    }
+  },
+  "encoderCalibration": {
+    "1": {
+      "positionCorrection": 1821,
+      "resolution": 1,
+      "reverse": false
+    },
+    "2": {
+      "positionCorrection": -807,
+      "resolution": 1,
+      "reverse": false
+    },
+    "3": {
+      "positionCorrection": -1818,
+      "resolution": 1,
+      "reverse": false
+    },
+    "4": {
+      "positionCorrection": 1386,
+      "resolution": 1,
+      "reverse": false
+    },
+    "5": {
+      "positionCorrection": -99,
+      "resolution": 1,
+      "reverse": false
+    },
+    "6": {
+      "positionCorrection": -1111,
+      "resolution": 1,
+      "reverse": false
+    }
+  }
+}

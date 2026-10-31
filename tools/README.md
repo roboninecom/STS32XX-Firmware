@@ -9,10 +9,11 @@ npm package built from this repository. Replay and teleoperation share the
 | Tool | Purpose |
 | --- | --- |
 | [Automated tuning](tuning/README.md) | Compare bounded batches of settings with repeated moves and longer validation holds. |
-| [Simulation and viewer](simulation/README.md) | View live telemetry and play recordings with the bundled SO-ARM-102 model; no bus access. |
+| [Simulation and viewer](simulation/README.md) | View live telemetry and play recordings with bundled SO-101 and SO-102 models; no bus access. |
 | [Teleoperation](teleoperation/README.md) | Control a follower by hand or replay a recorded session. |
 | [Pose recorder](pose-recorder/README.md) | Record named positions with torque off and replay them on a follower. |
-| [Discovery and settings](settings/README.md) | Find motors and back up or restore their persistent settings. |
+| [Legacy replay](legacy-replay/README.md) | Replay poses using saved legacy PID settings, without extension compensation. |
+| [Discovery, calibration and settings](settings/README.md) | Find motors, calibrate joint offsets and limits, and back up or restore persistent settings. |
 | [Hardware comparison tests](hw-diff-tests/README.md) | Compare factory and custom firmware behaviour on a dedicated servo bench. |
 | [Bus benchmark and telemetry](diagnostics/README.md) | Measure communication latency and check stationary readings for unusual values. |
 | [Firmware flashing and recovery](flash/README.md) | Flash custom or bundled factory firmware, recover interrupted uploads and repair factory settings. |

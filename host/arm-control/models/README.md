@@ -1,10 +1,15 @@
 # Gravity models
 
-`arm-upright-empty.json` defines the unloaded upright SO-ARM-102 model, including
-its encoder calibration and coupled terms for motors 2–4. Motors 1, 5 and 6
-have explicit zero compensation. It assumes the original upright mounting,
-unchanged encoder offsets and an empty gripper. It is not a universal servo
-model. Recheck it on hardware before using it with a different setup.
+Two upright, empty-gripper models are included:
+
+- `arm-upright-empty.json`: SO-102.
+- `so101-upright-empty.json`: SO-101.
+
+Both include encoder calibration and coupled terms for motors 2–4. Motors 1, 5
+and 6 have explicit zero compensation. They assume the original mounting,
+encoder offsets and link geometry. Recheck on hardware before using a different
+setup. Matching [controller profiles](../profiles/README.md) describe their
+operating settings and remaining limitations.
 
 The file contains signed PWM effort coefficients and the encoder settings they
 were fitted against. `encoderCalibration` lists signed position corrections,

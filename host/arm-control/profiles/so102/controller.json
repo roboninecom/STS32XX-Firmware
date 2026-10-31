@@ -1,0 +1,55 @@
+{
+  "followerPort": "/dev/ttyUSB0",
+  "baudRate": 1000000,
+  "acceleration": 15000,
+  "rampTimeMs": 100,
+  "responseTimeoutMs": 150,
+  "maxAgeMs": 150,
+  "gravityModel": "../../models/arm-upright-empty.json",
+  "profiles": {
+    "1": "motor-1.json",
+    "2": "motor-2.json",
+    "3": "motor-3.json",
+    "4": "motor-4.json",
+    "5": "motor-5.json",
+    "6": "motor-6.json"
+  },
+  "replay": {
+    "speed": 2000,
+    "holdMs": 1000,
+    "moveTimeoutMs": 60000,
+    "toleranceCounts": 20
+  },
+  "joints": [
+    {
+      "leaderId": 1,
+      "followerId": 1,
+      "mapping": "angle"
+    },
+    {
+      "leaderId": 2,
+      "followerId": 2,
+      "mapping": "angle"
+    },
+    {
+      "leaderId": 3,
+      "followerId": 3,
+      "mapping": "angle"
+    },
+    {
+      "leaderId": 4,
+      "followerId": 4,
+      "mapping": "angle"
+    },
+    {
+      "leaderId": 5,
+      "followerId": 5,
+      "mapping": "angle"
+    },
+    {
+      "leaderId": 6,
+      "followerId": 6,
+      "mapping": "angle"
+    }
+  ]
+}

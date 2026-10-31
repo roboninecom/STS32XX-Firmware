@@ -4,6 +4,19 @@ Live teleoperation, named-pose replay and timed-session replay use one follower
 controller. It handles setup, targets, measured feedback, gravity and cleanup.
 The [servo driver](../servo-driver/README.md) owns packet encoding and transport.
 
+## Motor settings files
+
+See the [SO-101 and SO-102 profiles](profiles/README.md) for reference settings
+and their operating limits.
+
+`profiles` may contain inline settings or paths relative to the controller file:
+
+```json
+"profiles": {"1": "motor-1.json", "2": "motor-2.json"}
+```
+
+Each motor file contains the profile fields documented in the servo driver. Optional `accelerationLimit` and `rampTimeMs` override the shared controller values. Tuning, replay and teleoperation use the same files. These are extension RAM settings; saved encoder offsets and travel limits remain separate.
+
 ## Enable gravity
 
 Add `gravityModel` to your existing configuration. Paths
@@ -17,11 +30,11 @@ configuration saved in the repository root:
 This line is an addition to a complete configuration, not a standalone file.
 Provide tested `profiles` for every follower; `effortLimit` caps the total motor
 output and `gravitySlewEffortPerS` limits how quickly gravity effort changes.
-Setting the slew alone does not enable gravity. Without `gravityModel`, the tool
-sends no gravity compensation.
+Setting the slew alone does not enable gravity. Without `gravityModel`, replay
+clears any retained gravity effort and then runs without gravity compensation.
 
-The supplied [arm model](models/README.md) preserves the existing upright,
-empty-gripper arm calibration. Its coefficients for motors 2–4 use their measured
+The supplied [arm models](models/README.md) preserve each upright,
+empty-gripper arm's calibration. Their coefficients for motors 2–4 use measured
 encoder counts, including coupled joints; motors 1, 5 and 6 explicitly use zero.
 Every controlled follower needs a model, and all joints used by its terms must
 be controlled and measured. Angle-dependent models also declare `encoderCalibration`
@@ -48,10 +61,10 @@ path and SHA-256 hash are included in the session log.
 ## Control behaviour
 
 1. Preflight checks firmware, saved limits, health, profiles and model inputs.
-2. With torque off, the controller configures and selects each motor with the
-   new session ID. One group torque-enable packet starts all prepared motors;
-   individual feedback confirms ready output. This avoids leaving later joints
-   unpowered during earlier motors' readiness and gravity checks.
+2. All controller tools continue a compatible powered session or
+   prepare a new one automatically. Matching profiles keep torque on; changed
+   profiles are applied one motor at a time. Fresh setup handles torque release,
+   configuration and selection, then enables all prepared motors together.
 3. Gravity is measured, sent and confirmed before the first motion target.
 4. During movement and pauses, one feedback pass supplies both health checks
    and gravity calculations. Gravity is refreshed approximately every 50 ms.
