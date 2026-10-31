@@ -4,6 +4,7 @@ const fs = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const { validateRecording } = require('../pose-recorder/capture');
 const { mapPosition } = require('./Teleoperation');
+const { coordinatedSpeeds } = require('../../host/arm-control/coordination');
 
 const MAX_FILE_BYTES = 64 * 1024 * 1024;
 function integer(value, min, max, name) {
@@ -24,6 +25,10 @@ class Replay {
     if (Buffer.byteLength(raw) > MAX_FILE_BYTES) throw new Error('Replay file exceeds 64 MiB');
     this.filename = filename;
     this.sha256 = createHash('sha256').update(raw).digest('hex');
+    // Read the firmware's moving reference for the simulator shadow and
+    // tracking-error charts. Replace compact feedback; do not add a second poll.
+    this.detailedAll = true;
+    this.feedbackIntervalMs = 50;
     const options = config.replay ?? {};
     for (const key of Object.keys(options))
       if (!['speed', 'holdMs', 'repeat', 'moveTimeoutMs', 'toleranceCounts'].includes(key)) throw new Error(`Unknown replay option: ${key}`);
@@ -74,30 +79,50 @@ class Replay {
 
   sample(controller) { return this.frame(controller); }
 
-  frame(controller, index = 0) {
+  frame(controller, index = 0, previousTargets) {
     const source = this.frames[index];
     const targets = this.joints.map(joint => {
       const limits = controller.limits.follower[joint.followerId];
       const position = this.kind === 'poses'
         ? Math.max(limits.min, Math.min(limits.max, source.positions[joint.followerId]))
         : mapPosition(source.positions[joint.leaderId], this.leaderLimits[joint.leaderId], limits, joint);
-      return { id: joint.followerId, position, ...(this.kind === 'poses' ? { speedLimit: this.speed } : {}) };
+      return { id: joint.followerId, position };
     });
+    if (this.kind === 'poses') {
+      const previous = new Map(previousTargets?.map(t => [t.id, t.position]));
+      const distances = targets.map(({ id, position }) => {
+        const sample = controller.lastFeedback.get(id) ?? controller.limits.follower[id].feedback;
+        const current = sample.active && sample.armed && Number.isInteger(sample.referencePositionQ8)
+          ? sample.referencePositionQ8 / 256 : sample.measuredPositionQ8 / 256;
+        return Math.abs(position - (previous.get(id) ?? current));
+      });
+      const caps = targets.map(t => Math.min(this.speed, controller.profiles[t.id].velocityLimit));
+      // Use the slowest joint's distance/speed ratio for the group. Subsequent
+      // legs start at the last capped target, so encoder noise during a hold
+      // cannot turn an unchanged joint into a spurious slow movement.
+      const speeds = coordinatedSpeeds(distances, caps);
+      targets.forEach((target, i) => {
+        target.speedLimit = speeds[i];
+      });
+    }
     return { timestamp: controller.clock(), positions: source.positions, targets,
       replay: { index, name: source.name, kind: this.kind } };
   }
 
   describe(controller) {
     let cappedTargets = 0;
+    let previousTargets;
     // Check the entire path during read-only preflight, not just its first pose.
     for (let index = 0; index < this.frames.length; index++) {
-      const frame = this.frame(controller, index);
+      const frame = this.frame(controller, index, previousTargets);
+      previousTargets = frame.targets;
       if (this.kind === 'poses') cappedTargets += frame.targets.filter(t => t.position !== frame.positions[t.id]).length;
     }
     return { path: this.filename, sha256: this.sha256, kind: this.kind, frames: this.frames.length,
+      telemetry: this.detailedAll ? 'detailed' : 'compact',
       repeat: this.repeat, cappedTargets, ...(this.kind === 'session'
         ? { recordedDurationMs: this.frames.at(-1).timestamp - this.frames[0].timestamp }
-        : { speed: this.speed, holdMs: this.holdMs }),
+        : { speed: this.speed, holdMs: this.holdMs, coordination: 'distance-scaled speed limits' }),
       moveTimeoutMs: this.moveTimeoutMs, toleranceCounts: this.toleranceCounts };
   }
 
@@ -114,6 +139,10 @@ class Replay {
     const arrive = async frame => {
       const deadline = controller.clock() + this.moveTimeoutMs;
       while (!stopped()) {
+        // Read time is part of the polling interval. Adding a full interval
+        // after a slow read can unnecessarily expire an otherwise fresh
+        // gravity update before the next pass starts.
+        const nextPoll = controller.clock() + (controller.gravity ? controller.monitorIntervalMs : 20);
         await monitor();
         let complete = true;
         for (const target of frame.targets) {
@@ -124,11 +153,12 @@ class Replay {
         }
         if (complete) return true;
         if (controller.clock() >= deadline) throw new Error(`Replay arrival timeout at frame ${frame.replay.index}`);
-        await controller.sleep(controller.gravity ? controller.monitorIntervalMs : 20);
+        await controller.sleep(Math.max(0, nextPoll - controller.clock()));
       }
       return false;
     };
 
+    let previousTargets;
     for (let cycle = 0; cycle < this.repeat; cycle++) {
       let previousStart = controller.clock(), finalFrame;
       for (let index = 0; index < this.frames.length; index++) {
@@ -138,12 +168,13 @@ class Replay {
           ? this.frames[index].timestamp - this.frames[index - 1].timestamp : 0;
         const due = previousStart + gap;
         if (!await waitUntil(due)) return;
-        const frame = this.frame(controller, index);
+        const frame = this.frame(controller, index, previousTargets);
         previousStart = frame.timestamp;
         frame.replay = { ...frame.replay, cycle: cycle + 1, latenessMs: Math.max(0, controller.clock() - due) };
         await onCommand({ ...frame, sequence: (controller.sequence + 1) & 0xffff });
         if (stopped()) return;
         await controller.send(frame);
+        previousTargets = frame.targets;
         const sent = controller.clock();
         if (stopped()) return;
         await onFrame({ ...frame, replay: { ...frame.replay, latenessMs: Math.max(0, sent - due) },

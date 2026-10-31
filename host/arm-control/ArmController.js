@@ -91,7 +91,7 @@ class ArmController {
       const supplied = this.config.profiles?.[id];
       if (!supplied) throw new Error(`Missing explicit RAM gain/effort profile for follower ${id}`);
       const profile = { ...supplied, velocityLimit: supplied.velocityLimit ?? 65535,
-        accelerationLimit: this.config.acceleration, rampTimeMs: this.config.rampTimeMs };
+        accelerationLimit: supplied.accelerationLimit ?? this.config.acceleration, rampTimeMs: supplied.rampTimeMs ?? this.config.rampTimeMs };
       ArmCodec.encodeConfig(profile);
       this.profiles[id] = profile;
     }
@@ -106,9 +106,9 @@ class ArmController {
   }
 
   feedback(id) {
-    // Tuning replaces the probe's normal feedback read with the detailed packet;
-    // supporting motors retain compact feedback. There is still only one reader.
-    return id === this.source.feedbackId
+    // Replay and tuning can replace compact feedback with the detailed packet.
+    // Each motor still has one reader, including when gravity is enabled.
+    return this.source.detailedAll || id === this.source.feedbackId
       ? this.follower.arm.tuning(id, this.options)
       : this.follower.arm.feedback(id, this.options);
   }
@@ -190,18 +190,17 @@ class ArmController {
     // Check the input and follower before changing any motor state.
     await this.source.assertUnpowered?.(this);
     for (const { followerId: id } of this.joints) {
-      if ((await this.follower.protocol.read(id, 40, 1, this.options))[0] !== 0)
-        throw new Error(`ID ${id}: startup requires torque already off`);
+      if ((await this.follower.protocol.read(id, 40, 1, this.options))[0] !== 0) {
+        this.prepared.add(id);
+        await this.write(id, 40, Buffer.from([0]));
+      }
     }
     const frame = await this.sample();
-    const q = await this.positions(this.follower, frame.targets.map(t => t.id));
     this.fresh(frame);
     for (const t of frame.targets) {
       if (this.stopping) throw this.failure ?? new Error('Startup cancelled');
       const id = t.id;
       await this.operation(id, 'deselect', () => this.follower.arm.select(id, false, 0, this.options));
-      const limits = this.limits.follower[id];
-      if (q[id] < limits.min || q[id] > limits.max) throw new Error(`ID ${id}: outside saved position limits`);
       await this.operation(id, 'configure', () => this.follower.arm.configure(id, this.profiles[id], this.options));
       this.prepared.add(id); // Include uncertain setup acknowledgments in cleanup.
       await this.operation(id, 'select extension', () => this.follower.arm.select(id, true, this.session, this.options));
@@ -222,6 +221,112 @@ class ArmController {
     if (this.stopping) throw this.failure ?? new Error('Startup cancelled');
   }
 
+  async start(callbacks) {
+    const motors = this.joints.map(({ followerId: id }) => this.limits.follower[id]);
+    const states = motors.map(m => m.feedback);
+    const session = states[0].session;
+    const reusable = session && motors.every(m => m.torque !== 0) && states.every(s => s.selected && s.armed && s.outputReady &&
+      s.driveEnabled && s.fresh && s.session === session);
+    if (!reusable) {
+      await this.initialize();
+      return;
+    }
+    await this.source.assertUnpowered?.(this);
+    const requested = this.profiles;
+    const detailed = this.source.detailedAll;
+    // Startup needs retained references and gravity even for sources that use
+    // compact feedback during motion. Keep the same single telemetry reader.
+    this.source.detailedAll = true;
+    try {
+      await this.adoptSession();
+      if (states.some(s => s.running)) await this.waitForRest(() => this.stopping);
+      if (!this.gravity) await this.clearGravity();
+      await this.applyProfiles(requested, callbacks);
+    } finally { this.source.detailedAll = detailed; }
+  }
+
+  async clearGravity() {
+    // The firmware retains the last gravity command. Explicitly ramp it to zero
+    // when the next configuration omits gravity, without releasing the motors.
+    const pending = new Map();
+    let deadline = this.clock() + 3000;
+    for (const id of this.ready) {
+      const s = this.lastFeedback.get(id);
+      if (!s.gravityReceived && !s.gravityEffort) continue;
+      const sequence = ((s.gravitySequence ?? 0) + 1) & 0xffff;
+      const payload = ArmCodec.encodeGravity({ session: this.session, sequence, gravityEffort: 0 });
+      await this.follower.protocol.transaction(wire => wire.armCommand(id, Instruction.ARM_GRAVITY, payload, this.options));
+      pending.set(id, sequence);
+      deadline = Math.max(deadline, this.clock() + 1000 +
+        Math.abs(s.gravityEffort) * 1000 / this.profiles[id].gravitySlewEffortPerS);
+    }
+    while (pending.size) {
+      if (this.stopping) throw this.failure ?? new Error('Startup cancelled');
+      await this.sleep(5);
+      await this.monitor(this.onTelemetry);
+      for (const [id, sequence] of pending) {
+        const s = this.lastFeedback.get(id);
+        if (s.gravityReceived && s.gravitySequence === sequence && s.gravityEffort === 0) pending.delete(id);
+      }
+      if (pending.size && this.clock() >= deadline) throw new Error('Gravity removal timeout');
+    }
+  }
+
+  async applyProfiles(profiles, { onCommand = () => {}, shouldStop = () => false } = {}) {
+    const changed = this.joints.filter(({ followerId: id }) =>
+      !ArmCodec.encodeConfig(profiles[id]).equals(ArmCodec.encodeConfig(this.profiles[id])));
+    if (!changed.length) return;
+    const targets = this.joints.map(({ followerId: id }) => ({ id,
+      position: this.lastFeedback.get(id).referencePositionQ8 / 256, speedLimit: 200 }));
+    if (targets.some(t => !Number.isFinite(t.position))) throw new Error('Invalid retained target');
+    for (const { followerId: id } of changed) {
+      if (this.stopping || shouldStop()) throw new Error('Settings application interrupted');
+      await this.changeProfile(id, profiles[id]);
+      const frame = { timestamp: this.clock(), targets };
+      await onCommand(frame);
+      await this.send(frame);
+      await this.waitForRest(() => this.stopping || shouldStop());
+    }
+  }
+
+  // Validate ownership before writing to an existing powered session.
+  async adoptSession() {
+    const samples = new Map();
+    const actualProfiles = {};
+    let session, sequence;
+    for (const { followerId: id } of this.joints) {
+      const s = await this.follower.arm.tuning(id, this.options);
+      this.checkHealth(id, s);
+      if (!s.selected || !s.armed || !s.outputReady || !s.driveEnabled || !s.fresh || !s.session)
+        throw new Error(`Follower ${id}: extension state changed during startup`);
+      session ??= s.session;
+      if (s.session !== session) throw new Error('Motor sessions changed during startup');
+      const actual = await this.follower.arm.configuration(id, this.options);
+      ArmCodec.encodeConfig(actual);
+      actualProfiles[id] = actual;
+      if (sequence === undefined || ((s.acceptedSequence - sequence) & 0xffff) < 32768) sequence = s.acceptedSequence;
+      samples.set(id, s);
+    }
+    for (const [id, s] of samples) {
+      if (((sequence + 1 - s.acceptedSequence) & 0xffff) > 32767)
+        throw new Error('Motor target counters are too far apart');
+      const latest = await this.follower.arm.tuning(id, this.options);
+      this.checkHealth(id, latest);
+      if (!latest.armed || !latest.outputReady || latest.session !== session ||
+          latest.acceptedSequence !== s.acceptedSequence || latest.gravitySequence !== s.gravitySequence)
+        throw new Error(`Follower ${id}: session changed during startup`);
+    }
+    this.session = session; this.sequence = sequence;
+    this.profiles = actualProfiles;
+    for (const [id, s] of samples) {
+      this.enabled.add(id); this.prepared.add(id); this.ready.add(id);
+      this.expectedSequences.set(id, s.acceptedSequence);
+      if (this.gravity && s.gravityReceived) this.gravitySent.set(id, { sequence: s.gravitySequence, effort: s.gravityEffort,
+        measuredAt: this.clock(), settledAt: this.clock() });
+    }
+    await this.monitor(this.onTelemetry);
+  }
+
   async waitUntilOutputReady(id) {
     const started = this.clock();
     while (true) {
@@ -232,10 +337,14 @@ class ArmController {
       const s = await this.feedback(id);
       this.checkHealth(id, s);
       if (!s.armed || s.session !== this.session) {
-        const q = s.measuredPositionQ8 / 256, limits = this.limits.follower[id];
-        if (Number.isFinite(q) && (q < limits.min || q > limits.max))
-          throw new Error(`Follower ${id}: outside saved position limits at torque enable (${q}, limits ${limits.min}–${limits.max})`);
-        throw new Error(`Follower ${id}: startup ownership lost`);
+        const position = s.measuredPositionQ8 / 256;
+        const { min, max } = this.limits.follower[id];
+        // Diagnose the firmware's refusal; do not add a host travel guard or
+        // silently change the motor's saved limits.
+        const detail = position < min || position > max
+          ? `position ${position} is outside saved limits ${min}–${max}; firmware rejects torque enable outside those limits`
+          : `selected=${s.selected}, armed=${s.armed}, session=${s.session}, expected=${this.session}`;
+        throw new Error(`Follower ${id}: firmware did not arm the requested session: ${detail}`);
       }
       if (s.fresh && s.driveEnabled && s.outputReady) return;
       if (this.stopping || this.clock() - started >= 3000) throw new Error(`Follower ${id}: output readiness timeout`);
@@ -283,7 +392,31 @@ class ArmController {
     if (this.failure) throw this.failure;
     if (this.gravity) for (const [id, sent] of this.gravitySent)
       if (this.clock() - sent.measuredAt > this.gravityMaxAgeMs)
-        throw new Error(`Follower ${id}: gravity update deadline missed`);
+        throw Object.assign(new Error(`Follower ${id}: gravity update deadline missed`), { code: 'GRAVITY_DEADLINE' });
+  }
+
+  async stationaryHoldVerified() {
+    if (this.ready.size !== this.joints.length) return false;
+    const previous = new Map();
+    try {
+      for (let pass = 0; pass < 2; pass++) {
+        const started = this.clock();
+        for (const id of this.ready) {
+          const s = await this.feedback(id);
+          this.checkHealth(id, s);
+          if (!s.fresh || !s.selected || !s.armed || !s.outputReady || !s.driveEnabled || s.running ||
+              s.session !== this.session || s.acceptedSequence !== this.expectedSequences.get(id)) return false;
+          const old = previous.get(id), gravity = this.gravitySent.get(id);
+          if (gravity && (!s.gravityReceived || s.gravitySequence !== gravity.sequence)) return false;
+          if (old && (s.sampleSequence === old.sampleSequence || s.sampleMs === old.sampleMs ||
+              Math.abs(s.measuredPositionQ8 - old.measuredPositionQ8) > 256)) return false;
+          previous.set(id, s);
+        }
+        if (this.clock() - started > 100) return false;
+        if (!pass) await this.sleep(25);
+      }
+      return true;
+    } catch { return false; }
   }
 
   async service(onTelemetry = this.onTelemetry) {
@@ -303,28 +436,41 @@ class ArmController {
     this.checkGravityAge();
     // Acceptance is published on the next fresh control pair after a write.
     if (this.clock() < this.captureNotBefore)
-      await this.sleep(this.captureNotBefore - this.clock());
+      await this.sleep(Math.max(0, this.captureNotBefore - this.clock()));
     const started = this.clock(), captures = [];
     // During startup, unpowered coupled axes are also measured. Ownership checks
     // apply only to axes whose control output has become ready.
     const ids = this.gravity ? this.joints.map(j => j.followerId) : [...this.enabled];
     for (const id of ids) {
       const measuredAt = this.clock(); // Conservative: includes request/response time.
-      const telemetry = await this.feedback(id);
+      const active = this.gravity ? this.ready.has(id) : this.enabled.has(id);
+      let telemetry = await this.feedback(id), feedbackRetries = 0;
+      // A command can invalidate the published control snapshot before the
+      // next control pair publishes its acceptance. Wait briefly for that pair;
+      // never retry an alarm, a changed session or a disabled output.
+      const freshDeadline = this.clock() + 20;
+      while (active && !telemetry.fresh && telemetry.selected && telemetry.armed &&
+          telemetry.session === this.session && telemetry.driveEnabled && telemetry.outputReady &&
+          this.clock() < freshDeadline) {
+        this.checkHealth(id, telemetry);
+        await this.sleep(3);
+        telemetry = await this.feedback(id); feedbackRetries++;
+      }
       this.checkHealth(id, telemetry);
       const previous = this.lastFeedback.get(id);
       if (previous && (telemetry.sampleSequence === previous.sampleSequence || telemetry.sampleMs === previous.sampleMs))
         throw new Error(`Follower ${id}: feedback sample did not advance`);
-      const active = this.gravity ? this.ready.has(id) : this.enabled.has(id);
       if (active &&
           (!telemetry.selected || !telemetry.armed || telemetry.session !== this.session || !telemetry.fresh ||
            !telemetry.driveEnabled || !telemetry.outputReady || telemetry.acceptedSequence !== (this.expectedSequences.get(id) ?? this.sequence)))
-        throw new Error(`Follower ${id}: extension tracking/session fault`);
+        throw new Error(`Follower ${id}: extension tracking/session fault ${JSON.stringify({
+          expectedSession: this.session, expectedSequence: this.expectedSequences.get(id) ?? this.sequence, telemetry,
+        })}`);
       const sent = this.gravitySent.get(id);
       if (sent && (!telemetry.gravityReceived || telemetry.gravitySequence !== sent.sequence))
         throw new Error(`Follower ${id}: gravity acceptance mismatch`);
       this.lastFeedback.set(id, telemetry);
-      captures.push({ timestamp: measuredAt, id, telemetry });
+      captures.push({ timestamp: measuredAt, id, telemetry, ...(feedbackRetries ? { feedbackRetries } : {}) });
     }
     // Back-to-back completion/startup reads must observe a new control sample,
     // even when the preceding pass only confirmed acceptance without a write.
@@ -337,7 +483,9 @@ class ArmController {
         const sequence = ((this.gravitySent.get(id)?.sequence ?? 0) + 1) & 0xffff;
         const payload = ArmCodec.encodeGravity({ session: this.session, sequence, gravityEffort: efforts[id] });
         await this.follower.protocol.transaction(async wire => {
-          this.checkGravityAge();
+          // The previous pass was checked before acquisition. While replacing
+          // it, freshness is determined by this pass, not by the old values on
+          // motors later in the write order.
           if (this.clock() - started > this.gravityMaxAgeMs) throw new Error('Stale coupled gravity measurements');
           await wire.armCommand(id, Instruction.ARM_GRAVITY, payload, this.options);
         }, this.options);
@@ -345,7 +493,11 @@ class ArmController {
         const change = Math.abs(efforts[id] - (previous?.effort ?? 0));
         // Conservative bound on outstanding firmware slew. Identical updates do
         // not restart the wait; changing effort includes any unfinished slew.
-        const settledAt = change ? Math.max(this.clock(), previous?.settledAt ?? 0) +
+        // Once a slew has completed, one PWM unit of rounding jitter must not
+        // restart completion on every pass. Larger changes and any outstanding
+        // slew still receive their full time allowance.
+        const needsSlew = change && (!previous || change > 1 || this.clock() < previous.settledAt);
+        const settledAt = needsSlew ? Math.max(this.clock(), previous?.settledAt ?? 0) +
           change * 1000 / this.profiles[id].gravitySlewEffortPerS : previous?.settledAt ?? this.clock();
         this.gravitySent.set(id, { sequence, effort: efforts[id], measuredAt: started, settledAt });
         this.captureNotBefore = this.clock() + 3;
@@ -416,21 +568,27 @@ class ArmController {
     return failures;
   }
 
-  async run({ onFrame = () => {}, onTelemetry = () => {}, onCommand = () => {}, shouldStop = () => false } = {}) {
-    let error;
+  async run({ onFrame = () => {}, onTelemetry = () => {}, onCommand = () => {}, onSession = () => {}, shouldStop = () => false } = {}) {
+    let error, playing = false;
     try {
       if (this.failure) throw this.failure;
       if (this.stopping || shouldStop()) return;
       this.onTelemetry = onTelemetry;
-      await this.initialize();
       const callbacks = { onFrame, onTelemetry, onCommand, shouldStop };
+      await this.start(callbacks);
+      await onSession({ session: this.session, profiles: this.profiles });
+      playing = true;
       await this.source.play(this, callbacks);
       await this.finishGravity();
       if (this.failure) throw this.failure;
     } catch (e) { error = e; }
     this.stopping = true;
-    const failures = error ? await this.disableTorque() : [];
-    if (error || failures.length) throw new Error(JSON.stringify({ error: error?.message, cleanupFailures: failures }), { cause: error });
+    // Reject late observations, but do not drop a loaded, already stationary arm
+    // merely because the host was descheduled. This does not recover the batch.
+    const holdRetained = error?.code === 'GRAVITY_DEADLINE' && playing && await this.stationaryHoldVerified();
+    const failures = error && !holdRetained ? await this.disableTorque() : [];
+    if (error || failures.length) throw new Error(JSON.stringify({ error: error?.message, cleanupFailures: failures,
+      holdRetained: !!holdRetained }), { cause: error });
   }
 }
 module.exports = { ArmController };

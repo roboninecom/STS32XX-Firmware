@@ -4,7 +4,7 @@ const { ArmCodec } = require('../../host/servo-driver');
 const assert = (ok, message) => { if (!ok) throw new Error(message); };
 const hash = value => createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
 const METRICS = ['trackingRms', 'holdError', 'holdSpan', 'overshoot', 'settlingMs', 'responseMs', 'saturationFraction'];
-const STAGES = ['baseline', 'gravity', 'velocity', 'pid', 'integral', 'validation'];
+const STAGES = ['baseline', 'gravity', 'velocity', 'pid', 'integral', 'motion', 'validation'];
 function keys(value, allowed, name) {
   assert(value && typeof value === 'object' && !Array.isArray(value), `Invalid ${name}`);
   for (const key of Object.keys(value)) assert(allowed.includes(key), `Unknown ${name}.${key}`);
@@ -21,7 +21,13 @@ function validate(plan, config) {
   assert(config.durationMs === undefined, 'Remove durationMs from tuning controller config; use batch.maxDurationMs');
   const ids = config.joints?.map(j => j.followerId);
   assert(ids?.includes(plan.probeId), 'probeId must be a configured follower');
-  keys(plan.poses, ['screen', 'validate'], 'poses');
+  keys(plan.poses, ['screen', 'validate', 'support'], 'poses');
+  // Older run logs may include a declared support pose. New execution captures
+  // the existing powered targets instead; never move the whole arm implicitly.
+  if (plan.poses.support !== undefined) {
+    keys(plan.poses.support, ids.map(String), 'poses.support');
+    for (const id of ids) number(plan.poses.support[id], 0, 32767, `support position ${id}`);
+  }
   for (const split of ['screen', 'validate']) {
     const pairs = plan.poses[split];
     assert(Array.isArray(pairs) && pairs.length >= 1 && pairs.length <= 8, `Expected 1–8 ${split} pose pairs`);
@@ -58,7 +64,7 @@ function validate(plan, config) {
   assert(Array.isArray(plan.candidates) && plan.candidates.length <= 8, 'At most eight explicit candidates');
   assert(new Set(plan.candidates.map(c => c.name)).size === plan.candidates.length, 'Duplicate candidate names');
   const allowed = { baseline: [], gravity: [], velocity: ['velocityFeedforward'], pid: ['kpQ8', 'kdQ8', 'velocityFilterQ8'],
-    integral: ['kiQ8', 'integralLimit'], validation: [] }[plan.stage];
+    integral: ['kiQ8', 'integralLimit'], motion: ['accelerationLimit', 'rampTimeMs'], validation: [] }[plan.stage];
   for (const candidate of plan.candidates) {
     keys(candidate, ['name', 'changes'], 'candidate');
     assert(typeof candidate.name === 'string' && /^[a-zA-Z0-9_-]{1,48}$/.test(candidate.name) && candidate.name !== 'baseline', 'Invalid candidate name');
@@ -70,14 +76,16 @@ function validate(plan, config) {
 }
 function candidateProfile(config, id, changes = {}) {
   return { ...config.profiles[id], velocityLimit: config.profiles[id].velocityLimit ?? 65535,
-    accelerationLimit: config.acceleration, rampTimeMs: config.rampTimeMs, ...changes };
+    accelerationLimit: config.profiles[id].accelerationLimit ?? config.acceleration,
+    rampTimeMs: config.profiles[id].rampTimeMs ?? config.rampTimeMs, ...changes };
 }
 function estimate(plan, config) {
   const n = config.joints.length, hz = 1000 / plan.sampling.intervalMs;
   // One C2 replaces C1 for the probe. Gravity uses existing measured samples.
   const bytesPerSecond = hz * (70 + (n - 1) * 48 + (config.gravityModel ? n * 18 : 0));
-  const blocks = plan.candidates.length ? (plan.candidates.length + Math.min(plan.batch.finalists, plan.candidates.length)) * 3 : 2;
-  return { bytesPerSecond, wireUtilization: bytesPerSecond * 10 / (config.baudRate ?? 1000000),
+  const setupBytesPerSecond = hz * (n * 70 + (config.gravityModel ? n * 18 : 0));
+  const blocks = plan.candidates.length ? plan.candidates.length + Math.min(plan.batch.finalists, plan.candidates.length) + 4 : 2;
+  return { bytesPerSecond, setupBytesPerSecond, wireUtilization: Math.max(bytesPerSecond, setupBytesPerSecond) * 10 / (config.baudRate ?? 1000000),
     maxDurationMs: plan.batch.maxDurationMs, blocks };
 }
 module.exports = { validate, candidateProfile, estimate, hash, assert, METRICS, STAGES };

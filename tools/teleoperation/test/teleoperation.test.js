@@ -73,9 +73,11 @@ test('missing extension gains fail instead of manufacturing tuning',async()=>{
   const r=rig();delete r.config.profiles[2];
   await assert.rejects(r.t.preflight(),/Missing explicit/);assert.equal(r.calls.length,0);
 });
-test('startup refuses powered follower without switching it off',async()=>{
+test('fresh setup automatically releases powered followers before configuration',async()=>{
   const r=rig();await r.t.preflight();r.follower.protocol.read=async()=>Buffer.from([1]);
-  await assert.rejects(r.t.initialize(),/already off/);assert.equal(r.calls.length,0);
+  await r.t.initialize();
+  assert.deepEqual(r.calls.slice(0,2).map(c=>[c[2],c[3],c[4][0]]),[[1,40,0],[2,40,0]]);
+  assert(r.calls.some(c=>c[1]==='configure'));
 });
 test('startup follows a different pose without alignment',async()=>{
   const r=rig();await r.t.preflight();
@@ -309,11 +311,11 @@ for (const interruptedDuring of ['sample', 'queued write']) {
 }
 
 
-test('extension startup cannot override saved limits',async()=>{
+test('host delegates out-of-limit startup to firmware',async()=>{
   const r=rig();await r.t.preflight();
   r.follower.protocol.syncRead=async ids=>({responses:new Map(ids.map(id=>[id,Buffer.from([0,0])]))});
-  await assert.rejects(r.t.initialize(),/outside saved position limits/);
-  assert(!r.calls.some(c=>c[1]==='write'&&c[3]===40&&c[4][0]===1));
+  await r.t.initialize();
+  assert(r.calls.some(c=>c[1]==='sync'&&c[2]===40));
   assert.throws(()=>new Teleoperation({leader:r.leader,follower:r.follower,
     config:{...r.config,startupBounds:{1:[0,4095]}}}),/Unknown controller setting: startupBounds/);
 });
@@ -334,7 +336,7 @@ test('failed torque-enable startup is detected from feedback and cleared on ever
   const r=rig();await r.t.preflight();
   const feedback=r.follower.arm.feedback;
   r.follower.arm.feedback=async()=>({...await feedback(),armed:false,session:0,fresh:false});
-  await assert.rejects(r.t.run(),/startup ownership lost/);
+  await assert.rejects(r.t.run(),/firmware did not arm/);
   assert.deepEqual(r.calls.filter(c=>c[1]==='write'&&c[3]===40&&c[4][0]===0).map(c=>c[2]),[1,2]);
 });
 

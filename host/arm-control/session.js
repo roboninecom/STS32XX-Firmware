@@ -66,6 +66,7 @@ async function run(config, { move = false, source, createSource, gravity, signal
         const started = Date.now();
         runEntered = true;
         await controller.run({
+          onSession: state => log.write({ type: 'session-ready', ...state }),
           shouldStop: () => config.durationMs !== undefined && Date.now() - started >= config.durationMs,
           onTelemetry: sample => log.write({ type: 'telemetry', ...sample }),
           onCommand: frame => log.write({ type: 'command', ...frame }),
@@ -105,4 +106,4 @@ async function run(config, { move = false, source, createSource, gravity, signal
   if (error) throw error;
 }
 
-module.exports = { validatePorts, run };
+module.exports = { validatePorts, openLog, run };

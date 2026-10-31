@@ -1,20 +1,27 @@
 'use strict';
 const { candidateProfile, hash } = require('./plan');
 const { score, aggregate, drift } = require('./analysis');
+const { ArmCodec } = require('../../host/servo-driver');
 
 // A controller input, like Replay. All device reads, profile changes, gravity,
 // targets and failure cleanup remain owned by the shared ArmController.
 class BatchSource {
   constructor(plan, config, { record = async () => {} } = {}) {
+    if (plan.poses.support !== undefined) throw new Error('Remove poses.support: tuning retains the current hold without repositioning');
     this.plan = plan; this.config = config; this.record = record;
     this.joints = config.joints;
     this.feedbackId = plan.probeId; this.feedbackIntervalMs = plan.sampling.intervalMs;
+    this.detailedAll = true;
     this.trials = []; this.blocks = []; this.index = 0;
     this.summary = { version: 2, planHash: hash(plan), status: 'incomplete', screen: [], validation: [], recommendation: null };
   }
   preflight() { return {}; }
   describe(controller) {
-    this.anchors = Object.fromEntries(this.joints.map(({ followerId: id }) => [id, Math.round(controller.limits.follower[id].position)]));
+    this.anchors = Object.fromEntries(this.joints.map(({ followerId: id }) => {
+      const limits = controller.limits.follower[id], s = limits.feedback;
+      const q = s.armed ? s.referencePositionQ8 / 256 : limits.position;
+      return [id, q];
+    }));
     const limits = controller.limits.follower[this.feedbackId];
     this.poses = Object.fromEntries(['screen', 'validate'].map(split => [split, this.plan.poses[split].map(pair =>
       pair.map(q => Math.max(limits.min, Math.min(limits.max, q))))]));
@@ -23,7 +30,8 @@ class BatchSource {
     if (Object.values(this.poses).flat().some(([a, b]) => a === b)) throw new Error('Capped tuning endpoints collapse to the same position');
     const screen = new Set(this.poses.screen.map(p => [...p].sort((a,b)=>a-b).join(':')));
     if (this.poses.validate.some(p => screen.has([...p].sort((a,b)=>a-b).join(':')))) throw new Error('Capping removes held-out pose coverage');
-    return { kind: 'tuning', stage: this.plan.stage, probeId: this.feedbackId, cappedTargets: this.cappedTargets, poses: this.poses };
+    return { kind: 'tuning', stage: this.plan.stage, probeId: this.feedbackId, support: this.anchors,
+      cappedTargets: this.cappedTargets, poses: this.poses };
   }
   sample(controller) { return this.frame(controller, this.anchors?.[this.feedbackId] ?? 0, this.plan.motion.speeds[0]); }
   frame(controller, position, speed) {
@@ -61,6 +69,12 @@ class BatchSource {
     return { ...s, hostMs: now, positions: Object.fromEntries([...controller.lastFeedback].map(([id, f]) => [id, f.measuredPositionQ8 / 256])) };
   }
   async move(controller, position, speed, trial) {
+    this.check(controller);
+    const held = controller.lastFeedback.get(this.feedbackId);
+    // The previous measured trial already included a hold at this endpoint.
+    // Do not resend that target and spend another setup hold before reversing.
+    if (!trial && this.completedPosition === position && !held?.running &&
+        held?.referencePositionQ8 === position * 256 && held.referenceVelocityQ8PerS === 0) return [];
     const frame = this.frame(controller, position, speed);
     await this.callbacks.onCommand(frame); await controller.send(frame);
     const start = controller.clock(), samples = [];
@@ -77,6 +91,7 @@ class BatchSource {
       const holdMs = trial?.holdMs ?? 300;
       if (referenceEndMs !== undefined && sample.t - referenceEndMs >= holdMs) {
         if (trial) trial.referenceEndMs = referenceEndMs;
+        this.completedPosition = position;
         return samples;
       }
     }
@@ -84,9 +99,10 @@ class BatchSource {
   async block(controller, name, changes, split, role) {
     this.check(controller);
     const profile = candidateProfile(this.config, this.feedbackId, changes);
-    if (JSON.stringify(profile) !== JSON.stringify(controller.profiles[this.feedbackId])) {
+    if (!ArmCodec.encodeConfig(profile).equals(ArmCodec.encodeConfig(controller.profiles[this.feedbackId]))) {
       await this.record({ type: 'profile-change', name, id: this.feedbackId, profile });
       await controller.changeProfile(this.feedbackId, profile);
+      this.completedPosition = undefined;
     }
     this.previous = undefined; this.nextSample = undefined; this.lastOverruns = undefined; this.lastPass = undefined;
     const start = this.trials.length;
@@ -106,30 +122,52 @@ class BatchSource {
     const block = { name, split, role, result }; this.blocks.push(block);
     await this.record({ type: 'block', block }); return result;
   }
-  async comparison(controller, candidate, split) {
+  async compareCandidates(controller, candidates, split) {
     const before = await this.block(controller, 'baseline', {}, split, 'before');
-    const result = await this.block(controller, candidate.name, candidate.changes, split, 'candidate');
+    const results = [];
+    for (const candidate of candidates)
+      results.push({ candidate, result: await this.block(controller, candidate.name, candidate.changes, split, 'candidate') });
     const after = await this.block(controller, 'baseline', {}, split, 'after');
     const stability = drift(before, after, this.plan);
-    const comparison = { name: candidate.name, split, result, baseline: { before, after }, stability,
-      eligible: result.passed && stability.stable,
-      betterThanBaseline: result.passed && (!before.passed || !after.passed || result.score < Math.min(before.score, after.score)) };
-    await this.record({ type: 'comparison', comparison });
-    if (!stability.stable) throw new Error('Baseline drift: review load, voltage and temperature');
-    return comparison;
+    const comparisons = [];
+    for (const { candidate, result } of results) {
+      const comparison = { name: candidate.name, split, result, baseline: { before, after }, stability,
+        eligible: result.passed && stability.stable,
+        betterThanBaseline: result.passed && (!before.passed || !after.passed || result.score < Math.min(before.score, after.score)) };
+      comparisons.push(comparison); await this.record({ type: 'comparison', comparison });
+    }
+    return comparisons;
   }
   async play(controller, callbacks) {
     this.callbacks = callbacks; this.started = controller.clock();
     try {
+      // Capture firmware hold targets, not measured positions: recapturing a
+      // loaded joint's steady error on each batch would make it sag repeatedly.
+      this.check(controller);
+      await controller.monitor(callbacks.onTelemetry);
+      for (const [id, s] of controller.lastFeedback) {
+          if (s.temperatureValidated >= this.plan.limits.maxTemperature || s.voltageRaw < this.plan.limits.minVoltageRaw ||
+              s.voltageRaw > this.plan.limits.maxVoltageRaw) throw new Error(`Motor ${id}: setup temperature/voltage limit`);
+          if (!Number.isInteger(s.referencePositionQ8) ||
+              Math.abs(s.referencePositionQ8 - s.measuredPositionQ8) / 256 > this.plan.limits.followingError)
+            throw new Error(`Motor ${id}: setup following-error limit`);
+        if (s.running) throw new Error(`Motor ${id}: tuning requires an idle hold`);
+        this.anchors[id] = s.referencePositionQ8 / 256;
+      }
+      await this.record({ type: 'support-ready', targets: this.anchors, positions: Object.fromEntries([...controller.lastFeedback]
+        .map(([id, s]) => [id, s.measuredPositionQ8 / 256])) });
+      this.detailedAll = false;
       if (!this.plan.candidates.length) {
         await this.block(controller, 'baseline', {}, 'screen', 'characterize');
         await this.block(controller, 'baseline', {}, 'validate', 'characterize');
       } else {
-        for (const candidate of this.plan.candidates) this.summary.screen.push(await this.comparison(controller, candidate, 'screen'));
+        this.summary.screen = await this.compareCandidates(controller, this.plan.candidates, 'screen');
+        if (this.summary.screen.some(c => !c.stability.stable)) { this.summary.status = 'inconclusive'; return; }
         const finalists = this.summary.screen.filter(c => c.eligible).sort((a,b) => a.result.score - b.result.score).slice(0, this.plan.batch.finalists);
         await this.record({ type: 'shortlist', names: finalists.map(c => c.name) });
-        for (const finalist of finalists) this.summary.validation.push(await this.comparison(controller,
-          this.plan.candidates.find(c => c.name === finalist.name), 'validate'));
+        if (finalists.length) this.summary.validation = await this.compareCandidates(controller,
+          finalists.map(f => this.plan.candidates.find(c => c.name === f.name)), 'validate');
+        if (this.summary.validation.some(c => !c.stability.stable)) { this.summary.status = 'inconclusive'; return; }
         this.summary.recommendation = this.summary.validation.filter(c => c.eligible && c.betterThanBaseline)
           .sort((a,b) => a.result.score - b.result.score)[0]?.name ?? null;
       }

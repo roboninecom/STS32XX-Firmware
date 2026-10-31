@@ -28,12 +28,17 @@ function score(samples, trial, plan) {
   const settled = samples[lastOutside + 1];
   const responseMs = settled && samples.at(-1).t - settled.t >= a.settleDwellMs ? settled.t : null;
   // Separate sustained holding from the permitted post-reference settling time.
-  // Keep at least half of a short screening hold; long validation uses all of
-  // the remaining hold, so slow oscillations cannot hide in a one-second tail.
-  const steady = hold.filter(s => s.t >= trial.referenceEndMs + Math.min(a.settlingMs, trial.holdMs / 2));
+  // Short screens report their available tail without qualifying holding.
+  // Validation allows the full settling interval, then observes the remaining
+  // hold so slow oscillations cannot hide in a single endpoint sample.
+  const shortScreen = trial.split === 'screen' && trial.holdMs < a.settlingMs + a.settleDwellMs;
+  const steadyStart = shortScreen ? Math.min(a.settlingMs, trial.holdMs / 2)
+    : Math.min(a.settlingMs, Math.max(0, trial.holdMs - a.settleDwellMs));
+  const steady = hold.filter(s => s.t >= trial.referenceEndMs + steadyStart);
   if (!steady.length) return { valid: false, passed: false, reasons: ['no steady hold'] };
   const q = steady.map(s => s.measuredPositionQ8 / 256);
   const direction = Math.sign(trial.target - trial.from);
+  const saturation = rows => rows.length ? rows.filter(s => s.saturated).length / rows.length : 0;
   const metrics = {
     trackingRms: move.length ? rms(move.map(s => (s.referencePositionQ8 - s.measuredPositionQ8) / 256)) : 0,
     holdError: Math.max(...steady.map(s => Math.abs(s.measuredPositionQ8 / 256 - trial.target))),
@@ -41,28 +46,47 @@ function score(samples, trial, plan) {
     overshoot: Math.max(0, ...samples.map(s => direction * (s.measuredPositionQ8 / 256 - trial.target))),
     settlingMs: responseMs === null ? null : Math.max(0, responseMs - trial.referenceEndMs),
     responseMs,
-    saturationFraction: samples.filter(s => s.saturated).length / samples.length,
+    // A long hold must not hide an effort-limited movement.
+    saturationFraction: Math.max(saturation(move), saturation(hold)),
   };
-  const failures = METRICS.filter(k => metrics[k] === null || metrics[k] > a[k]);
-  return { valid: !reasons.length, passed: !reasons.length && !failures.length, reasons: [...new Set(reasons)], failures, metrics,
-    score: responseMs === null ? null : Math.max(...METRICS.map(k => metrics[k] / a[k])),
+  // Short screening can assess motion, but cannot reject holding before the
+  // allowed settling interval has elapsed. These metrics remain visible and
+  // must pass the longer, separate validation before any recommendation.
+  const deferredMetrics = shortScreen ? ['holdError', 'holdSpan', 'settlingMs', 'responseMs'] : [];
+  const assessed = METRICS.filter(k => !deferredMetrics.includes(k));
+  const failures = assessed.filter(k => metrics[k] === null || metrics[k] > a[k]);
+  return { valid: !reasons.length, passed: !reasons.length && !failures.length, reasons: [...new Set(reasons)], failures, metrics, deferredMetrics,
+    score: assessed.some(k => metrics[k] === null) ? null : Math.max(...assessed.map(k => metrics[k] / a[k])),
     observation: { samples: samples.length, referenceEndMs: trial.referenceEndMs,
+      requestedSpeed: trial.speed,
+      referencePeakSpeed: Math.max(...samples.map(s => Math.abs(s.referenceVelocityQ8PerS / 256))),
+      measuredPeakSpeed: Math.max(...samples.map(s => Math.abs(s.measuredVelocityQ8PerS / 256))),
       temperatureMax: Math.max(...samples.map(s => s.temperatureValidated)),
       holdDrift: q.at(-1) - q[0], maxGapMs: Math.max(...samples.slice(1).map((s, i) => s.t - samples[i].t)) } };
 }
 function aggregate(trials) {
   const valid = trials.length > 0 && trials.every(t => t.result.valid);
   return { valid, passed: valid && trials.every(t => t.result.passed), trials: trials.length,
+    deferredMetrics: [...new Set(trials.flatMap(t => t.result.deferredMetrics ?? []))],
     score: valid && trials.every(t => t.result.score !== null) ? median(trials.map(t => t.result.score)) : null,
     worst: valid ? Object.fromEntries(METRICS.map(k => [k, trials.some(t => t.result.metrics[k] === null) ? null : Math.max(...trials.map(t => t.result.metrics[k]))])) : null,
     failures: [...new Set(trials.flatMap(t => [...(t.result.failures ?? []), ...t.result.reasons]))] };
 }
 function drift(before, after, plan) {
   if (!before.valid || !after.valid) return { stable: false, reason: 'invalid bracketing baseline' };
-  const changes = Object.fromEntries(METRICS.map(k => [k, before.worst[k] === null || after.worst[k] === null
-    ? (before.worst[k] === after.worst[k] ? 0 : 1)
-    : Math.abs(after.worst[k] - before.worst[k]) / Math.max(plan.acceptance[k], before.worst[k])]));
-  return { stable: Object.values(changes).every(x => x <= plan.batch.driftRatio), changes };
+  const changes = Object.fromEntries(METRICS.map(k => [k, before.worst[k] === null || after.worst[k] === null ||
+    before.deferredMetrics?.includes(k) || after.deferredMetrics?.includes(k)
+    // A null settling time means the error never entered the acceptance band.
+    // Crossing that band by one count is not a 100% physical baseline change.
+    // Compare the continuous error/span metrics; report censored timing below.
+    ? null
+    // Position endpoints are quantized to encoder counts. A one-count change
+    // in hold span/error or overshoot is not evidence of baseline drift.
+    : Math.max(0, Math.abs(after.worst[k] - before.worst[k]) -
+        (['holdError', 'holdSpan', 'overshoot'].includes(k) ? 1 : 0)) /
+      Math.max(plan.acceptance[k], before.worst[k])]));
+  return { stable: Object.values(changes).every(x => x === null || x <= plan.batch.driftRatio), changes,
+    incomparable: Object.keys(changes).filter(k => changes[k] === null) };
 }
 
 // Offline identification takes independently labelled TRAIN and held-out groups,

@@ -66,8 +66,8 @@ one `profiles` entry per follower ID:
 See the [firmware register guide](../../README.md) for gain units and field
 ranges. Profiles are configuration entries for individual motors, not switchable
 firmware profiles. Acceleration and ramp time are shared by all followers.
-The tool configures and selects extension control with a generated session ID,
-then enables torque and waits for ready feedback. Persistent settings are unchanged.
+Startup handles torque and applies the supplied settings automatically, reusing
+an existing extension session when possible. Persistent settings are unchanged.
 
 For gravity compensation, add `gravityModel` to the configuration. See the
 [shared controller guide](../../host/arm-control/README.md) for the existing arm
@@ -116,8 +116,8 @@ current configuration. Files up to 64 MiB are supported. Truncated or malformed 
 before opening a port.
 
 Replay maps recorded leader positions through the recorded leader limits and
-the follower's current limits. It sends new commands with a fresh session and
-sequence numbers; recorded gains, gravity efforts, targets and packets are not
+the follower's current limits. It sends new commands using the current control
+session and sequence numbers; recorded gains, gravity efforts, targets and packets are not
 reused. A `command` event records an intended command, so a log from a failed run
 can include a position that was never sent during that run.
 
@@ -137,7 +137,35 @@ recording instead of the example's 10-second cap.
 
 For named poses from the pose recorder, use `npm run replay` as described
 in that guide. Both recording formats share follower setup, health checks and cleanup.
+Always start replay with `npm run replay -- CONFIG.json RECORDING --run`.
+It starts unpowered motors or continues an existing extension session automatically.
+Matching settings keep torque on. Changed settings are applied one motor at a time
+while supporting motors stay powered. Omitting `gravityModel` clears any retained
+gravity effort. No separate setup command is needed.
+The installed firmware rejects extension startup when a measured position is
+outside its saved travel limits. A startup refusal reports the position and limits.
 Replay logs include the source path and SHA-256 hash. Gravity-enabled logs also
 identify the current model and record requested efforts and acceptance feedback.
+Named-pose replay automatically scales joint speeds by travel distance, respecting
+the configured replay speed and each motor's speed limit. Shorter moves slow down
+to improve arrival timing. Each motor still generates its own S-curve, so acceleration
+and braking phases are not exactly synchronized. Recorded-session replay retains
+its recorded timing and existing target behavior.
+Replay reads detailed telemetry, including the firmware's intermediate planned
+position, so the simulator shadow follows the motion profile. It replaces the
+compact feedback read rather than adding another read. Feedback is scheduled
+every 50 ms during holds and timed playback; pose arrival checks can poll faster.
+
+To reduce bus traffic, append `--compact`:
+
+```sh
+npm run replay -- CONFIG.json RECORDING --run --compact
+```
+
+This requests smaller feedback packets at the same rate. Tuned settings and
+gravity compensation remain active. Measured positions still animate in the
+simulator, but the target shadow jumps to each destination because intermediate
+planner positions are absent. PID terms and applied gravity/velocity contributions
+are also absent from compact feedback. Session setup may still read detailed feedback.
 
 Run offline tests with `npm run test:teleoperation`.

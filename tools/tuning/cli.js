@@ -4,11 +4,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { run } = require('../../host/arm-control/session');
 const { GravityModel } = require('../../host/arm-control/GravityModel');
+const { loadConfiguration } = require('../../host/arm-control/configuration');
 const { validate, estimate, hash } = require('./plan');
 const { BatchSource } = require('./BatchSource');
 const { score, fit } = require('./analysis');
 const { extract } = require('./identification');
-const USAGE = 'npm run tune -- inspect|preflight|run PLAN.json\nnpm run tune -- analyse EVENTS.ndjson\nnpm run tune -- extract EVENTS.ndjson [MORE.ndjson ...]\nnpm run tune -- fit DATASET.json';
+const { exportSettings } = require('./bundle');
+const { ApplySettings } = require('./ApplySettings');
+const { EventLog } = require('./EventLog');
+const USAGE = 'npm run tune -- inspect|preflight|run PLAN.json\nnpm run tune -- analyse EVENTS.ndjson\nnpm run tune -- extract EVENTS.ndjson [MORE.ndjson ...]\nnpm run tune -- fit DATASET.json\nnpm run tune -- export CONFIG.json NEW_DIRECTORY\nnpm run tune -- apply CONFIG.json';
 
 function analyse(file) {
   const events = fs.readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line));
@@ -56,7 +60,7 @@ function implementationIdentity() {
 async function load(file) {
   const plan = JSON.parse(fs.readFileSync(file, 'utf8'));
   const configFile = path.resolve(path.dirname(file), plan.config);
-  const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+  const config = await loadConfiguration(configFile);
   validate(plan, config);
   const gravity = config.gravityModel ? await GravityModel.load(path.resolve(path.dirname(configFile), config.gravityModel)) : undefined;
   if (estimate(plan, config).wireUtilization >= 0.5) throw new Error('Tuning telemetry exceeds 50% nominal wire budget');
@@ -65,22 +69,22 @@ async function load(file) {
 async function execute({ plan, config, gravity }, { move = false, directory, signal, output = console.log, ...dependencies } = {}) {
   validate(plan, config);
   fs.mkdirSync(directory, { recursive: true });
-  const file = path.join(directory, 'events.ndjson'), fd = fs.openSync(file, 'wx');
+  const file = path.join(directory, 'events.ndjson'), log = await EventLog.open(file);
   const record = event => {
-    fs.writeSync(fd, JSON.stringify({ wallTime: new Date().toISOString(), ...event }) + '\n');
-    if (['trial-end', 'comparison', 'run-end'].includes(event.type)) fs.fsyncSync(fd);
+    log.write({ wallTime: new Date().toISOString(), ...event });
     if (event.type === 'comparison') output(JSON.stringify(event));
   };
   const source = new BatchSource(plan, config, { record });
   let error, terminalWritten = false;
   const saveSummary = () => fs.writeFileSync(path.join(directory, 'summary.json'), JSON.stringify(source.summary, null, 2) + '\n');
-  const logEvent = event => {
+  const logEvent = async event => {
     record(event);
     if (event.type === 'stopped') {
       // Final evidence must be durable while the shared lifecycle can still
       // remove torque if a write fails. Do not defer this until the port closes.
       saveSummary();
       record({ type: 'run-end', summary: source.summary });
+      await log.flush();
       terminalWritten = true;
     }
   };
@@ -91,17 +95,18 @@ async function execute({ plan, config, gravity }, { move = false, directory, sig
       output: message => { if (!message.startsWith('{')) output(message); },
       createLog: async () => ({ filename: file, write: logEvent, close: async () => {} }) });
     if (!move) source.summary.status = 'preflight';
-    else if (source.summary.status !== 'complete') throw new Error('Tuning interrupted before completion');
+    else if (!['complete', 'inconclusive'].includes(source.summary.status)) throw new Error('Tuning interrupted before completion');
   } catch (cause) {
     error = cause; source.summary.status = 'failed'; source.summary.error = cause.message;
     source.summary.recommendation = null;
   } finally {
     try {
       if (!terminalWritten || error) {
-        record({ type: 'run-end', summary: source.summary });
         saveSummary();
+        record({ type: 'run-end', summary: source.summary });
+        await log.flush();
       }
-    } finally { fs.closeSync(fd); }
+    } finally { await log.close(); }
   }
   output(JSON.stringify({ directory, ...source.summary }));
   if (error) throw error;
@@ -111,14 +116,28 @@ async function main(args = process.argv.slice(2)) {
   const [command, input, ...options] = args;
   if (!command || command === '--help') { console.log(USAGE); return; }
   if (!input) throw new Error(USAGE);
+  if (command === 'export') {
+    if (options.length !== 1) throw new Error('npm run tune -- export CONFIG.json NEW_DIRECTORY');
+    const result = await exportSettings(path.resolve(input), path.resolve(options[0]));
+    console.log(JSON.stringify(result, null, 2)); return result;
+  }
+  if (command === 'apply') {
+    if (options.length) throw new Error('npm run tune -- apply CONFIG.json');
+    const config = await loadConfiguration(input);
+    const gravity = config.gravityModel ? await GravityModel.load(path.resolve(path.dirname(input), config.gravityModel)) : undefined;
+    const abort = new AbortController(), stop = () => abort.abort();
+    process.on('SIGINT', stop); process.on('SIGTERM', stop);
+    try { await run(config, { source: new ApplySettings(config), gravity, move: true, signal: abort.signal }); }
+    finally { process.off('SIGINT', stop); process.off('SIGTERM', stop); }
+    return;
+  }
   if (['analyse', 'fit', 'extract'].includes(command)) {
     if (command !== 'extract' && options.length) throw new Error(USAGE);
     const result = command === 'analyse' ? analyse(input) : command === 'fit'
       ? fit(JSON.parse(fs.readFileSync(input, 'utf8'))) : extract([input, ...options]);
     console.log(JSON.stringify(result, null, 2)); return result;
   }
-  if (!['inspect', 'preflight', 'run'].includes(command) ||
-      options.length) throw new Error(USAGE);
+  if (!['inspect', 'preflight', 'run'].includes(command) || options.length) throw new Error(USAGE);
   const inputs = await load(path.resolve(input));
   if (command === 'inspect') { console.log(JSON.stringify({ planHash: hash(inputs.plan), estimate: estimate(inputs.plan, inputs.config) }, null, 2)); return; }
   const root = path.join(__dirname, 'logs'); fs.mkdirSync(root, { recursive: true });

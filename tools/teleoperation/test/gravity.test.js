@@ -27,11 +27,15 @@ test('gravity is measured, primed and confirmed before the first replay target',
   assert.equal(r.motors.get(1).torque, 1); assert.equal(torqueOff(r).length, 0);
 });
 
-for (const kind of ['poses', 'session']) test(`${kind}: gravity refreshes throughout holds and recorded gaps`, async () => {
+for (const detailed of [true, false]) for (const kind of ['poses', 'session'])
+test(`${kind}, ${detailed ? 'detailed' : 'compact'}: gravity refreshes throughout holds and recorded gaps`, async () => {
   const config = configuration(); config.replay.holdMs = 500;
   const raw = kind === 'poses' ? poses([1500, 2000]) : session(config,
     [{ timestamp: 0, positions: { 1: 1500 } }, { timestamp: 500, positions: { 1: 2000 } }]);
-  const r = rig(raw, config, model()); await r.controller.preflight(); await r.controller.run();
+  const r = rig(raw, config, model());
+  r.replay.detailedAll = detailed;
+  if (!detailed) r.follower.arm.tuning = async () => { throw new Error('Unexpected detailed feedback'); };
+  await r.controller.preflight(); await r.controller.run();
   const updates = gravityCalls(r);
   assert(updates.length > 15);
   for (let i = 1; i < updates.length; i++) assert(updates[i].at - updates[i - 1].at <= 70);
@@ -212,7 +216,7 @@ for (const failure of ['broadcast', 'last motor']) test(`group enable ${failure}
     const feedback = r.follower.arm.feedback;
     r.follower.arm.feedback = async id => ({ ...await feedback(id), ...(id === 3 ? { armed: false } : {}) });
   }
-  await assert.rejects(r.controller.run(), /uncertain transmission|startup ownership/);
+  await assert.rejects(r.controller.run(), /uncertain transmission|firmware did not arm/);
   assert.equal(targets(r).length, 0); assert.deepEqual(torqueOff(r).map(c => c.id), ids);
 });
 
@@ -237,4 +241,86 @@ for (const stage of ['readiness', 'gravity confirmation']) test(`interrupted gro
     if (stage === 'gravity confirmation') r.controller.stopping = true;
   } }), /Startup cancelled/);
   assert.equal(targets(r).length, 0); assert.equal(torqueOff(r).length, 1);
+});
+
+for (const condition of ['stationary', 'moving', 'alarm', 'ownership'])
+  test(`late gravity during established ${condition} state retains only a verified stationary hold`, async () => {
+    const r = rig(poses([1500]), configuration(), model());
+    const feedback = r.follower.arm.feedback;
+    r.controller.source.play = async c => {
+      await c.send(await c.sample()); await c.monitor();
+      r.follower.arm.feedback = async id => ({ ...await feedback(id),
+        ...(condition === 'moving' ? { running: true } : {}),
+        ...(condition === 'alarm' ? { faults: 1 } : {}),
+        ...(condition === 'ownership' ? { session: 0 } : {}) });
+      r.advance(101); c.checkGravityAge();
+    };
+    await r.controller.preflight();
+    await assert.rejects(r.controller.run(), /gravity update deadline/);
+    assert.equal(r.motors.get(1).torque, condition === 'stationary' ? 1 : 0);
+  });
+
+test('fresh coupled updates replace an older pass without expiring later motors mid-write', async () => {
+  const config = configuration(); delete config.joints; config.profiles[2] = profile;
+  const r = rig(poses([1500], [1, 2]), config, model([1, 2]));
+  await r.controller.preflight(); await r.controller.initialize();
+  r.advance(70); // Previous measurements are still within the deadline at entry.
+  const transaction = r.follower.protocol.transaction;
+  r.follower.protocol.transaction = async operation => { r.advance(20); return transaction(operation); };
+  await r.controller.monitor(); // Second motor's OLD value is now >100 ms old; NEW measurements are only 40 ms old.
+  assert([...r.controller.gravitySent.values()].every(s => r.controller.clock() - s.measuredAt < 100));
+  assert([...r.motors.values()].every(m => m.torque === 1));
+});
+
+test('one-PWM gravity rounding at a stationary pose does not prevent completion', async () => {
+  const g = model(); let count = 0;
+  g.evaluate = () => ({ 1: 50 + (++count % 2) });
+  const r = rig(poses(), configuration(), g);
+  r.controller.source.play = async () => {};
+  await r.controller.preflight(); await r.controller.run();
+  assert(r.controller.clock() < 1500);
+  assert.equal(r.motors.get(1).torque, 1);
+  assert(gravityCalls(r).some(c => c.effort === 50));
+  assert(gravityCalls(r).some(c => c.effort === 51));
+});
+
+test('a healthy pending snapshot is retried after a command without losing the hold', async () => {
+  const r = rig(poses([1500]), configuration(), model());
+  const feedback = r.follower.arm.feedback; let injected = false; const retries = [];
+  r.follower.arm.feedback = async id => {
+    const s = await feedback(id);
+    if (!injected && targets(r).length) { injected = true; return { ...s, fresh: false, acceptedSequence: s.acceptedSequence - 1 }; }
+    return s;
+  };
+  await r.controller.preflight(); await r.controller.run({ onTelemetry: s => { if (s.feedbackRetries) retries.push(s.feedbackRetries); } });
+  assert.deepEqual(retries, [1]); assert.equal(torqueOff(r).length, 0);
+});
+
+test('a snapshot that never becomes fresh still fails within a bounded wait', async () => {
+  const r = rig(poses([1500]), configuration(), model());
+  const feedback = r.follower.arm.feedback;
+  r.follower.arm.feedback = async id => ({ ...await feedback(id), ...(targets(r).length ? { fresh: false } : {}) });
+  await r.controller.preflight(); await assert.rejects(r.controller.run(), /tracking\/session/);
+  assert(r.controller.clock() < 1000); assert.equal(torqueOff(r).length, 1);
+});
+
+for (const delayMs of [80, 110]) test(`arrival polling with a ${delayMs} ms read preserves the gravity deadline`, async () => {
+  const config = configuration(); config.replay.moveTimeoutMs = 500;
+  const r = rig(poses([1500]), config, model());
+  r.controller.monitorIntervalMs = 25;
+  const feedback = r.follower.arm.feedback; let reads = 0;
+  r.follower.arm.feedback = async id => {
+    const sample = await feedback(id);
+    if (!targets(r).length) return sample;
+    if (++reads === 1) r.advance(delayMs);
+    return { ...sample, running: reads < 3 };
+  };
+  await r.controller.preflight();
+  if (delayMs < 100) {
+    await r.controller.run();
+    assert(reads >= 3); assert.equal(torqueOff(r).length, 0);
+  } else {
+    await assert.rejects(r.controller.run(), /Stale coupled gravity measurements/);
+    assert.equal(torqueOff(r).length, 1);
+  }
 });

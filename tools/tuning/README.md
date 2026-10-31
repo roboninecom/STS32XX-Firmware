@@ -9,7 +9,7 @@ are written to EEPROM and no winning candidate is automatically installed.
 
 From the repository root, install Node.js 20+ dependencies with `npm install`.
 Copy `controller.example.json` and `example.json`, then edit the port, motor IDs,
-profiles, safe pose pairs and limits for your mechanism. Example gains and poses
+profiles, safe joint travel pairs and limits for your mechanism. Example gains and poses
 are illustrative. Include every supporting motor in the controller configuration.
 For gravity, add `gravityModel` exactly as described in the
 [shared controller guide](../../host/arm-control/README.md).
@@ -17,13 +17,29 @@ For gravity, add `gravityModel` exactly as described in the
 The plan's `config` path is relative to the plan. The controller's `gravityModel`
 path is relative to that controller file. The same controller configuration can
 be used for pose replay. Omit `durationMs` for tuning: the plan owns the batch
-budget. Initial torque must be off.
+budget. Secure the mechanism for startup and profile changes, which briefly
+release one motor at a time.
 
 ```sh
 npm run tune -- inspect tools/tuning/example.json
 npm run tune -- preflight tools/tuning/example.json
 npm run tune -- run tools/tuning/example.json
 ```
+
+The tool keeps supporting joints at their existing firmware hold targets. Only
+`probeId` moves through its declared test pairs. There is no automatic whole-arm
+repositioning. Current targets and measured positions are logged for comparison
+between runs. Use reviewed joint paths for the current arm configuration.
+
+Use the same command for the first batch and every subsequent batch:
+
+```sh
+npm run tune -- run NEXT_PLAN.json
+```
+
+Startup automatically prepares unpowered motors or continues an existing session.
+Changed baseline settings are applied before the batch; unchanged motors retain
+their powered hold. Do not run another controller on the same bus.
 
 `inspect` does not connect. `preflight` reads firmware, calibration, saved limits,
 health and profiles without changing the motors. `run` moves them.
@@ -41,37 +57,89 @@ path. A pair collapsed to one position cannot be used as a tuning exercise.
    velocity gains using steady motion at more than one speed.
 4. **P/D and velocity filtering:** screen a small explicit set of candidates.
    Include poses with both high and low gravity load, then use longer holds to
-   expose oscillations. Change one factor at a time when identifying its effect.
+   expose oscillations. A small factorial batch can compare P, D and filtering
+   together; verify the best combination on the held-out pairs.
 5. **Integral:** only if a persistent error remains; compare moving accuracy as
-   well as long holds. Keep integral zero unless the result supports enabling it.
-6. **Validation:** run the selected configuration on different pose pairs with
-   more repeats and longer holds. Recheck after changing payload or calibration.
+   well as long holds. Include small reversals: long sweeps alone can miss an
+   integral limit that prevents a stationary joint from overcoming friction.
+   Keep integral zero unless the result supports enabling it.
+6. **Combined motion:** replay a recorded path that exercises every joint and
+   includes both folded and extended configurations. A gain that works with
+   supporting joints stationary can oscillate when the whole mechanism moves.
+   Recheck the changed joints on this same path before accepting their settings.
+7. **Validation:** freeze the selected configuration, repeat the path at every
+   required speed and acceleration, then hold representative poses for longer.
+   Record accuracy, overshoot, settling, temperature and output saturation for
+   each motor. Recheck after changing payload or calibration.
 
 `stage` restricts candidate fields: `velocity` allows `velocityFeedforward`;
 `pid` allows `kpQ8`, `kdQ8`, `velocityFilterQ8`; `integral` allows `kiQ8` and
-`integralLimit`. Baseline, gravity and validation stages collect data without
+`integralLimit`; `motion` allows `accelerationLimit` and `rampTimeMs`. Baseline, gravity and validation stages collect data without
 candidate changes. P/D/I and velocity gains use the firmware's Q8 units: divide
 by 256 for the corresponding gain. Output limits remain the explicitly supplied
 controller limits throughout the batch.
 
+Keep acceleration and ramp time fixed while comparing gains. Then compare motion settings at the required speeds. The maximum configurable acceleration is 30,000 counts/s²; the usable value depends on load and effort limits. Check actual reference and measured speeds: short strokes may never reach the requested speed.
+
+Integral gain and its limit need testing together. A large accumulated correction
+can continue driving a joint after friction releases, causing overshoot. The
+integral limit bounds only that correction; the total motor output is controlled
+separately by `effortLimit`. Prefer a stable residual error to repeated hunting,
+and report any accuracy criterion the selected settings do not meet.
+
+## Reuse settings
+
+A controller profile can be a separate JSON file, for example `"profiles": {"1": "motor-1.json"}`. Paths are relative to the controller file. Motor files contain the same fields as inline profiles; optional `accelerationLimit` and `rampTimeMs` override the shared defaults. Replay, teleoperation and tuning load these files through the same loader. Settings are applied to RAM during extension setup, not saved in EEPROM.
+
+Export a controller into a new directory containing one file per motor, `controller.json`, an optional `gravity.json`, and a manifest:
+
+```sh
+npm run tune -- export CONFIG.json NEW_DIRECTORY
+```
+
+Export does not connect to motors or certify the settings. Use the exported `controller.json` with replay, teleoperation or a tuning plan.
+
+To apply accepted settings and hold the current position:
+
+```sh
+npm run tune -- apply NEW_DIRECTORY/controller.json
+```
+
+Startup handles powered and unpowered motors automatically. In an existing session,
+only changed motors are briefly disabled and reconfigured, one at a time.
+Supporting motors stay powered and existing targets are retained. Omitting the
+gravity model clears retained gravity effort. Replay applies its configuration
+automatically, so this command is only needed to apply settings without replaying.
+
+Keep accepted settings, the gravity model, calibration, payload/mounting description
+and validation evidence together. Another arm needs its own calibration and
+validation. Do not restore another arm's encoder offsets.
+
 ## How a batch works
 
-For each candidate, the tool runs baseline → candidate → baseline. Each block
+For screening, the tool runs baseline → all candidates → baseline. Each block
 exercises every pair and speed in both directions, alternating the first
 approach across repeats. If the two baselines drift beyond `driftRatio`, the
-batch stops. Eligible candidates are ranked, and up to `finalists` repeat the
-comparison on different validation pairs with longer holds. A recommendation
+batch ends as inconclusive and keeps its powered hold. Position drift allows one
+encoder count of quantization. Eligible candidates are ranked, and up to
+`finalists` repeat the comparison between shared baselines on different validation
+pairs with longer holds. A recommendation
 requires passing validation and beating its baseline.
 
 Metrics include moving tracking RMS, steady position error and span, overshoot,
 settling time, total response time and saturation fraction. Settling requires a
 final continuous period inside the band; an early crossing does not count.
+If screening holds are shorter than the allowed settling time plus dwell,
+holding and settling metrics are reported as deferred. Screening then ranks
+moving error, overshoot and saturation. The longer validation must pass all
+metrics before a recommendation is made. Use validation holds long enough to
+cover the allowed settling time and a steady observation interval.
 Acceptance limits are supplied in the plan. An unsuccessful but valid response
 can be scored; stale samples, alarms, control overruns, excessive following
 error, support motion, temperature/voltage limits or logging failures stop the
-batch and attempt verified torque-off on all prepared motors.
+batch and attempt verified torque-off on all prepared motors. A missed gravity deadline during an established stationary hold instead preserves torque only after two fresh, healthy, stationary feedback passes confirm session ownership; the batch still fails and supplies no recommendation.
 
-One detailed C2 read replaces the probe's C1 read. Supporting motors retain C1;
+At startup, detailed C2 feedback records the existing hold targets and checks following error on every joint. During tests, one C2 read replaces the probe's C1 read. Supporting motors retain C1;
 all measurements also serve gravity updates. The plan estimates wire usage and
 rejects requests at or above 50% nominal capacity. Actual gaps are checked during
 the run. There is no separate polling process for tuning or visualization.
@@ -83,6 +151,9 @@ interval. Before changing a profile, the controller waits for the planners to
 stop and measured positions to stay within one encoder count for 200 ms. Gravity
 updates continue during this wait; failure to settle within 30 seconds stops the
 batch. Firmware retains its last target if commands stop.
+
+An already completed endpoint hold is reused before reversing direction; the
+tool does not send a duplicate setup target or add another setup delay.
 
 Normal completion restores the configured baseline and retains powered hold
 with final gravity compensation. Ctrl+C interrupts the tuning batch and attempts

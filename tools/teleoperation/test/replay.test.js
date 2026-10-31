@@ -7,6 +7,99 @@ const { run } = require('../../../host/arm-control/session');
 
 const { profile, configuration, poses, session, rig, targets, torqueOff } = require('./fake-arm');
 
+function coupledRig(waypoints, changes = {}) {
+  const ids = Object.keys(waypoints[0]).map(Number), config = configuration();
+  config.joints = ids.map(id => ({ leaderId: id, followerId: id, mapping: 'angle' }));
+  config.profiles = Object.fromEntries(ids.map(id => [id, { ...profile, ...changes[id] }]));
+  const recording = JSON.parse(poses(waypoints.map(() => 1000), ids));
+  recording.poses.forEach((pose, index) => { pose.positions = waypoints[index]; });
+  return rig(JSON.stringify(recording), config);
+}
+
+test('pose replay scales speeds from actual starting positions and leaves stationary joints idle', async () => {
+  const r = coupledRig([{ 1: 2000, 2: 1750, 3: 1000 }]);
+  r.motors.get(2).position = 1500;
+  await r.controller.preflight();
+  assert.deepEqual(r.replay.sample(r.controller).targets.map(t => t.speedLimit), [300, 75, 1]);
+  await r.controller.run();
+  assert.deepEqual(targets(r).map(t => [t.id, t.position, t.speed]), [[1, 2000, 300], [2, 1750, 75], [3, 1000, 1]]);
+  assert.equal(new Set(targets(r).map(t => t.sequence)).size, 1);
+});
+
+test('coordination uses capped travel and slows the group for a lower motor speed limit', async () => {
+  const r = coupledRig([{ 1: 5000, 2: 2500 }], { 2: { velocityLimit: 100 } });
+  await r.controller.preflight();
+  assert.equal(r.controller.sourceSummary.cappedTargets, 1);
+  await r.controller.run();
+  assert.deepEqual(targets(r).map(t => [t.position, t.speed]), [[4000, 200], [2500, 100]]);
+});
+
+test('coordination retains previous targets across repeats despite measured hold error', async () => {
+  const r = coupledRig([{ 1: 1100, 2: 1000 }, { 1: 1100, 2: 1200 }]);
+  r.replay.repeat = 2;
+  await r.controller.preflight();
+  await r.controller.run({ onFrame: () => { r.motors.get(1).position += 1; } });
+  assert.deepEqual(targets(r).filter(t => t.id === 1).map(t => t.speed), [300, 1, 1, 1]);
+  assert.deepEqual(targets(r).filter(t => t.id === 2).map(t => t.speed), [1, 300, 300, 300]);
+});
+
+test('first coordinated move uses the active reference, but ignores inactive reference fields', async () => {
+  const r = coupledRig([{ 1: 2000, 2: 3000 }]);
+  await r.controller.preflight();
+  const sample = { active: true, armed: true, referencePositionQ8: 1000 * 256, measuredPositionQ8: 1100 * 256 };
+  r.controller.lastFeedback.set(1, sample);
+  assert.deepEqual(r.replay.sample(r.controller).targets.map(t => t.speedLimit), [150, 300]);
+  sample.active = false;
+  assert.deepEqual(r.replay.sample(r.controller).targets.map(t => t.speedLimit), [135, 300]);
+});
+
+test('tiny and zero-distance coordinated moves always have valid nonzero integer speeds', async () => {
+  const r = coupledRig([{ 1: 1001, 2: 2000 }, { 1: 1001, 2: 2000 }]);
+  await r.controller.preflight();
+  await r.controller.run();
+  assert.deepEqual(targets(r).map(t => t.speed), [1, 300, 1, 1]);
+});
+
+for (const kind of ['poses', 'session']) test(`${kind} replay logs firmware reference positions using one detailed feedback reader`, async () => {
+  const config = configuration();
+  const r = rig(kind === 'poses' ? poses() : session(config), config);
+  const feedback = r.follower.arm.feedback;
+  let reads = 0;
+  r.follower.arm.feedback = async () => { throw new Error('Unexpected compact feedback read'); };
+  r.follower.arm.tuning = async id => {
+    reads++;
+    return { ...await feedback(id), referencePositionQ8: 1234 * 256, referenceVelocityQ8PerS: 50 * 256 };
+  };
+  const samples = [];
+  await r.controller.preflight();
+  await r.controller.run({ onTelemetry: sample => samples.push(sample) });
+  assert.equal(r.controller.monitorIntervalMs, 50);
+  assert(reads > 0 && samples.length > 0);
+  assert(samples.every(s => s.telemetry.referencePositionQ8 === 1234 * 256 &&
+    s.telemetry.referenceVelocityQ8PerS === 50 * 256));
+  assert.equal(targets(r).at(-1).position, 2000);
+});
+
+for (const position of [99, 4001]) test(`startup refusal reports measured position ${position} and saved limits`, async () => {
+  const r = rig();
+  r.motors.get(1).position = position;
+  await r.controller.preflight();
+  const feedback = r.follower.arm.feedback;
+  r.follower.arm.feedback = async id => ({ ...await feedback(id), armed: false });
+  await assert.rejects(r.controller.run(), new RegExp(`position ${position} is outside saved limits 100–4000`));
+  assert.equal(targets(r).length, 0);
+  assert.equal(r.motors.get(1).torque, 0);
+});
+
+test('in-range startup refusal reports session state without blaming travel limits', async () => {
+  const r = rig(); await r.controller.preflight();
+  const feedback = r.follower.arm.feedback;
+  r.follower.arm.feedback = async id => ({ ...await feedback(id), session: 0 });
+  await assert.rejects(r.controller.run(), /selected=true, armed=true, session=0, expected=/);
+  assert.equal(targets(r).length, 0);
+  assert.equal(r.motors.get(1).torque, 0);
+});
+
 test('pose replay caps targets to saved limits and sends each pose once with configured speed', async () => {
   const r = rig(poses([10, 5000])); await r.controller.preflight();
   assert.equal(r.controller.sourceSummary.cappedTargets, 2);
@@ -138,6 +231,41 @@ test('ordinary transport time fits inside recorded spacing instead of accumulati
   r.follower.protocol.armCommand = async (...args) => { r.advance(5); await send(...args); };
   await r.controller.preflight(); await r.controller.run();
   assert.deepEqual(targets(r).map(t => t.at - targets(r)[0].at), [0, 100, 200]);
+});
+
+test('replay rejects the removed resume option', () => {
+  assert.deepEqual(parse(['config.json', 'poses.json', '--run'], 'replay'),
+    { filename: 'config.json', replayFile: 'poses.json', move: true });
+  for (const args of [['config.json', 'poses.json', '--resume'],
+    ['config.json', 'poses.json', '--run', '--resume'],
+    ['config.json', 'poses.json', '--run', '--run']])
+    assert.throws(() => parse(args, 'replay'));
+  assert.throws(() => parse(['config.json', '--run', '--resume']));
+});
+
+test('compact replay is optional, preserves preview, and rejects duplicate or live flags', () => {
+  assert.deepEqual(parse(['config.json', 'poses.json', '--compact'], 'replay'),
+    { filename: 'config.json', replayFile: 'poses.json', move: false, compact: true });
+  for (const flags of [['--run', '--compact'], ['--compact', '--run']])
+    assert.equal(parse(['config.json', 'poses.json', ...flags], 'replay').move, true);
+  assert.throws(() => parse(['config.json', 'poses.json', '--compact', '--compact'], 'replay'));
+  assert.throws(() => parse(['config.json', '--compact']));
+});
+
+for (const kind of ['poses', 'session']) test(`${kind} compact replay uses smaller feedback and retains motion and polling`, async () => {
+  const config = configuration(), r = rig(kind === 'poses' ? poses() : session(config), config);
+  r.replay.detailedAll = false;
+  const feedback = r.follower.arm.feedback;
+  let reads = 0;
+  r.follower.arm.feedback = async id => { reads++; return feedback(id); };
+  r.follower.arm.tuning = async () => { throw new Error('Unexpected detailed feedback during fresh compact replay'); };
+  await r.controller.preflight();
+  assert.equal(r.controller.sourceSummary.telemetry, 'compact');
+  await r.controller.run();
+  assert.equal(r.controller.monitorIntervalMs, 50);
+  assert(reads > 0);
+  assert.equal(targets(r).at(-1).position, 2000);
+  assert.equal(r.motors.get(1).torque, 1);
 });
 
 test('published pose replay example passes read-only preflight without a joints map', async () => {

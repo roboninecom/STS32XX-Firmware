@@ -30,7 +30,7 @@ function rig(raw = poses(), config = configuration(), gravity) {
   follower.protocol = {
     read: async (id, address, length) => {
       const motor = motors.get(id), bytes = Buffer.alloc(length);
-      if (address === 0) { bytes[8] = 1; bytes[55] = 1; bytes.writeUInt16LE(100, 9); bytes.writeUInt16LE(4000, 11); bytes.writeUInt16LE(motor.position, 56); }
+      if (address === 0) { bytes[8] = 1; bytes[40] = motor.torque; bytes[55] = 1; bytes.writeUInt16LE(100, 9); bytes.writeUInt16LE(4000, 11); bytes.writeUInt16LE(motor.position, 56); }
       if (address === 40) bytes[0] = motor.torque;
       if (address === 56) bytes.writeUInt16LE(motor.position);
       return bytes;
@@ -38,7 +38,10 @@ function rig(raw = poses(), config = configuration(), gravity) {
     syncRead: async ids => ({ responses: new Map(ids.map(id => { const bytes = Buffer.alloc(2); bytes.writeUInt16LE(motors.get(id).position); return [id, bytes]; })) }),
     write: async (id, address, bytes) => {
       calls.push({ type: 'write', id, address, value: bytes[0] });
-      if (address === 40) motors.get(id).torque = bytes[0];
+      if (address === 40) {
+        motors.get(id).torque = bytes[0];
+        if (bytes[0]) motors.get(id).sequence = 0;
+      }
     },
     transaction: async operation => operation(follower.protocol),
     armCommand: async (id, instruction, bytes) => {
@@ -46,6 +49,7 @@ function rig(raw = poses(), config = configuration(), gravity) {
         const motor = motors.get(id);
         motor.gravitySequence = bytes.readUInt16LE(2);
         motor.gravityReceived = true;
+        motor.gravityEffort = bytes.readInt16LE(4);
         calls.push({ type: 'gravity', id, sequence: motor.gravitySequence, effort: bytes.readInt16LE(4), at: now });
         return;
       }
@@ -71,7 +75,8 @@ function rig(raw = poses(), config = configuration(), gravity) {
   };
   follower.arm = {
     capabilities: async () => ({ major: 9 }),
-    configure: async (id, config) => { calls.push({ type: 'configure', id, config }); },
+    configure: async (id, config) => { motors.get(id).config = structuredClone(config); calls.push({ type: 'configure', id, config }); },
+    configuration: async id => structuredClone(motors.get(id).config),
     select: async (id, selected, session) => {
       Object.assign(motors.get(id), { selected, session }); calls.push({ type: 'select', id, selected, session });
     },
@@ -84,6 +89,9 @@ function rig(raw = poses(), config = configuration(), gravity) {
         measuredVelocityQ8PerS: 0, measuredPositionQ8: motor.position * 256, running: false };
     },
   };
+  follower.arm.tuning = async id => ({ ...await follower.arm.feedback(id),
+    referencePositionQ8: motors.get(id).position * 256, referenceVelocityQ8PerS: 0,
+    gravityEffort: motors.get(id).gravityEffort ?? 0 });
   const controller = new ArmController({ follower, config, gravity, source: replay, clock: () => now, sleep: async ms => { now += ms; } });
   return { replay, controller, follower, calls, config, motors, advance: ms => { now += ms; } };
 }
