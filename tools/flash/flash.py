@@ -184,9 +184,14 @@ def execute(args, manifest, image):
                 save_report(directory, report)
                 check_device(before, manifest, args.id, args.baud)
             print(f"Release: {manifest['release']}; encoded bytes: {len(image)}; target ID: {args.id}")
-            print("Connect ONLY the intended servo. Keep torque disabled and the power supply connected.")
+            print("Keep torque disabled and the power supply connected.")
             if recovery:
+                print("Connect ONLY the intended servo for recovery; bootloader transfers are not addressed.")
                 print("Recovery cannot check model or settings first. Confirm hardware compatibility yourself.")
+            else:
+                print(f"Normal flash resets only ID {args.id}. Flash one motor at a time; do not power-cycle the bus.")
+                if "factory" in manifest:
+                    print("Isolate the servo when restoring factory firmware; startup defaults may change its ID.")
             if not args.yes and input("Type FLASH to continue: ").strip() != "FLASH":
                 report["status"] = "cancelled"
                 return 1

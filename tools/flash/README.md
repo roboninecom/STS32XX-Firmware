@@ -34,8 +34,11 @@ The factory image is only for matching hardware. Use the selected manifest with
 
 ## Prepare
 
-- Connect **only one servo** to the adapter; bootloader transfers are not addressed
-  by motor ID.
+- Normal flashing resets only the selected motor ID. Motors with unique IDs may
+  remain connected; flash them sequentially while the others run normally.
+  Do not power-cycle the bus or run another uploader during a transfer.
+- For **recovery**, connect only the intended servo. Recovery does not select a
+  motor by ID, and bootloader transfers are not addressed.
 - Secure the mechanism, use stable motor power, and close other programs using
   the serial port.
 - For normal flashing, disable torque, lock settings writes and clear any active
@@ -68,7 +71,9 @@ python tools/flash/flash.py flash \
   --port /dev/cu.usbmodemYOUR_ADAPTER --id 2
 ```
 
-To install the bundled factory firmware, select its manifest instead:
+To install the bundled factory firmware, select its manifest instead. Isolate
+the servo for this operation: factory startup may change its ID to 1, conflicting
+with another motor on the bus.
 
 ```sh
 python tools/flash/flash.py flash \
@@ -89,8 +94,9 @@ repair below rather than flashing again.
 
 ## Recover an unresponsive servo
 
-First check power, wiring, ID and baud rate. If recovery is needed, use the same
-selected manifest. For example, to recover with factory firmware:
+First check power, wiring, ID and baud rate. If recovery is needed, connect
+**only the intended servo** and use the selected manifest. For example, to
+recover with factory firmware:
 
 ```sh
 python tools/flash/flash.py recover \

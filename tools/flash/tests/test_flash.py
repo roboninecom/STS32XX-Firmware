@@ -219,17 +219,19 @@ class WireTests(unittest.TestCase):
         self.assertEqual(port.writes, [])
 
     def test_normal_and_recovery_share_transfer_but_only_normal_sends_reset(self):
-        for recovery in (False, True):
-            port = Port(self.clock)
-            with patch("bootloader.acquire") as acquire, patch("bootloader.transfer") as transfer:
-                image = bytes(range(64))
-                bootloader.upload(port, 1, image, recovery)
-                acquire.assert_called_once_with(port, recovery)
-                self.assertEqual(transfer.call_args.args[:2], (port, image))
-            self.assertEqual(len(port.writes), 0 if recovery else 1)
-            if not recovery:
-                self.assertEqual(port.writes[0], bytes.fromhex("ffff010208f4"))
-                self.assertEqual(port.baudrate, 500_000)
+        for servo_id, reset_packet in ((1, "ffff010208f4"), (6, "ffff060208ef")):
+            for recovery in (False, True):
+                with self.subTest(servo_id=servo_id, recovery=recovery):
+                    port = Port(self.clock)
+                    with patch("bootloader.acquire") as acquire, patch("bootloader.transfer") as transfer:
+                        image = bytes(range(64))
+                        bootloader.upload(port, servo_id, image, recovery)
+                        acquire.assert_called_once_with(port, recovery)
+                        self.assertEqual(transfer.call_args.args[:2], (port, image))
+                    self.assertEqual(len(port.writes), 0 if recovery else 1)
+                    if not recovery:
+                        self.assertEqual(port.writes[0], bytes.fromhex(reset_packet))
+                        self.assertEqual(port.baudrate, 500_000)
 
     def test_handshake_reacquires_magic_and_times_out(self):
         port = Port(self.clock)
