@@ -62,6 +62,15 @@ no speed, acceleration or playback timing settings.
 
 ## Replay poses
 
+For replay using saved legacy PID settings, without a controller configuration
+or compensation, use the separate [legacy replay tool](../legacy-replay/README.md):
+
+```sh
+npm run replay-legacy -- POSES.json --port /dev/ttyUSB0 --run
+```
+
+The extension replay described below adds explicit tuning and optional gravity compensation.
+
 Replay requires a follower running this repository's v9 firmware. Copy
 [replay.example.json](replay.example.json) to your own configuration file and
 set `followerPort`. IDs come from the recording. Provide a
@@ -83,9 +92,11 @@ npm run replay -- CONFIG.json POSES.json --run
 ```
 
 Only the follower port is opened. The first pose is a real movement from the
-current position. All configured motors must start with torque off, healthy
-feedback, locked settings, and no deferred command pending. Extension startup
-also requires current positions inside the saved limits.
+current position. The same command handles powered and unpowered motors and
+applies the configuration automatically. Matching settings keep torque on;
+changed profiles are applied one motor at a time. Omitting `gravityModel` clears
+retained gravity effort. No separate setup command is needed.
+Motor health, locked settings and firmware session readiness are still checked.
 
 Each pose is sent once. Playback waits for movement to finish and for every
 motor to be within `toleranceCounts`, then starts the hold period. Targets outside
@@ -94,7 +105,7 @@ the run with an error. Manually recorded timestamps do not set playback speed.
 
 | `replay` setting | Default | Meaning |
 | --- | --- | --- |
-| `speed` | 1000 | Requested speed in encoder counts/s, 1–65535. |
+| `speed` | 1000 | Maximum replay speed in encoder counts/s, 1–65535. Shorter joint moves use proportionally lower speeds. |
 | `holdMs` | 1000 | Pause after each pose, 0–600000 ms. |
 | `repeat` | 1 | Number of passes through the list, 1–1000. Each new pass returns to the first pose. |
 | `moveTimeoutMs` | 30000 | Maximum wait for each arrival, 1–600000 ms. |
@@ -102,8 +113,13 @@ the run with an error. Manually recorded timestamps do not set playback speed.
 
 The controller uses S-curves and explicit gains. Top-level
 `acceleration` and `rampTimeMs` control acceleration smoothing;
-`profiles[ID].velocityLimit` also caps speed. Motors receive one group command
-but can arrive at different times. To enable gravity compensation, add
+`profiles[ID].velocityLimit` also caps speed. Replay automatically scales joint
+speeds by their travel distances, accounting for each motor's speed limit, and
+sends one group command per pose. The first move starts from the current hold
+reference (or measured position); later moves use the previous capped targets.
+Arrival timing is approximate: acceleration, ramp time and integer speed limits
+still differ between joints. This does not blend motion through waypoints.
+To enable gravity compensation, add
 `gravityModel` to the configuration as described in the
 [shared controller guide](../../host/arm-control/README.md). The existing arm
 model is included. Compensation uses measured follower positions and continues
