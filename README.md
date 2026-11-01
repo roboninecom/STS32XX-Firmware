@@ -7,13 +7,14 @@ position control, velocity feedforward and host-calculated gravity compensation.
 Start with the **[Quick start](QUICKSTART.md)** guide, or read the
 [detailed documentation](DETAILED_DOCUMENTATION.md) for configuration and protocol details.
 
-[![Overview: recorded SO-101 and SO-102 before-and-after tests](assets/readme/posters/overview.jpg)](assets/readme/videos/overview.mp4)
+[![Overview: recorded SO-101 and SO-102 before-and-after tests](assets/readme/posters/overview.jpg)](https://youtu.be/AsxFs24vXQs)
 
-[Watch video (MP4)](assets/readme/videos/overview.mp4)
+[Watch on YouTube](https://youtu.be/AsxFs24vXQs) | [MP4](assets/readme/videos/overview.mp4)
 
 Approximate values describe the recorded demonstrations, not guaranteed accuracy across the workspace.
 
-Select a video image or the link below it to watch the silent clip.
+Select a video image or the YouTube link below it to watch the silent clip.
+All documentation videos are available by link (Unlisted); MP4 copies are also provided.
 
 - [Why we built it](#why-we-built-it)
 - [What changes in control](#what-changes-in-control)
@@ -30,24 +31,24 @@ positioning accuracy** describes how close the arm gets to the target.
 
 **Repeated returns measured with an indicator**
 
-[![Repeated returns measured with an indicator](assets/readme/posters/repeatability.jpg)](assets/readme/videos/repeatability.mp4)
+[![Repeated returns measured with an indicator](assets/readme/posters/repeatability.jpg)](https://youtu.be/_VN10zWybBU)
 
-[Watch video (MP4)](assets/readme/videos/repeatability.mp4)
+[Watch on YouTube](https://youtu.be/_VN10zWybBU) | [MP4](assets/readme/videos/repeatability.mp4)
 
 **Repeatability versus absolute positioning accuracy**
 
-[![Conceptual explanation of repeatability and absolute positioning accuracy](assets/readme/posters/repeatability-vs-accuracy.jpg)](assets/readme/videos/repeatability-vs-accuracy.mp4)
+[![Conceptual explanation of repeatability and absolute positioning accuracy](assets/readme/posters/repeatability-vs-accuracy.jpg)](https://youtu.be/L5FINW5FATI)
 
-[Watch video (MP4)](assets/readme/videos/repeatability-vs-accuracy.mp4)
+[Watch on YouTube](https://youtu.be/L5FINW5FATI) | [MP4](assets/readme/videos/repeatability-vs-accuracy.mp4)
 
 We tried to reduce positioning error by tuning PID on the stock firmware. In
 some test scenarios, the settings that reduced the error also caused oscillation.
 We developed custom firmware to give us more control over motion planning and
 position control.
 
-[![Stock firmware: oscillation during PID tuning](assets/readme/posters/stock-pid-oscillation.jpg)](assets/readme/videos/stock-pid-oscillation.mp4)
+[![Stock firmware: oscillation during PID tuning](assets/readme/posters/stock-pid-oscillation.jpg)](https://youtu.be/wIBd3jnOwRk)
 
-[Watch video (MP4)](assets/readme/videos/stock-pid-oscillation.mp4)
+[Watch on YouTube](https://youtu.be/wIBd3jnOwRk) | [MP4](assets/readme/videos/stock-pid-oscillation.mp4)
 
 ## What changes in control
 
@@ -55,15 +56,15 @@ The host sends targets and settings; each servo plans and controls its own movem
 
 ![Control overview: host settings and targets, local motion planning and control](assets/readme/illustrations/control-overview.png)
 
-[Watch the recorded overview (MP4)](assets/readme/videos/overview.mp4)
+[Watch the recorded overview on YouTube](https://youtu.be/AsxFs24vXQs) | [MP4](assets/readme/videos/overview.mp4)
 
 ### S-curve motion
 
 Makes acceleration and braking more gradual. The curve illustrates acceleration over time.
 
-[![Conceptual illustration of s-curve motion](assets/readme/illustrations/s-curve.png)](assets/readme/videos/s-curve.mp4)
+[![Conceptual illustration of s-curve motion](assets/readme/illustrations/s-curve.png)](https://youtu.be/92mDt4rbobY)
 
-[Watch video (MP4)](assets/readme/videos/s-curve.mp4)
+[Watch on YouTube](https://youtu.be/92mDt4rbobY) | [MP4](assets/readme/videos/s-curve.mp4)
 
 [Configuration and limitations](DETAILED_DOCUMENTATION.md#s-curve-motion).
 
@@ -71,9 +72,9 @@ Makes acceleration and braking more gradual. The curve illustrates acceleration 
 
 Adjusts how the servo corrects position error. The gray curve illustrates oscillation; the white curve illustrates a more damped response. The dashed line is the target.
 
-[![Conceptual illustration of pid control](assets/readme/illustrations/pid-tuning.png)](assets/readme/videos/pid-tuning.mp4)
+[![Conceptual illustration of pid control](assets/readme/illustrations/pid-tuning.png)](https://youtu.be/TEpvaAMlfrg)
 
-[Watch video (MP4)](assets/readme/videos/pid-tuning.mp4)
+[Watch on YouTube](https://youtu.be/TEpvaAMlfrg) | [MP4](assets/readme/videos/pid-tuning.mp4)
 
 [Configuration and limitations](DETAILED_DOCUMENTATION.md#pid-controller).
 
@@ -81,9 +82,9 @@ Adjusts how the servo corrects position error. The gray curve illustrates oscill
 
 Adds motor output based on planned speed, calculated inside the servo. Both curves progress from left to right over time.
 
-[![Conceptual illustration of velocity feedforward](assets/readme/illustrations/velocity-feedforward.png)](assets/readme/videos/velocity-feedforward.mp4)
+[![Conceptual illustration of velocity feedforward](assets/readme/illustrations/velocity-feedforward.png)](https://youtu.be/osGGs-nhk9I)
 
-[Watch video (MP4)](assets/readme/videos/velocity-feedforward.mp4)
+[Watch on YouTube](https://youtu.be/osGGs-nhk9I) | [MP4](assets/readme/videos/velocity-feedforward.mp4)
 
 [Configuration and limitations](DETAILED_DOCUMENTATION.md#velocity-feedforward).
 
@@ -91,9 +92,9 @@ Adds motor output based on planned speed, calculated inside the servo. Both curv
 
 The host calculates the contribution and the servo applies it. The downward arrow represents weight; the upward arrow represents support.
 
-[![Conceptual illustration of gravity compensation](assets/readme/illustrations/gravity-compensation.png)](assets/readme/videos/gravity-compensation.mp4)
+[![Conceptual illustration of gravity compensation](assets/readme/illustrations/gravity-compensation.png)](https://youtu.be/25sc41PTDIA)
 
-[Watch video (MP4)](assets/readme/videos/gravity-compensation.mp4)
+[Watch on YouTube](https://youtu.be/25sc41PTDIA) | [MP4](assets/readme/videos/gravity-compensation.mp4)
 
 [Configuration and limitations](DETAILED_DOCUMENTATION.md#gravity-compensation).
 
@@ -110,15 +111,15 @@ custom-firmware setup.
 
 **SO-101: before, then after**
 
-[![SO-101 recorded before-and-after comparison](assets/readme/posters/so101-before-after.jpg)](assets/readme/videos/so101-before-after.mp4)
+[![SO-101 recorded before-and-after comparison](assets/readme/posters/so101-before-after.jpg)](https://youtu.be/ZdLlv8q73gE)
 
-[Watch video (MP4)](assets/readme/videos/so101-before-after.mp4)
+[Watch on YouTube](https://youtu.be/ZdLlv8q73gE) | [MP4](assets/readme/videos/so101-before-after.mp4)
 
 **SO-102: before, then after**
 
-[![SO-102 recorded before-and-after comparison](assets/readme/posters/so102-before-after.jpg)](assets/readme/videos/so102-before-after.mp4)
+[![SO-102 recorded before-and-after comparison](assets/readme/posters/so102-before-after.jpg)](https://youtu.be/0rmO15pFqJ4)
 
-[Watch video (MP4)](assets/readme/videos/so102-before-after.mp4)
+[Watch on YouTube](https://youtu.be/0rmO15pFqJ4) | [MP4](assets/readme/videos/so102-before-after.mp4)
 
 The approximate values shown describe these demonstrations, not guaranteed
 accuracy across the arm's workspace. Repeatability, absolute positioning
@@ -126,18 +127,18 @@ accuracy and mechanical deflection are different measurements.
 
 ### Complete coordinated movement
 
-[![Complete recorded SO-101 movement](assets/readme/posters/coordinated-motion.jpg)](assets/readme/videos/coordinated-motion.mp4)
+[![Complete recorded SO-101 movement](assets/readme/posters/coordinated-motion.jpg)](https://youtu.be/dCtcS5aAko0)
 
-[Watch video (MP4)](assets/readme/videos/coordinated-motion.mp4)
+[Watch on YouTube](https://youtu.be/dCtcS5aAko0) | [MP4](assets/readme/videos/coordinated-motion.mp4)
 
 This clip preserves the complete recorded movement. Each servo plans locally;
 sending targets together does not by itself guarantee simultaneous arrival.
 
 ### Mechanical limitations
 
-[![Gearbox backlash and frame flex](assets/readme/posters/mechanical-limits.jpg)](assets/readme/videos/mechanical-limits.mp4)
+[![Gearbox backlash and frame flex](assets/readme/posters/mechanical-limits.jpg)](https://youtu.be/53l7at5aE6k)
 
-[Watch video (MP4)](assets/readme/videos/mechanical-limits.mp4)
+[Watch on YouTube](https://youtu.be/53l7at5aE6k) | [MP4](assets/readme/videos/mechanical-limits.mp4)
 
 Gearbox backlash and frame flex still affect the arm's endpoint position.
 Controller tuning does not remove these mechanical limitations. Validate

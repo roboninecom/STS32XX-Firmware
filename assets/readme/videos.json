@@ -1,0 +1,102 @@
+{
+  "channel": "Robonine",
+  "repository": "https://github.com/roboninecom/STS32XX-Firmware",
+  "videos": [
+    {
+      "name": "overview",
+      "title": "STS32XX Firmware | SO-101 and SO-102: Before and After",
+      "description": "Recorded before-and-after tests of SO-101 and SO-102 arms using STS32XX custom servo firmware. Each model is shown with its original behavior first, then with the custom-firmware setup. Approximate values describe these specific demonstrations, not guaranteed accuracy across the workspace.\n\nSilent documentation clip from Robonine.\n\nFirmware, setup guide and detailed documentation:\nhttps://github.com/roboninecom/STS32XX-Firmware",
+      "youtube_url": "https://youtu.be/AsxFs24vXQs",
+      "visibility": "unlisted",
+      "mp4": "videos/overview.mp4"
+    },
+    {
+      "name": "repeatability",
+      "title": "STS32XX Firmware | Repeatability: Repeated Returns",
+      "description": "Repeated returns measured with an indicator. Repeatability describes consistency across repeated moves; it is different from absolute positioning accuracy. This recorded demonstration does not establish accuracy across the full workspace.\n\nSilent documentation clip from Robonine.\n\nFirmware, setup guide and detailed documentation:\nhttps://github.com/roboninecom/STS32XX-Firmware",
+      "youtube_url": "https://youtu.be/_VN10zWybBU",
+      "visibility": "unlisted",
+      "mp4": "videos/repeatability.mp4"
+    },
+    {
+      "name": "repeatability-vs-accuracy",
+      "title": "STS32XX Firmware | Repeatability vs Absolute Positioning Accuracy",
+      "description": "A conceptual explanation of repeatability and absolute positioning accuracy. Repeatability describes how consistently the arm returns; absolute positioning accuracy describes how close it gets to the commanded target. The graphics are explanatory, not measured hardware plots.\n\nSilent documentation clip from Robonine.\n\nFirmware, setup guide and detailed documentation:\nhttps://github.com/roboninecom/STS32XX-Firmware",
+      "youtube_url": "https://youtu.be/L5FINW5FATI",
+      "visibility": "unlisted",
+      "mp4": "videos/repeatability-vs-accuracy.mp4"
+    },
+    {
+      "name": "stock-pid-oscillation",
+      "title": "STS32XX Firmware | Stock Firmware: PID Tuning and Oscillation",
+      "description": "Recorded oscillation during PID tuning on stock servo firmware. In some test scenarios, settings that reduced positioning error also caused oscillation. This motivated additional control over motion planning and position feedback.\n\nSilent documentation clip from Robonine.\n\nFirmware, setup guide and detailed documentation:\nhttps://github.com/roboninecom/STS32XX-Firmware",
+      "youtube_url": "https://youtu.be/wIBd3jnOwRk",
+      "visibility": "unlisted",
+      "mp4": "videos/stock-pid-oscillation.mp4"
+    },
+    {
+      "name": "s-curve",
+      "title": "STS32XX Firmware | S-Curve Motion Profiles",
+      "description": "A conceptual explanation of gradual acceleration and braking. Each servo plans its own jerk-limited motion locally. Short moves may omit stages. The animation is explanatory, not a measured hardware plot.\n\nSilent documentation clip from Robonine.\n\nFirmware, setup guide and detailed documentation:\nhttps://github.com/roboninecom/STS32XX-Firmware",
+      "youtube_url": "https://youtu.be/92mDt4rbobY",
+      "visibility": "unlisted",
+      "mp4": "videos/s-curve.mp4"
+    },
+    {
+      "name": "pid-tuning",
+      "title": "STS32XX Firmware | PID Position Control",
+      "description": "A conceptual explanation of configurable position control. Proportional, integral and derivative contributions affect correction, settling and damping. The curves are illustrative; gains must be tuned for the actual mechanism and load.\n\nSilent documentation clip from Robonine.\n\nFirmware, setup guide and detailed documentation:\nhttps://github.com/roboninecom/STS32XX-Firmware",
+      "youtube_url": "https://youtu.be/TEpvaAMlfrg",
+      "visibility": "unlisted",
+      "mp4": "videos/pid-tuning.mp4"
+    },
+    {
+      "name": "velocity-feedforward",
+      "title": "STS32XX Firmware | Local Velocity Feedforward",
+      "description": "A conceptual explanation of velocity feedforward. Each servo calculates additional motor output from its planned speed using configured direction-specific gains. Feedforward falls to zero when planned motion stops. The animation is not a measured hardware plot.\n\nSilent documentation clip from Robonine.\n\nFirmware, setup guide and detailed documentation:\nhttps://github.com/roboninecom/STS32XX-Firmware",
+      "youtube_url": "https://youtu.be/osGGs-nhk9I",
+      "visibility": "unlisted",
+      "mp4": "videos/velocity-feedforward.mp4"
+    },
+    {
+      "name": "gravity-compensation",
+      "title": "STS32XX Firmware | Host-Calculated Gravity Compensation",
+      "description": "A conceptual explanation of gravity compensation. The host calculates the contribution for the arm pose and load; the servo applies it subject to slew and output limits. The servo does not contain an arm model. The animation is explanatory, not measured data.\n\nSilent documentation clip from Robonine.\n\nFirmware, setup guide and detailed documentation:\nhttps://github.com/roboninecom/STS32XX-Firmware",
+      "youtube_url": "https://youtu.be/25sc41PTDIA",
+      "visibility": "unlisted",
+      "mp4": "videos/gravity-compensation.mp4"
+    },
+    {
+      "name": "so101-before-after",
+      "title": "STS32XX Firmware | SO-101: Before and After",
+      "description": "A recorded SO-101 comparison: original behavior first, followed by the custom-firmware setup. The approximate values shown apply to this demonstration, not guaranteed accuracy throughout the workspace. Repeatability, absolute positioning accuracy and mechanical deflection are different measurements.\n\nSilent documentation clip from Robonine.\n\nFirmware, setup guide and detailed documentation:\nhttps://github.com/roboninecom/STS32XX-Firmware",
+      "youtube_url": "https://youtu.be/ZdLlv8q73gE",
+      "visibility": "unlisted",
+      "mp4": "videos/so101-before-after.mp4"
+    },
+    {
+      "name": "so102-before-after",
+      "title": "STS32XX Firmware | SO-102: Before and After",
+      "description": "A recorded SO-102 comparison: original behavior first, followed by the custom-firmware setup. The approximate values shown apply to this demonstration, not guaranteed accuracy throughout the workspace. Repeatability, absolute positioning accuracy and mechanical deflection are different measurements.\n\nSilent documentation clip from Robonine.\n\nFirmware, setup guide and detailed documentation:\nhttps://github.com/roboninecom/STS32XX-Firmware",
+      "youtube_url": "https://youtu.be/0rmO15pFqJ4",
+      "visibility": "unlisted",
+      "mp4": "videos/so102-before-after.mp4"
+    },
+    {
+      "name": "coordinated-motion",
+      "title": "STS32XX Firmware | SO-101: Complete Coordinated Movement",
+      "description": "The complete recorded SO-101 movement, preserved without cutting the motion. Each servo plans locally. Sending multiple targets together does not by itself guarantee simultaneous arrival.\n\nSilent documentation clip from Robonine.\n\nFirmware, setup guide and detailed documentation:\nhttps://github.com/roboninecom/STS32XX-Firmware",
+      "youtube_url": "https://youtu.be/dCtcS5aAko0",
+      "visibility": "unlisted",
+      "mp4": "videos/coordinated-motion.mp4"
+    },
+    {
+      "name": "mechanical-limits",
+      "title": "STS32XX Firmware | Mechanical Limits: Backlash and Frame Flex",
+      "description": "Gearbox backlash and frame flex can affect endpoint position even with improved control. Controller tuning does not eliminate these mechanical limitations. This clip combines mechanism footage with a conceptual explanation of frame flex.\n\nSilent documentation clip from Robonine.\n\nFirmware, setup guide and detailed documentation:\nhttps://github.com/roboninecom/STS32XX-Firmware",
+      "youtube_url": "https://youtu.be/53l7at5aE6k",
+      "visibility": "unlisted",
+      "mp4": "videos/mechanical-limits.mp4"
+    }
+  ]
+}

@@ -53,7 +53,7 @@ all servo models.
 
 ![Host targets, servo motion planning and position feedback](assets/readme/illustrations/control-overview.png)
 
-[Watch the recorded overview (MP4)](assets/readme/videos/overview.mp4)
+[Watch the recorded overview on YouTube](https://youtu.be/AsxFs24vXQs) | [MP4](assets/readme/videos/overview.mp4)
 
 The **host** is the computer or controller connected to the servos. It sends a
 **target**: a destination and speed limit. Acceleration and compensation settings
@@ -86,9 +86,9 @@ direction. These values are not direct measurements of torque or current.
 
 ## S-curve motion
 
-[![Conceptual illustration of s-curve motion](assets/readme/illustrations/s-curve.png)](assets/readme/videos/s-curve.mp4)
+[![Conceptual illustration of s-curve motion](assets/readme/illustrations/s-curve.png)](https://youtu.be/92mDt4rbobY)
 
-[Watch video (MP4)](assets/readme/videos/s-curve.mp4)
+[Watch on YouTube](https://youtu.be/92mDt4rbobY) | [MP4](assets/readme/videos/s-curve.mp4)
 
 Makes acceleration and braking more gradual. The curve illustrates acceleration over time. Conceptual illustration, not measured hardware data.
 
@@ -198,9 +198,9 @@ for the two-step procedure and model-mapping requirements.
 
 ## PID controller
 
-[![Conceptual illustration of pid control](assets/readme/illustrations/pid-tuning.png)](assets/readme/videos/pid-tuning.mp4)
+[![Conceptual illustration of pid control](assets/readme/illustrations/pid-tuning.png)](https://youtu.be/TEpvaAMlfrg)
 
-[Watch video (MP4)](assets/readme/videos/pid-tuning.mp4)
+[Watch on YouTube](https://youtu.be/TEpvaAMlfrg) | [MP4](assets/readme/videos/pid-tuning.mp4)
 
 Adjusts how the servo corrects position error. The gray curve illustrates oscillation; the white curve illustrates a more damped response. The dashed line is the target. Conceptual illustration, not measured hardware data.
 
@@ -247,9 +247,9 @@ feedforward remain active. Turning motor output off clears I correction.
 
 ## Velocity feedforward
 
-[![Conceptual illustration of velocity feedforward](assets/readme/illustrations/velocity-feedforward.png)](assets/readme/videos/velocity-feedforward.mp4)
+[![Conceptual illustration of velocity feedforward](assets/readme/illustrations/velocity-feedforward.png)](https://youtu.be/osGGs-nhk9I)
 
-[Watch video (MP4)](assets/readme/videos/velocity-feedforward.mp4)
+[Watch on YouTube](https://youtu.be/osGGs-nhk9I) | [MP4](assets/readme/videos/velocity-feedforward.mp4)
 
 Adds motor output based on planned speed, calculated inside the servo. Both curves progress from left to right over time. Conceptual illustration, not measured hardware data.
 
@@ -275,9 +275,9 @@ to zero to disable it.
 
 ## Gravity compensation
 
-[![Conceptual illustration of gravity compensation](assets/readme/illustrations/gravity-compensation.png)](assets/readme/videos/gravity-compensation.mp4)
+[![Conceptual illustration of gravity compensation](assets/readme/illustrations/gravity-compensation.png)](https://youtu.be/25sc41PTDIA)
 
-[Watch video (MP4)](assets/readme/videos/gravity-compensation.mp4)
+[Watch on YouTube](https://youtu.be/25sc41PTDIA) | [MP4](assets/readme/videos/gravity-compensation.mp4)
 
 The host calculates the contribution and the servo applies it. The downward arrow represents weight; the upward arrow represents support. Conceptual illustration, not measured hardware data.
 
@@ -719,9 +719,9 @@ headers and [vendor README](firmware/platform/gd32f130/vendor/README.md).
 
 ## Current limits
 
-[![Gearbox backlash and frame flex](assets/readme/posters/mechanical-limits.jpg)](assets/readme/videos/mechanical-limits.mp4)
+[![Gearbox backlash and frame flex](assets/readme/posters/mechanical-limits.jpg)](https://youtu.be/53l7at5aE6k)
 
-[Watch video (MP4)](assets/readme/videos/mechanical-limits.mp4)
+[Watch on YouTube](https://youtu.be/53l7at5aE6k) | [MP4](assets/readme/videos/mechanical-limits.mp4)
 
 Temperature reported through extension feedback is checked to suppress isolated
 jumps, but the motor's temperature protection still uses the raw sensor readings.
