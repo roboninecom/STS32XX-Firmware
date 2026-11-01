@@ -1,5 +1,9 @@
 # STS32XX Firmware
 
+<!-- documentation-languages -->
+[English](docs/i18n/en/README.md) · [Русский](docs/i18n/ru/README.md) · [Español](docs/i18n/es/README.md) · [Français](docs/i18n/fr/README.md) · [Deutsch](docs/i18n/de/README.md) · [Português (Brasil)](docs/i18n/pt-BR/README.md) · [简体中文](docs/i18n/zh-CN/README.md) · [日本語](docs/i18n/ja/README.md) · [हिन्दी](docs/i18n/hi/README.md) · [العربية](docs/i18n/ar/README.md)
+<!-- /documentation-languages -->
+
 Firmware for GD32F130-based STS3215 servos. Standard STS commands are available
 in legacy mode; extension mode adds locally planned smooth motion, configurable
 position control, velocity feedforward and host-calculated gravity compensation.

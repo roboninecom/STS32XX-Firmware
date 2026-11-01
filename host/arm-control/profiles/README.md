@@ -1,5 +1,9 @@
 # Arm profiles
 
+<!-- documentation-languages -->
+[English](../../../docs/i18n/en/host/arm-control/profiles/README.md) · [Русский](../../../docs/i18n/ru/host/arm-control/profiles/README.md) · [Español](../../../docs/i18n/es/host/arm-control/profiles/README.md) · [Français](../../../docs/i18n/fr/host/arm-control/profiles/README.md) · [Deutsch](../../../docs/i18n/de/host/arm-control/profiles/README.md) · [Português (Brasil)](../../../docs/i18n/pt-BR/host/arm-control/profiles/README.md) · [简体中文](../../../docs/i18n/zh-CN/host/arm-control/profiles/README.md) · [日本語](../../../docs/i18n/ja/host/arm-control/profiles/README.md) · [हिन्दी](../../../docs/i18n/hi/host/arm-control/profiles/README.md) · [العربية](../../../docs/i18n/ar/host/arm-control/profiles/README.md)
+<!-- /documentation-languages -->
+
 Reference settings from upright, empty-gripper arms. Each directory contains a
 controller file and one profile per motor, including PID and directional velocity
 feedforward. Both controllers use the gravity models for motors 2–4; motors 1, 5

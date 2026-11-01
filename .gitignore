@@ -11,6 +11,7 @@ __pycache__/
 !README.md
 !/QUICKSTART.md
 !/DETAILED_DOCUMENTATION.md
+!/docs/i18n/**/*.md
 **/archive/
 **/archives/
 **/backup/

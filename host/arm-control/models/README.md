@@ -1,5 +1,9 @@
 # Gravity models
 
+<!-- documentation-languages -->
+[English](../../../docs/i18n/en/host/arm-control/models/README.md) · [Русский](../../../docs/i18n/ru/host/arm-control/models/README.md) · [Español](../../../docs/i18n/es/host/arm-control/models/README.md) · [Français](../../../docs/i18n/fr/host/arm-control/models/README.md) · [Deutsch](../../../docs/i18n/de/host/arm-control/models/README.md) · [Português (Brasil)](../../../docs/i18n/pt-BR/host/arm-control/models/README.md) · [简体中文](../../../docs/i18n/zh-CN/host/arm-control/models/README.md) · [日本語](../../../docs/i18n/ja/host/arm-control/models/README.md) · [हिन्दी](../../../docs/i18n/hi/host/arm-control/models/README.md) · [العربية](../../../docs/i18n/ar/host/arm-control/models/README.md)
+<!-- /documentation-languages -->
+
 Two upright, empty-gripper models are included:
 
 - `arm-upright-empty.json`: SO-102.

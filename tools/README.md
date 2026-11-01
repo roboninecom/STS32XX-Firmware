@@ -1,5 +1,9 @@
 # Tools
 
+<!-- documentation-languages -->
+[English](../docs/i18n/en/tools/README.md) · [Русский](../docs/i18n/ru/tools/README.md) · [Español](../docs/i18n/es/tools/README.md) · [Français](../docs/i18n/fr/tools/README.md) · [Deutsch](../docs/i18n/de/tools/README.md) · [Português (Brasil)](../docs/i18n/pt-BR/tools/README.md) · [简体中文](../docs/i18n/zh-CN/tools/README.md) · [日本語](../docs/i18n/ja/tools/README.md) · [हिन्दी](../docs/i18n/hi/tools/README.md) · [العربية](../docs/i18n/ar/tools/README.md)
+<!-- /documentation-languages -->
+
 Utilities for working with STS servos. Each guide includes setup instructions,
 commands and hardware requirements. For application development, use the
 [Node.js servo driver](../host/servo-driver/README.md), available as a standalone

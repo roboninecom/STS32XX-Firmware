@@ -1,0 +1,1228 @@
+{
+  "schema_version": 1,
+  "kind": "full-document-translations",
+  "locales": {
+    "en": "English",
+    "ru": "Русский",
+    "es": "Español",
+    "fr": "Français",
+    "de": "Deutsch",
+    "pt-BR": "Português (Brasil)",
+    "zh-CN": "简体中文",
+    "ja": "日本語",
+    "hi": "हिन्दी",
+    "ar": "العربية"
+  },
+  "documents": {
+    "DETAILED_DOCUMENTATION.md": {
+      "source_sha256": "77015c353b8fb892d0454003a2531e94e2dd254ae0f9ee634c7c261b3bce61ed",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/DETAILED_DOCUMENTATION.md",
+          "source_sha256": "77015c353b8fb892d0454003a2531e94e2dd254ae0f9ee634c7c261b3bce61ed",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/DETAILED_DOCUMENTATION.md",
+          "source_sha256": "77015c353b8fb892d0454003a2531e94e2dd254ae0f9ee634c7c261b3bce61ed",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/DETAILED_DOCUMENTATION.md",
+          "source_sha256": "77015c353b8fb892d0454003a2531e94e2dd254ae0f9ee634c7c261b3bce61ed",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/DETAILED_DOCUMENTATION.md",
+          "source_sha256": "77015c353b8fb892d0454003a2531e94e2dd254ae0f9ee634c7c261b3bce61ed",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/DETAILED_DOCUMENTATION.md",
+          "source_sha256": "77015c353b8fb892d0454003a2531e94e2dd254ae0f9ee634c7c261b3bce61ed",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/DETAILED_DOCUMENTATION.md",
+          "source_sha256": "77015c353b8fb892d0454003a2531e94e2dd254ae0f9ee634c7c261b3bce61ed",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/DETAILED_DOCUMENTATION.md",
+          "source_sha256": "77015c353b8fb892d0454003a2531e94e2dd254ae0f9ee634c7c261b3bce61ed",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/DETAILED_DOCUMENTATION.md",
+          "source_sha256": "77015c353b8fb892d0454003a2531e94e2dd254ae0f9ee634c7c261b3bce61ed",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/DETAILED_DOCUMENTATION.md",
+          "source_sha256": "77015c353b8fb892d0454003a2531e94e2dd254ae0f9ee634c7c261b3bce61ed",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/DETAILED_DOCUMENTATION.md",
+          "source_sha256": "77015c353b8fb892d0454003a2531e94e2dd254ae0f9ee634c7c261b3bce61ed",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "QUICKSTART.md": {
+      "source_sha256": "e2b13540be76d281fc2cb19a1c54a13a6006c6d07d51a078644b2c04508e19c2",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/QUICKSTART.md",
+          "source_sha256": "e2b13540be76d281fc2cb19a1c54a13a6006c6d07d51a078644b2c04508e19c2",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/QUICKSTART.md",
+          "source_sha256": "e2b13540be76d281fc2cb19a1c54a13a6006c6d07d51a078644b2c04508e19c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/QUICKSTART.md",
+          "source_sha256": "e2b13540be76d281fc2cb19a1c54a13a6006c6d07d51a078644b2c04508e19c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/QUICKSTART.md",
+          "source_sha256": "e2b13540be76d281fc2cb19a1c54a13a6006c6d07d51a078644b2c04508e19c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/QUICKSTART.md",
+          "source_sha256": "e2b13540be76d281fc2cb19a1c54a13a6006c6d07d51a078644b2c04508e19c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/QUICKSTART.md",
+          "source_sha256": "e2b13540be76d281fc2cb19a1c54a13a6006c6d07d51a078644b2c04508e19c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/QUICKSTART.md",
+          "source_sha256": "e2b13540be76d281fc2cb19a1c54a13a6006c6d07d51a078644b2c04508e19c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/QUICKSTART.md",
+          "source_sha256": "e2b13540be76d281fc2cb19a1c54a13a6006c6d07d51a078644b2c04508e19c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/QUICKSTART.md",
+          "source_sha256": "e2b13540be76d281fc2cb19a1c54a13a6006c6d07d51a078644b2c04508e19c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/QUICKSTART.md",
+          "source_sha256": "e2b13540be76d281fc2cb19a1c54a13a6006c6d07d51a078644b2c04508e19c2",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "README.md": {
+      "source_sha256": "160e6bf58b1a7e0acb67826787898426d8d70405511e59dc89cf37681178aed1",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/README.md",
+          "source_sha256": "160e6bf58b1a7e0acb67826787898426d8d70405511e59dc89cf37681178aed1",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/README.md",
+          "source_sha256": "160e6bf58b1a7e0acb67826787898426d8d70405511e59dc89cf37681178aed1",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/README.md",
+          "source_sha256": "160e6bf58b1a7e0acb67826787898426d8d70405511e59dc89cf37681178aed1",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/README.md",
+          "source_sha256": "160e6bf58b1a7e0acb67826787898426d8d70405511e59dc89cf37681178aed1",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/README.md",
+          "source_sha256": "160e6bf58b1a7e0acb67826787898426d8d70405511e59dc89cf37681178aed1",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/README.md",
+          "source_sha256": "160e6bf58b1a7e0acb67826787898426d8d70405511e59dc89cf37681178aed1",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/README.md",
+          "source_sha256": "160e6bf58b1a7e0acb67826787898426d8d70405511e59dc89cf37681178aed1",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/README.md",
+          "source_sha256": "160e6bf58b1a7e0acb67826787898426d8d70405511e59dc89cf37681178aed1",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/README.md",
+          "source_sha256": "160e6bf58b1a7e0acb67826787898426d8d70405511e59dc89cf37681178aed1",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/README.md",
+          "source_sha256": "160e6bf58b1a7e0acb67826787898426d8d70405511e59dc89cf37681178aed1",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "firmware/README.md": {
+      "source_sha256": "e4e85cc114093c8b5884cd8427af8af734ef8fbefba6253584de85bf8c575d4d",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/firmware/README.md",
+          "source_sha256": "e4e85cc114093c8b5884cd8427af8af734ef8fbefba6253584de85bf8c575d4d",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/firmware/README.md",
+          "source_sha256": "e4e85cc114093c8b5884cd8427af8af734ef8fbefba6253584de85bf8c575d4d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/firmware/README.md",
+          "source_sha256": "e4e85cc114093c8b5884cd8427af8af734ef8fbefba6253584de85bf8c575d4d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/firmware/README.md",
+          "source_sha256": "e4e85cc114093c8b5884cd8427af8af734ef8fbefba6253584de85bf8c575d4d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/firmware/README.md",
+          "source_sha256": "e4e85cc114093c8b5884cd8427af8af734ef8fbefba6253584de85bf8c575d4d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/firmware/README.md",
+          "source_sha256": "e4e85cc114093c8b5884cd8427af8af734ef8fbefba6253584de85bf8c575d4d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/firmware/README.md",
+          "source_sha256": "e4e85cc114093c8b5884cd8427af8af734ef8fbefba6253584de85bf8c575d4d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/firmware/README.md",
+          "source_sha256": "e4e85cc114093c8b5884cd8427af8af734ef8fbefba6253584de85bf8c575d4d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/firmware/README.md",
+          "source_sha256": "e4e85cc114093c8b5884cd8427af8af734ef8fbefba6253584de85bf8c575d4d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/firmware/README.md",
+          "source_sha256": "e4e85cc114093c8b5884cd8427af8af734ef8fbefba6253584de85bf8c575d4d",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "firmware/platform/gd32f130/vendor/README.md": {
+      "source_sha256": "16f0986b325b050213b3d71dabe387161aed4185744fe87bf01e63bc997cf011",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/firmware/platform/gd32f130/vendor/README.md",
+          "source_sha256": "16f0986b325b050213b3d71dabe387161aed4185744fe87bf01e63bc997cf011",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/firmware/platform/gd32f130/vendor/README.md",
+          "source_sha256": "16f0986b325b050213b3d71dabe387161aed4185744fe87bf01e63bc997cf011",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/firmware/platform/gd32f130/vendor/README.md",
+          "source_sha256": "16f0986b325b050213b3d71dabe387161aed4185744fe87bf01e63bc997cf011",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/firmware/platform/gd32f130/vendor/README.md",
+          "source_sha256": "16f0986b325b050213b3d71dabe387161aed4185744fe87bf01e63bc997cf011",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/firmware/platform/gd32f130/vendor/README.md",
+          "source_sha256": "16f0986b325b050213b3d71dabe387161aed4185744fe87bf01e63bc997cf011",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/firmware/platform/gd32f130/vendor/README.md",
+          "source_sha256": "16f0986b325b050213b3d71dabe387161aed4185744fe87bf01e63bc997cf011",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/firmware/platform/gd32f130/vendor/README.md",
+          "source_sha256": "16f0986b325b050213b3d71dabe387161aed4185744fe87bf01e63bc997cf011",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/firmware/platform/gd32f130/vendor/README.md",
+          "source_sha256": "16f0986b325b050213b3d71dabe387161aed4185744fe87bf01e63bc997cf011",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/firmware/platform/gd32f130/vendor/README.md",
+          "source_sha256": "16f0986b325b050213b3d71dabe387161aed4185744fe87bf01e63bc997cf011",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/firmware/platform/gd32f130/vendor/README.md",
+          "source_sha256": "16f0986b325b050213b3d71dabe387161aed4185744fe87bf01e63bc997cf011",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "firmware/tests/README.md": {
+      "source_sha256": "f60ef2d23a7fcf777b188fee5c5cd173483770223ad5a4165962a50e535948ac",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/firmware/tests/README.md",
+          "source_sha256": "f60ef2d23a7fcf777b188fee5c5cd173483770223ad5a4165962a50e535948ac",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/firmware/tests/README.md",
+          "source_sha256": "f60ef2d23a7fcf777b188fee5c5cd173483770223ad5a4165962a50e535948ac",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/firmware/tests/README.md",
+          "source_sha256": "f60ef2d23a7fcf777b188fee5c5cd173483770223ad5a4165962a50e535948ac",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/firmware/tests/README.md",
+          "source_sha256": "f60ef2d23a7fcf777b188fee5c5cd173483770223ad5a4165962a50e535948ac",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/firmware/tests/README.md",
+          "source_sha256": "f60ef2d23a7fcf777b188fee5c5cd173483770223ad5a4165962a50e535948ac",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/firmware/tests/README.md",
+          "source_sha256": "f60ef2d23a7fcf777b188fee5c5cd173483770223ad5a4165962a50e535948ac",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/firmware/tests/README.md",
+          "source_sha256": "f60ef2d23a7fcf777b188fee5c5cd173483770223ad5a4165962a50e535948ac",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/firmware/tests/README.md",
+          "source_sha256": "f60ef2d23a7fcf777b188fee5c5cd173483770223ad5a4165962a50e535948ac",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/firmware/tests/README.md",
+          "source_sha256": "f60ef2d23a7fcf777b188fee5c5cd173483770223ad5a4165962a50e535948ac",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/firmware/tests/README.md",
+          "source_sha256": "f60ef2d23a7fcf777b188fee5c5cd173483770223ad5a4165962a50e535948ac",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "host/arm-control/README.md": {
+      "source_sha256": "8d7f77da1d6ac665224f4e3ee4d342da5efb55e866ed4e1bd49057c69fceb73b",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/host/arm-control/README.md",
+          "source_sha256": "8d7f77da1d6ac665224f4e3ee4d342da5efb55e866ed4e1bd49057c69fceb73b",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/host/arm-control/README.md",
+          "source_sha256": "8d7f77da1d6ac665224f4e3ee4d342da5efb55e866ed4e1bd49057c69fceb73b",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/host/arm-control/README.md",
+          "source_sha256": "8d7f77da1d6ac665224f4e3ee4d342da5efb55e866ed4e1bd49057c69fceb73b",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/host/arm-control/README.md",
+          "source_sha256": "8d7f77da1d6ac665224f4e3ee4d342da5efb55e866ed4e1bd49057c69fceb73b",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/host/arm-control/README.md",
+          "source_sha256": "8d7f77da1d6ac665224f4e3ee4d342da5efb55e866ed4e1bd49057c69fceb73b",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/host/arm-control/README.md",
+          "source_sha256": "8d7f77da1d6ac665224f4e3ee4d342da5efb55e866ed4e1bd49057c69fceb73b",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/host/arm-control/README.md",
+          "source_sha256": "8d7f77da1d6ac665224f4e3ee4d342da5efb55e866ed4e1bd49057c69fceb73b",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/host/arm-control/README.md",
+          "source_sha256": "8d7f77da1d6ac665224f4e3ee4d342da5efb55e866ed4e1bd49057c69fceb73b",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/host/arm-control/README.md",
+          "source_sha256": "8d7f77da1d6ac665224f4e3ee4d342da5efb55e866ed4e1bd49057c69fceb73b",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/host/arm-control/README.md",
+          "source_sha256": "8d7f77da1d6ac665224f4e3ee4d342da5efb55e866ed4e1bd49057c69fceb73b",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "host/arm-control/models/README.md": {
+      "source_sha256": "f1f09ba15e6cd2d57595c116c1e3a85504cffa0dcefb3c04513257b319eb113d",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/host/arm-control/models/README.md",
+          "source_sha256": "f1f09ba15e6cd2d57595c116c1e3a85504cffa0dcefb3c04513257b319eb113d",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/host/arm-control/models/README.md",
+          "source_sha256": "f1f09ba15e6cd2d57595c116c1e3a85504cffa0dcefb3c04513257b319eb113d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/host/arm-control/models/README.md",
+          "source_sha256": "f1f09ba15e6cd2d57595c116c1e3a85504cffa0dcefb3c04513257b319eb113d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/host/arm-control/models/README.md",
+          "source_sha256": "f1f09ba15e6cd2d57595c116c1e3a85504cffa0dcefb3c04513257b319eb113d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/host/arm-control/models/README.md",
+          "source_sha256": "f1f09ba15e6cd2d57595c116c1e3a85504cffa0dcefb3c04513257b319eb113d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/host/arm-control/models/README.md",
+          "source_sha256": "f1f09ba15e6cd2d57595c116c1e3a85504cffa0dcefb3c04513257b319eb113d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/host/arm-control/models/README.md",
+          "source_sha256": "f1f09ba15e6cd2d57595c116c1e3a85504cffa0dcefb3c04513257b319eb113d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/host/arm-control/models/README.md",
+          "source_sha256": "f1f09ba15e6cd2d57595c116c1e3a85504cffa0dcefb3c04513257b319eb113d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/host/arm-control/models/README.md",
+          "source_sha256": "f1f09ba15e6cd2d57595c116c1e3a85504cffa0dcefb3c04513257b319eb113d",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/host/arm-control/models/README.md",
+          "source_sha256": "f1f09ba15e6cd2d57595c116c1e3a85504cffa0dcefb3c04513257b319eb113d",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "host/arm-control/profiles/README.md": {
+      "source_sha256": "19df964d85fb1db622f293e62f71b8a92f687c8871a2a7ef58c42fdda3c6f9ba",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/host/arm-control/profiles/README.md",
+          "source_sha256": "19df964d85fb1db622f293e62f71b8a92f687c8871a2a7ef58c42fdda3c6f9ba",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/host/arm-control/profiles/README.md",
+          "source_sha256": "19df964d85fb1db622f293e62f71b8a92f687c8871a2a7ef58c42fdda3c6f9ba",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/host/arm-control/profiles/README.md",
+          "source_sha256": "19df964d85fb1db622f293e62f71b8a92f687c8871a2a7ef58c42fdda3c6f9ba",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/host/arm-control/profiles/README.md",
+          "source_sha256": "19df964d85fb1db622f293e62f71b8a92f687c8871a2a7ef58c42fdda3c6f9ba",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/host/arm-control/profiles/README.md",
+          "source_sha256": "19df964d85fb1db622f293e62f71b8a92f687c8871a2a7ef58c42fdda3c6f9ba",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/host/arm-control/profiles/README.md",
+          "source_sha256": "19df964d85fb1db622f293e62f71b8a92f687c8871a2a7ef58c42fdda3c6f9ba",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/host/arm-control/profiles/README.md",
+          "source_sha256": "19df964d85fb1db622f293e62f71b8a92f687c8871a2a7ef58c42fdda3c6f9ba",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/host/arm-control/profiles/README.md",
+          "source_sha256": "19df964d85fb1db622f293e62f71b8a92f687c8871a2a7ef58c42fdda3c6f9ba",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/host/arm-control/profiles/README.md",
+          "source_sha256": "19df964d85fb1db622f293e62f71b8a92f687c8871a2a7ef58c42fdda3c6f9ba",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/host/arm-control/profiles/README.md",
+          "source_sha256": "19df964d85fb1db622f293e62f71b8a92f687c8871a2a7ef58c42fdda3c6f9ba",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "host/servo-driver/README.md": {
+      "source_sha256": "9d623029a6c3ec58f123084315d099f64398c13572365e27ba833bf8b46d99c4",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/host/servo-driver/README.md",
+          "source_sha256": "9d623029a6c3ec58f123084315d099f64398c13572365e27ba833bf8b46d99c4",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/host/servo-driver/README.md",
+          "source_sha256": "9d623029a6c3ec58f123084315d099f64398c13572365e27ba833bf8b46d99c4",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/host/servo-driver/README.md",
+          "source_sha256": "9d623029a6c3ec58f123084315d099f64398c13572365e27ba833bf8b46d99c4",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/host/servo-driver/README.md",
+          "source_sha256": "9d623029a6c3ec58f123084315d099f64398c13572365e27ba833bf8b46d99c4",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/host/servo-driver/README.md",
+          "source_sha256": "9d623029a6c3ec58f123084315d099f64398c13572365e27ba833bf8b46d99c4",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/host/servo-driver/README.md",
+          "source_sha256": "9d623029a6c3ec58f123084315d099f64398c13572365e27ba833bf8b46d99c4",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/host/servo-driver/README.md",
+          "source_sha256": "9d623029a6c3ec58f123084315d099f64398c13572365e27ba833bf8b46d99c4",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/host/servo-driver/README.md",
+          "source_sha256": "9d623029a6c3ec58f123084315d099f64398c13572365e27ba833bf8b46d99c4",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/host/servo-driver/README.md",
+          "source_sha256": "9d623029a6c3ec58f123084315d099f64398c13572365e27ba833bf8b46d99c4",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/host/servo-driver/README.md",
+          "source_sha256": "9d623029a6c3ec58f123084315d099f64398c13572365e27ba833bf8b46d99c4",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "tools/README.md": {
+      "source_sha256": "44913357917fd553b4603d3df3bfabef56baf2ae8779305c9aae2f78f3fb1bda",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/tools/README.md",
+          "source_sha256": "44913357917fd553b4603d3df3bfabef56baf2ae8779305c9aae2f78f3fb1bda",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/tools/README.md",
+          "source_sha256": "44913357917fd553b4603d3df3bfabef56baf2ae8779305c9aae2f78f3fb1bda",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/tools/README.md",
+          "source_sha256": "44913357917fd553b4603d3df3bfabef56baf2ae8779305c9aae2f78f3fb1bda",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/tools/README.md",
+          "source_sha256": "44913357917fd553b4603d3df3bfabef56baf2ae8779305c9aae2f78f3fb1bda",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/tools/README.md",
+          "source_sha256": "44913357917fd553b4603d3df3bfabef56baf2ae8779305c9aae2f78f3fb1bda",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/tools/README.md",
+          "source_sha256": "44913357917fd553b4603d3df3bfabef56baf2ae8779305c9aae2f78f3fb1bda",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/tools/README.md",
+          "source_sha256": "44913357917fd553b4603d3df3bfabef56baf2ae8779305c9aae2f78f3fb1bda",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/tools/README.md",
+          "source_sha256": "44913357917fd553b4603d3df3bfabef56baf2ae8779305c9aae2f78f3fb1bda",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/tools/README.md",
+          "source_sha256": "44913357917fd553b4603d3df3bfabef56baf2ae8779305c9aae2f78f3fb1bda",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/tools/README.md",
+          "source_sha256": "44913357917fd553b4603d3df3bfabef56baf2ae8779305c9aae2f78f3fb1bda",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "tools/diagnostics/README.md": {
+      "source_sha256": "54e2978ffe155b7b8d9d959ff03dfe5f644ed8622f0895cea5066f2ef7e685ca",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/tools/diagnostics/README.md",
+          "source_sha256": "54e2978ffe155b7b8d9d959ff03dfe5f644ed8622f0895cea5066f2ef7e685ca",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/tools/diagnostics/README.md",
+          "source_sha256": "54e2978ffe155b7b8d9d959ff03dfe5f644ed8622f0895cea5066f2ef7e685ca",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/tools/diagnostics/README.md",
+          "source_sha256": "54e2978ffe155b7b8d9d959ff03dfe5f644ed8622f0895cea5066f2ef7e685ca",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/tools/diagnostics/README.md",
+          "source_sha256": "54e2978ffe155b7b8d9d959ff03dfe5f644ed8622f0895cea5066f2ef7e685ca",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/tools/diagnostics/README.md",
+          "source_sha256": "54e2978ffe155b7b8d9d959ff03dfe5f644ed8622f0895cea5066f2ef7e685ca",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/tools/diagnostics/README.md",
+          "source_sha256": "54e2978ffe155b7b8d9d959ff03dfe5f644ed8622f0895cea5066f2ef7e685ca",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/tools/diagnostics/README.md",
+          "source_sha256": "54e2978ffe155b7b8d9d959ff03dfe5f644ed8622f0895cea5066f2ef7e685ca",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/tools/diagnostics/README.md",
+          "source_sha256": "54e2978ffe155b7b8d9d959ff03dfe5f644ed8622f0895cea5066f2ef7e685ca",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/tools/diagnostics/README.md",
+          "source_sha256": "54e2978ffe155b7b8d9d959ff03dfe5f644ed8622f0895cea5066f2ef7e685ca",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/tools/diagnostics/README.md",
+          "source_sha256": "54e2978ffe155b7b8d9d959ff03dfe5f644ed8622f0895cea5066f2ef7e685ca",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "tools/flash/README.md": {
+      "source_sha256": "9a707335e1994e7a3a4770489cf911c1a2b288e67b6eda7bc0365a351eb1baeb",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/tools/flash/README.md",
+          "source_sha256": "9a707335e1994e7a3a4770489cf911c1a2b288e67b6eda7bc0365a351eb1baeb",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/tools/flash/README.md",
+          "source_sha256": "9a707335e1994e7a3a4770489cf911c1a2b288e67b6eda7bc0365a351eb1baeb",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/tools/flash/README.md",
+          "source_sha256": "9a707335e1994e7a3a4770489cf911c1a2b288e67b6eda7bc0365a351eb1baeb",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/tools/flash/README.md",
+          "source_sha256": "9a707335e1994e7a3a4770489cf911c1a2b288e67b6eda7bc0365a351eb1baeb",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/tools/flash/README.md",
+          "source_sha256": "9a707335e1994e7a3a4770489cf911c1a2b288e67b6eda7bc0365a351eb1baeb",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/tools/flash/README.md",
+          "source_sha256": "9a707335e1994e7a3a4770489cf911c1a2b288e67b6eda7bc0365a351eb1baeb",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/tools/flash/README.md",
+          "source_sha256": "9a707335e1994e7a3a4770489cf911c1a2b288e67b6eda7bc0365a351eb1baeb",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/tools/flash/README.md",
+          "source_sha256": "9a707335e1994e7a3a4770489cf911c1a2b288e67b6eda7bc0365a351eb1baeb",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/tools/flash/README.md",
+          "source_sha256": "9a707335e1994e7a3a4770489cf911c1a2b288e67b6eda7bc0365a351eb1baeb",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/tools/flash/README.md",
+          "source_sha256": "9a707335e1994e7a3a4770489cf911c1a2b288e67b6eda7bc0365a351eb1baeb",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "tools/hw-diff-tests/README.md": {
+      "source_sha256": "3c61c82935befefb0bdca42df84bf586e467018831cd15f42e03f54dc321a212",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/tools/hw-diff-tests/README.md",
+          "source_sha256": "3c61c82935befefb0bdca42df84bf586e467018831cd15f42e03f54dc321a212",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/tools/hw-diff-tests/README.md",
+          "source_sha256": "3c61c82935befefb0bdca42df84bf586e467018831cd15f42e03f54dc321a212",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/tools/hw-diff-tests/README.md",
+          "source_sha256": "3c61c82935befefb0bdca42df84bf586e467018831cd15f42e03f54dc321a212",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/tools/hw-diff-tests/README.md",
+          "source_sha256": "3c61c82935befefb0bdca42df84bf586e467018831cd15f42e03f54dc321a212",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/tools/hw-diff-tests/README.md",
+          "source_sha256": "3c61c82935befefb0bdca42df84bf586e467018831cd15f42e03f54dc321a212",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/tools/hw-diff-tests/README.md",
+          "source_sha256": "3c61c82935befefb0bdca42df84bf586e467018831cd15f42e03f54dc321a212",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/tools/hw-diff-tests/README.md",
+          "source_sha256": "3c61c82935befefb0bdca42df84bf586e467018831cd15f42e03f54dc321a212",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/tools/hw-diff-tests/README.md",
+          "source_sha256": "3c61c82935befefb0bdca42df84bf586e467018831cd15f42e03f54dc321a212",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/tools/hw-diff-tests/README.md",
+          "source_sha256": "3c61c82935befefb0bdca42df84bf586e467018831cd15f42e03f54dc321a212",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/tools/hw-diff-tests/README.md",
+          "source_sha256": "3c61c82935befefb0bdca42df84bf586e467018831cd15f42e03f54dc321a212",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "tools/poses/README.md": {
+      "source_sha256": "9394e1d3e3a4ece967cb28ae2fc8522d8f24548cc2864b1ac88a3a96a9ff4342",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/tools/poses/README.md",
+          "source_sha256": "9394e1d3e3a4ece967cb28ae2fc8522d8f24548cc2864b1ac88a3a96a9ff4342",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/tools/poses/README.md",
+          "source_sha256": "9394e1d3e3a4ece967cb28ae2fc8522d8f24548cc2864b1ac88a3a96a9ff4342",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/tools/poses/README.md",
+          "source_sha256": "9394e1d3e3a4ece967cb28ae2fc8522d8f24548cc2864b1ac88a3a96a9ff4342",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/tools/poses/README.md",
+          "source_sha256": "9394e1d3e3a4ece967cb28ae2fc8522d8f24548cc2864b1ac88a3a96a9ff4342",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/tools/poses/README.md",
+          "source_sha256": "9394e1d3e3a4ece967cb28ae2fc8522d8f24548cc2864b1ac88a3a96a9ff4342",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/tools/poses/README.md",
+          "source_sha256": "9394e1d3e3a4ece967cb28ae2fc8522d8f24548cc2864b1ac88a3a96a9ff4342",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/tools/poses/README.md",
+          "source_sha256": "9394e1d3e3a4ece967cb28ae2fc8522d8f24548cc2864b1ac88a3a96a9ff4342",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/tools/poses/README.md",
+          "source_sha256": "9394e1d3e3a4ece967cb28ae2fc8522d8f24548cc2864b1ac88a3a96a9ff4342",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/tools/poses/README.md",
+          "source_sha256": "9394e1d3e3a4ece967cb28ae2fc8522d8f24548cc2864b1ac88a3a96a9ff4342",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/tools/poses/README.md",
+          "source_sha256": "9394e1d3e3a4ece967cb28ae2fc8522d8f24548cc2864b1ac88a3a96a9ff4342",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "tools/settings/README.md": {
+      "source_sha256": "b742603e3c0e9ee29d02fc932339775c1918eb67724ccf8cbb80424b9d327c87",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/tools/settings/README.md",
+          "source_sha256": "b742603e3c0e9ee29d02fc932339775c1918eb67724ccf8cbb80424b9d327c87",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/tools/settings/README.md",
+          "source_sha256": "b742603e3c0e9ee29d02fc932339775c1918eb67724ccf8cbb80424b9d327c87",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/tools/settings/README.md",
+          "source_sha256": "b742603e3c0e9ee29d02fc932339775c1918eb67724ccf8cbb80424b9d327c87",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/tools/settings/README.md",
+          "source_sha256": "b742603e3c0e9ee29d02fc932339775c1918eb67724ccf8cbb80424b9d327c87",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/tools/settings/README.md",
+          "source_sha256": "b742603e3c0e9ee29d02fc932339775c1918eb67724ccf8cbb80424b9d327c87",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/tools/settings/README.md",
+          "source_sha256": "b742603e3c0e9ee29d02fc932339775c1918eb67724ccf8cbb80424b9d327c87",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/tools/settings/README.md",
+          "source_sha256": "b742603e3c0e9ee29d02fc932339775c1918eb67724ccf8cbb80424b9d327c87",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/tools/settings/README.md",
+          "source_sha256": "b742603e3c0e9ee29d02fc932339775c1918eb67724ccf8cbb80424b9d327c87",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/tools/settings/README.md",
+          "source_sha256": "b742603e3c0e9ee29d02fc932339775c1918eb67724ccf8cbb80424b9d327c87",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/tools/settings/README.md",
+          "source_sha256": "b742603e3c0e9ee29d02fc932339775c1918eb67724ccf8cbb80424b9d327c87",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "tools/settings/images/README.md": {
+      "source_sha256": "b42289ebeadf4e05ab47d045335057ff037672352348e1d98a1ad11ffeca19fd",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/tools/settings/images/README.md",
+          "source_sha256": "b42289ebeadf4e05ab47d045335057ff037672352348e1d98a1ad11ffeca19fd",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/tools/settings/images/README.md",
+          "source_sha256": "b42289ebeadf4e05ab47d045335057ff037672352348e1d98a1ad11ffeca19fd",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/tools/settings/images/README.md",
+          "source_sha256": "b42289ebeadf4e05ab47d045335057ff037672352348e1d98a1ad11ffeca19fd",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/tools/settings/images/README.md",
+          "source_sha256": "b42289ebeadf4e05ab47d045335057ff037672352348e1d98a1ad11ffeca19fd",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/tools/settings/images/README.md",
+          "source_sha256": "b42289ebeadf4e05ab47d045335057ff037672352348e1d98a1ad11ffeca19fd",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/tools/settings/images/README.md",
+          "source_sha256": "b42289ebeadf4e05ab47d045335057ff037672352348e1d98a1ad11ffeca19fd",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/tools/settings/images/README.md",
+          "source_sha256": "b42289ebeadf4e05ab47d045335057ff037672352348e1d98a1ad11ffeca19fd",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/tools/settings/images/README.md",
+          "source_sha256": "b42289ebeadf4e05ab47d045335057ff037672352348e1d98a1ad11ffeca19fd",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/tools/settings/images/README.md",
+          "source_sha256": "b42289ebeadf4e05ab47d045335057ff037672352348e1d98a1ad11ffeca19fd",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/tools/settings/images/README.md",
+          "source_sha256": "b42289ebeadf4e05ab47d045335057ff037672352348e1d98a1ad11ffeca19fd",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "tools/simulation/README.md": {
+      "source_sha256": "8e61faa1e42437be2426e31062d6cb8ff958f9139ec8a23ac96096bfda8276e3",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/tools/simulation/README.md",
+          "source_sha256": "8e61faa1e42437be2426e31062d6cb8ff958f9139ec8a23ac96096bfda8276e3",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/tools/simulation/README.md",
+          "source_sha256": "8e61faa1e42437be2426e31062d6cb8ff958f9139ec8a23ac96096bfda8276e3",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/tools/simulation/README.md",
+          "source_sha256": "8e61faa1e42437be2426e31062d6cb8ff958f9139ec8a23ac96096bfda8276e3",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/tools/simulation/README.md",
+          "source_sha256": "8e61faa1e42437be2426e31062d6cb8ff958f9139ec8a23ac96096bfda8276e3",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/tools/simulation/README.md",
+          "source_sha256": "8e61faa1e42437be2426e31062d6cb8ff958f9139ec8a23ac96096bfda8276e3",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/tools/simulation/README.md",
+          "source_sha256": "8e61faa1e42437be2426e31062d6cb8ff958f9139ec8a23ac96096bfda8276e3",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/tools/simulation/README.md",
+          "source_sha256": "8e61faa1e42437be2426e31062d6cb8ff958f9139ec8a23ac96096bfda8276e3",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/tools/simulation/README.md",
+          "source_sha256": "8e61faa1e42437be2426e31062d6cb8ff958f9139ec8a23ac96096bfda8276e3",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/tools/simulation/README.md",
+          "source_sha256": "8e61faa1e42437be2426e31062d6cb8ff958f9139ec8a23ac96096bfda8276e3",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/tools/simulation/README.md",
+          "source_sha256": "8e61faa1e42437be2426e31062d6cb8ff958f9139ec8a23ac96096bfda8276e3",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "tools/simulation/urdf/README.md": {
+      "source_sha256": "eaa71adfcb7c9acea9372bfbc0070139f2cd988e82527cb002a801f9424831c2",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/tools/simulation/urdf/README.md",
+          "source_sha256": "eaa71adfcb7c9acea9372bfbc0070139f2cd988e82527cb002a801f9424831c2",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/tools/simulation/urdf/README.md",
+          "source_sha256": "eaa71adfcb7c9acea9372bfbc0070139f2cd988e82527cb002a801f9424831c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/tools/simulation/urdf/README.md",
+          "source_sha256": "eaa71adfcb7c9acea9372bfbc0070139f2cd988e82527cb002a801f9424831c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/tools/simulation/urdf/README.md",
+          "source_sha256": "eaa71adfcb7c9acea9372bfbc0070139f2cd988e82527cb002a801f9424831c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/tools/simulation/urdf/README.md",
+          "source_sha256": "eaa71adfcb7c9acea9372bfbc0070139f2cd988e82527cb002a801f9424831c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/tools/simulation/urdf/README.md",
+          "source_sha256": "eaa71adfcb7c9acea9372bfbc0070139f2cd988e82527cb002a801f9424831c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/tools/simulation/urdf/README.md",
+          "source_sha256": "eaa71adfcb7c9acea9372bfbc0070139f2cd988e82527cb002a801f9424831c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/tools/simulation/urdf/README.md",
+          "source_sha256": "eaa71adfcb7c9acea9372bfbc0070139f2cd988e82527cb002a801f9424831c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/tools/simulation/urdf/README.md",
+          "source_sha256": "eaa71adfcb7c9acea9372bfbc0070139f2cd988e82527cb002a801f9424831c2",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/tools/simulation/urdf/README.md",
+          "source_sha256": "eaa71adfcb7c9acea9372bfbc0070139f2cd988e82527cb002a801f9424831c2",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "tools/simulation/urdf/so101/README.md": {
+      "source_sha256": "9954a770c03105be4d7031f5a6eb7e0c3734346e80583aaa13f07d3f7fd47d44",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/tools/simulation/urdf/so101/README.md",
+          "source_sha256": "9954a770c03105be4d7031f5a6eb7e0c3734346e80583aaa13f07d3f7fd47d44",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/tools/simulation/urdf/so101/README.md",
+          "source_sha256": "9954a770c03105be4d7031f5a6eb7e0c3734346e80583aaa13f07d3f7fd47d44",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/tools/simulation/urdf/so101/README.md",
+          "source_sha256": "9954a770c03105be4d7031f5a6eb7e0c3734346e80583aaa13f07d3f7fd47d44",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/tools/simulation/urdf/so101/README.md",
+          "source_sha256": "9954a770c03105be4d7031f5a6eb7e0c3734346e80583aaa13f07d3f7fd47d44",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/tools/simulation/urdf/so101/README.md",
+          "source_sha256": "9954a770c03105be4d7031f5a6eb7e0c3734346e80583aaa13f07d3f7fd47d44",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/tools/simulation/urdf/so101/README.md",
+          "source_sha256": "9954a770c03105be4d7031f5a6eb7e0c3734346e80583aaa13f07d3f7fd47d44",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/tools/simulation/urdf/so101/README.md",
+          "source_sha256": "9954a770c03105be4d7031f5a6eb7e0c3734346e80583aaa13f07d3f7fd47d44",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/tools/simulation/urdf/so101/README.md",
+          "source_sha256": "9954a770c03105be4d7031f5a6eb7e0c3734346e80583aaa13f07d3f7fd47d44",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/tools/simulation/urdf/so101/README.md",
+          "source_sha256": "9954a770c03105be4d7031f5a6eb7e0c3734346e80583aaa13f07d3f7fd47d44",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/tools/simulation/urdf/so101/README.md",
+          "source_sha256": "9954a770c03105be4d7031f5a6eb7e0c3734346e80583aaa13f07d3f7fd47d44",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "tools/teleoperation/README.md": {
+      "source_sha256": "d278eada8fae312c56a9dbc8421aa75eb7448751473254484349dc0b80c4e257",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/tools/teleoperation/README.md",
+          "source_sha256": "d278eada8fae312c56a9dbc8421aa75eb7448751473254484349dc0b80c4e257",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/tools/teleoperation/README.md",
+          "source_sha256": "d278eada8fae312c56a9dbc8421aa75eb7448751473254484349dc0b80c4e257",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/tools/teleoperation/README.md",
+          "source_sha256": "d278eada8fae312c56a9dbc8421aa75eb7448751473254484349dc0b80c4e257",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/tools/teleoperation/README.md",
+          "source_sha256": "d278eada8fae312c56a9dbc8421aa75eb7448751473254484349dc0b80c4e257",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/tools/teleoperation/README.md",
+          "source_sha256": "d278eada8fae312c56a9dbc8421aa75eb7448751473254484349dc0b80c4e257",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/tools/teleoperation/README.md",
+          "source_sha256": "d278eada8fae312c56a9dbc8421aa75eb7448751473254484349dc0b80c4e257",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/tools/teleoperation/README.md",
+          "source_sha256": "d278eada8fae312c56a9dbc8421aa75eb7448751473254484349dc0b80c4e257",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/tools/teleoperation/README.md",
+          "source_sha256": "d278eada8fae312c56a9dbc8421aa75eb7448751473254484349dc0b80c4e257",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/tools/teleoperation/README.md",
+          "source_sha256": "d278eada8fae312c56a9dbc8421aa75eb7448751473254484349dc0b80c4e257",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/tools/teleoperation/README.md",
+          "source_sha256": "d278eada8fae312c56a9dbc8421aa75eb7448751473254484349dc0b80c4e257",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    },
+    "tools/tuning/README.md": {
+      "source_sha256": "d0dd453892a156cd41d177e7aedbb813c5c5599aff998f1091d2319d9f8dd958",
+      "translations": {
+        "en": {
+          "path": "docs/i18n/en/tools/tuning/README.md",
+          "source_sha256": "d0dd453892a156cd41d177e7aedbb813c5c5599aff998f1091d2319d9f8dd958",
+          "review": "source-copy"
+        },
+        "ru": {
+          "path": "docs/i18n/ru/tools/tuning/README.md",
+          "source_sha256": "d0dd453892a156cd41d177e7aedbb813c5c5599aff998f1091d2319d9f8dd958",
+          "review": "machine-translated-structurally-checked"
+        },
+        "es": {
+          "path": "docs/i18n/es/tools/tuning/README.md",
+          "source_sha256": "d0dd453892a156cd41d177e7aedbb813c5c5599aff998f1091d2319d9f8dd958",
+          "review": "machine-translated-structurally-checked"
+        },
+        "fr": {
+          "path": "docs/i18n/fr/tools/tuning/README.md",
+          "source_sha256": "d0dd453892a156cd41d177e7aedbb813c5c5599aff998f1091d2319d9f8dd958",
+          "review": "machine-translated-structurally-checked"
+        },
+        "de": {
+          "path": "docs/i18n/de/tools/tuning/README.md",
+          "source_sha256": "d0dd453892a156cd41d177e7aedbb813c5c5599aff998f1091d2319d9f8dd958",
+          "review": "machine-translated-structurally-checked"
+        },
+        "pt-BR": {
+          "path": "docs/i18n/pt-BR/tools/tuning/README.md",
+          "source_sha256": "d0dd453892a156cd41d177e7aedbb813c5c5599aff998f1091d2319d9f8dd958",
+          "review": "machine-translated-structurally-checked"
+        },
+        "zh-CN": {
+          "path": "docs/i18n/zh-CN/tools/tuning/README.md",
+          "source_sha256": "d0dd453892a156cd41d177e7aedbb813c5c5599aff998f1091d2319d9f8dd958",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ja": {
+          "path": "docs/i18n/ja/tools/tuning/README.md",
+          "source_sha256": "d0dd453892a156cd41d177e7aedbb813c5c5599aff998f1091d2319d9f8dd958",
+          "review": "machine-translated-structurally-checked"
+        },
+        "hi": {
+          "path": "docs/i18n/hi/tools/tuning/README.md",
+          "source_sha256": "d0dd453892a156cd41d177e7aedbb813c5c5599aff998f1091d2319d9f8dd958",
+          "review": "machine-translated-structurally-checked"
+        },
+        "ar": {
+          "path": "docs/i18n/ar/tools/tuning/README.md",
+          "source_sha256": "d0dd453892a156cd41d177e7aedbb813c5c5599aff998f1091d2319d9f8dd958",
+          "review": "machine-translated-structurally-checked"
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,9 @@
 # Firmware sources
 
+<!-- documentation-languages -->
+[English](../docs/i18n/en/firmware/README.md) · [Русский](../docs/i18n/ru/firmware/README.md) · [Español](../docs/i18n/es/firmware/README.md) · [Français](../docs/i18n/fr/firmware/README.md) · [Deutsch](../docs/i18n/de/firmware/README.md) · [Português (Brasil)](../docs/i18n/pt-BR/firmware/README.md) · [简体中文](../docs/i18n/zh-CN/firmware/README.md) · [日本語](../docs/i18n/ja/firmware/README.md) · [हिन्दी](../docs/i18n/hi/firmware/README.md) · [العربية](../docs/i18n/ar/firmware/README.md)
+<!-- /documentation-languages -->
+
 GD32F130 firmware, including portable control code, hardware drivers and tests.
 The extension protocol is documented in the [detailed documentation](../DETAILED_DOCUMENTATION.md#extension-protocol).
 
