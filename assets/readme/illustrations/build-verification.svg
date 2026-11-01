@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><rect width="1280" height="720" fill="#090909"/>
+<text x="64" y="54" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="650" font-size="40">Build and verification</text>
+<rect x="65" y="260" width="340" height="155" rx="10" fill="#191919" stroke="#bcbcbc" stroke-width="2"/>
+<text x="170.5" y="305.5" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">firmware/</text>
+<text x="100.5" y="341.5" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">Sources + build rules</text>
+<rect x="470" y="260" width="340" height="155" rx="10" fill="#191919" stroke="#bcbcbc" stroke-width="2"/>
+<text x="603.5" y="305.5" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">make</text>
+<text x="544.0" y="341.5" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">Build firmware</text>
+<rect x="875" y="260" width="340" height="155" rx="10" fill="#191919" stroke="#bcbcbc" stroke-width="2"/>
+<text x="969.0" y="305.5" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">make verify</text>
+<text x="926.0" y="341.5" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">Offline verification</text>
+<path d="M415 335 L455 335" stroke="white" stroke-width="3"/><polygon points="455,335 442.7138441335348,341.71195754045885 442.7138441335348,328.28804245954115" fill="white"/>
+<path d="M820 335 L860 335" stroke="white" stroke-width="3"/><polygon points="860,335 847.7138441335347,341.71195754045885 847.7138441335347,328.28804245954115" fill="white"/>
+<text x="364.0" y="535" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="500" font-size="30">Verification does not flash hardware.</text>
+</svg>
