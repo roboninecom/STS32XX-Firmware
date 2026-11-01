@@ -33,8 +33,6 @@ compatible.
 
 ## Legacy mode
 
-![Legacy control through the standard STS register interface](assets/readme/illustrations/legacy-mode.png)
-
 Legacy mode supports the standard STS register interface, including motor power,
 operating mode, position and speed commands, and status readings. Existing STS
 software can use registers **0–86** without enabling the extension.
@@ -50,8 +48,6 @@ for the standard commands does not guarantee identical physical behavior across
 all servo models.
 
 ## How extension mode works
-
-![Host targets, servo motion planning and position feedback](assets/readme/illustrations/control-overview.png)
 
 [Watch the recorded overview on YouTube](https://youtu.be/AsxFs24vXQs) | [MP4](assets/readme/videos/overview.mp4)
 
@@ -310,8 +306,6 @@ turns motor output off.
 
 ## Starting and stopping extension mode
 
-![Extension-session lifecycle](assets/readme/illustrations/extension-session.png)
-
 The following sequence uses the register numbers and commands documented later.
 Selection prepares a session; enabling motor power starts control.
 
@@ -363,8 +357,6 @@ torque enable to zero. Sensor freshness checks, motor protection,
 and the firmware watchdog remain active while moving and holding.
 
 ## Extension protocol
-
-![Extension-protocol unicast request and response](assets/readme/illustrations/extension-protocol.png)
 
 This section describes the exact messages exchanged between the host and servo.
 It is intended for readers connecting their own software.
@@ -504,8 +496,6 @@ not advance the motion sequence. The requested value remains active until
 replaced or disarmed.
 
 ## Extension registers
-
-![Extension register blocks](assets/readme/illustrations/extension-registers.png)
 
 An **offset** is the starting byte of a field, counting from zero within its
 block. Offsets below are decimal; selectors use hexadecimal notation (`0x...`). All writes use instruction `0x91`; reads use
@@ -678,8 +668,6 @@ refer to different moments; compare their timestamps and sample numbers.
 
 ## Build and verification
 
-![Firmware build and offline verification](assets/readme/illustrations/build-verification.png)
-
 Firmware sources, tests and build rules are in [`firmware/`](firmware/README.md).
 After installing the [toolchain](firmware/README.md#build-and-verify), run:
 
@@ -694,8 +682,6 @@ flashing-tool and viewer tests. To install a published firmware release, use the
 [flash and recovery tool](tools/flash/README.md).
 
 ## Repository layout
-
-![Firmware, host and tools responsibilities](assets/readme/illustrations/repository-layout.png)
 
 | Directory | Responsibility |
 | --- | --- |

@@ -54,7 +54,9 @@ position control.
 
 The host sends targets and settings; each servo plans and controls its own movement.
 
-![Control overview: host settings and targets, local motion planning and control](assets/readme/illustrations/control-overview.png)
+1. The host sends targets and settings and computes gravity compensation when configured.
+2. Each servo plans its own S-curve motion.
+3. Local PID and feedforward control adjust motor output using measured position and estimated speed.
 
 [Watch the recorded overview on YouTube](https://youtu.be/AsxFs24vXQs) | [MP4](assets/readme/videos/overview.mp4)
 
