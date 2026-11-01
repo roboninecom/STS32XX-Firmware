@@ -1,7 +1,7 @@
 # Firmware sources
 
 GD32F130 firmware, including portable control code, hardware drivers and tests.
-The extension protocol is documented in the [project README](../README.md).
+The extension protocol is documented in the [technical reference](../TECHNICAL_REFERENCE.md#extension-protocol).
 
 | Directory | Contents |
 | --- | --- |

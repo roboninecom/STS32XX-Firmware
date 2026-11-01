@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><rect width="1280" height="720" fill="#090909"/>
+<text x="64" y="54" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="650" font-size="40">Extension register blocks</text>
+<rect x="65" y="175" width="350" height="150" rx="10" fill="#191919" stroke="#bcbcbc" stroke-width="2"/>
+<text x="208.0" y="218.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">0x90</text>
+<text x="165.0" y="254.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">Capabilities</text>
+<rect x="465" y="175" width="350" height="150" rx="10" fill="#191919" stroke="#bcbcbc" stroke-width="2"/>
+<text x="606.5" y="218.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">0xA0</text>
+<text x="551.0" y="254.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">Configuration</text>
+<rect x="865" y="175" width="350" height="150" rx="10" fill="#191919" stroke="#bcbcbc" stroke-width="2"/>
+<text x="1007.0" y="218.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">0xB8</text>
+<text x="928.5" y="254.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">Session selection</text>
+<rect x="265" y="440" width="350" height="150" rx="10" fill="#191919" stroke="#bcbcbc" stroke-width="2"/>
+<text x="410.5" y="483.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">0xC1</text>
+<text x="299.5" y="519.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">Operational feedback</text>
+<rect x="665" y="440" width="350" height="150" rx="10" fill="#191919" stroke="#bcbcbc" stroke-width="2"/>
+<text x="808.0" y="483.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">0xC2</text>
+<text x="731.0" y="519.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">Tuning feedback</text>
+</svg>

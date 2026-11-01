@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><rect width="1280" height="720" fill="#090909"/>
+<text x="64" y="54" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="650" font-size="40">Quick start</text>
+<text x="90" y="145" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="650" font-size="32">01</text>
+<text x="200" y="145" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="500" font-size="30">Install</text>
+<path d="M115 180 L115 209" stroke="white" stroke-width="3"/><polygon points="115,209 108.28804245954116,196.7138441335348 121.71195754045884,196.7138441335348" fill="white"/>
+<text x="90" y="219" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="650" font-size="32">02</text>
+<text x="200" y="219" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="500" font-size="30">Back up and flash</text>
+<path d="M115 254 L115 283" stroke="white" stroke-width="3"/><polygon points="115,283 108.28804245954116,270.7138441335348 121.71195754045884,270.7138441335348" fill="white"/>
+<text x="90" y="293" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="650" font-size="32">03</text>
+<text x="200" y="293" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="500" font-size="30">Calibrate joint offsets and limits</text>
+<path d="M115 328 L115 357" stroke="white" stroke-width="3"/><polygon points="115,357 108.28804245954116,344.7138441335348 121.71195754045884,344.7138441335348" fill="white"/>
+<text x="90" y="367" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="650" font-size="32">04</text>
+<text x="200" y="367" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="500" font-size="30">Check communication</text>
+<path d="M115 402 L115 431" stroke="white" stroke-width="3"/><polygon points="115,431 108.28804245954116,418.7138441335348 121.71195754045884,418.7138441335348" fill="white"/>
+<text x="90" y="441" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="650" font-size="32">05</text>
+<text x="200" y="441" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="500" font-size="30">Record and replay poses</text>
+<path d="M115 476 L115 505" stroke="white" stroke-width="3"/><polygon points="115,505 108.28804245954116,492.7138441335348 121.71195754045884,492.7138441335348" fill="white"/>
+<text x="90" y="515" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="650" font-size="32">06</text>
+<text x="200" y="515" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="500" font-size="30">Enable gravity compensation</text>
+<path d="M115 550 L115 579" stroke="white" stroke-width="3"/><polygon points="115,579 108.28804245954116,566.7138441335347 121.71195754045884,566.7138441335347" fill="white"/>
+<text x="90" y="589" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="650" font-size="32">07</text>
+<text x="200" y="589" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="500" font-size="30">Tune and view motion</text>
+</svg>

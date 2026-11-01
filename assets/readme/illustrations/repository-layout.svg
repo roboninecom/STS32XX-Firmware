@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><rect width="1280" height="720" fill="#090909"/>
+<text x="64" y="54" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="650" font-size="40">Repository layout</text>
+<rect x="65" y="245" width="350" height="200" rx="10" fill="#191919" stroke="#bcbcbc" stroke-width="2"/>
+<text x="175.5" y="313.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">firmware/</text>
+<text x="141.0" y="349.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">Servo firmware</text>
+<rect x="465" y="245" width="350" height="200" rx="10" fill="#191919" stroke="#bcbcbc" stroke-width="2"/>
+<text x="606.0" y="313.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">host/</text>
+<text x="503.0" y="349.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">Drivers + arm control</text>
+<rect x="865" y="245" width="350" height="200" rx="10" fill="#191919" stroke="#bcbcbc" stroke-width="2"/>
+<text x="1003.0" y="313.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">tools/</text>
+<text x="900.0" y="349.0" dominant-baseline="hanging" fill="#ffffff" font-family="Montserrat,Arial,sans-serif" font-weight="600" font-size="25">Setup + tests + replay</text>
+</svg>

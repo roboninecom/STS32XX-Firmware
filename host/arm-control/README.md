@@ -34,7 +34,7 @@ offsets and travel limits remain separate.
 | `gravitySlewEffortPerS` | Rate limit for gravity effort changes. |
 | `velocityFeedforward` | `positiveGainQ8`, `negativeGainQ8`, `effortLimit`; zero all three to disable. |
 
-See the [firmware register guide](../../README.md#configuration--0xa0) for full
+See the [firmware register guide](../../TECHNICAL_REFERENCE.md#configuration--0xa0) for full
 units and ranges. These are per-motor settings, not switchable firmware profiles.
 
 Tuning and settings application use `joints: [{ "followerId": 1 }]`; add one
