@@ -10,7 +10,7 @@ __pycache__/
 *.md
 !README.md
 !/QUICKSTART.md
-!/TECHNICAL_REFERENCE.md
+!/DETAILED_DOCUMENTATION.md
 **/archive/
 **/archives/
 **/backup/

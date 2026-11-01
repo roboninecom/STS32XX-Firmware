@@ -1,4 +1,4 @@
-# STS32XX Firmware
+# Detailed documentation
 
 Start with the **[Quick start](QUICKSTART.md)** guide for flashing, testing, replay and
 gravity compensation. See [tools](tools/README.md) for individual command guides.
@@ -11,7 +11,7 @@ Firmware for GD32F130-based STS3215 servos, with two ways to control the motor:
   compensation for motion and gravity. The connected computer sends settings and
   destinations; each servo calculates its movement locally.
 
-This README explains how the features work, then provides the command and
+This document explains how the features work, then provides the command and
 register reference for **extension protocol v9.0**. Extension settings are kept
 in temporary memory and must be sent again after a reset or power cycle.
 Controlling software must support version 9; older extension clients are not
@@ -33,6 +33,8 @@ compatible.
 
 ## Legacy mode
 
+![Legacy control through the standard STS register interface](assets/readme/illustrations/legacy-mode.png)
+
 Legacy mode supports the standard STS register interface, including motor power,
 operating mode, position and speed commands, and status readings. Existing STS
 software can use registers **0–86** without enabling the extension.
@@ -48,6 +50,10 @@ for the standard commands does not guarantee identical physical behavior across
 all servo models.
 
 ## How extension mode works
+
+![Host targets, servo motion planning and position feedback](assets/readme/illustrations/control-overview.png)
+
+[Watch the recorded overview (MP4)](assets/readme/videos/overview.mp4)
 
 The **host** is the computer or controller connected to the servos. It sends a
 **target**: a destination and speed limit. Acceleration and compensation settings
@@ -79,6 +85,12 @@ the motor. The extension allows an output limit up to **1000** in either
 direction. These values are not direct measurements of torque or current.
 
 ## S-curve motion
+
+[![Conceptual illustration of s-curve motion](assets/readme/illustrations/s-curve.png)](assets/readme/videos/s-curve.mp4)
+
+[Watch video (MP4)](assets/readme/videos/s-curve.mp4)
+
+Makes acceleration and braking more gradual. The curve illustrates acceleration over time. Conceptual illustration, not measured hardware data.
 
 An S-curve makes acceleration increase and decrease gradually. Instead of
 suddenly applying full acceleration or braking, the servo eases into and out of
@@ -173,14 +185,24 @@ open. The calibration tool saves this manually placed pose as 2048 for each
 motor. Keep an existing verified calibration when reusing its recordings and
 gravity model.
 
-| SO-101 | SO-102 |
-| --- | --- |
-| ![SO-101 reference pose with six labeled joints](tools/settings/images/so101-reference-pose.png) | ![SO-102 reference pose with six labeled joints](tools/settings/images/so102-reference-pose.png) |
+**SO-101 reference pose**
+
+[![SO-101 reference pose with six labeled joints](tools/settings/images/so101-reference-pose.png)](tools/settings/images/so101-reference-pose.png)
+
+**SO-102 reference pose**
+
+[![SO-102 reference pose with six labeled joints](tools/settings/images/so102-reference-pose.png)](tools/settings/images/so102-reference-pose.png)
 
 Open an image for a larger view. Follow the [calibration guide](tools/settings/README.md#reference-pose-images)
 for the two-step procedure and model-mapping requirements.
 
 ## PID controller
+
+[![Conceptual illustration of pid control](assets/readme/illustrations/pid-tuning.png)](assets/readme/videos/pid-tuning.mp4)
+
+[Watch video (MP4)](assets/readme/videos/pid-tuning.mp4)
+
+Adjusts how the servo corrects position error. The gray curve illustrates oscillation; the white curve illustrates a more damped response. The dashed line is the target. Conceptual illustration, not measured hardware data.
 
 The PID controller adjusts motor output to follow the planned movement. Its three
 settings have different jobs:
@@ -225,6 +247,12 @@ feedforward remain active. Turning motor output off clears I correction.
 
 ## Velocity feedforward
 
+[![Conceptual illustration of velocity feedforward](assets/readme/illustrations/velocity-feedforward.png)](assets/readme/videos/velocity-feedforward.mp4)
+
+[Watch video (MP4)](assets/readme/videos/velocity-feedforward.mp4)
+
+Adds motor output based on planned speed, calculated inside the servo. Both curves progress from left to right over time. Conceptual illustration, not measured hardware data.
+
 Velocity feedforward supplies some of the output expected to be needed for
 movement before a tracking error develops. It is calculated **inside the servo**
 from the planned speed:
@@ -246,6 +274,12 @@ power is off and the session is disarmed. Set both gains and its output limit
 to zero to disable it.
 
 ## Gravity compensation
+
+[![Conceptual illustration of gravity compensation](assets/readme/illustrations/gravity-compensation.png)](assets/readme/videos/gravity-compensation.mp4)
+
+[Watch video (MP4)](assets/readme/videos/gravity-compensation.mp4)
+
+The host calculates the contribution and the servo applies it. The downward arrow represents weight; the upward arrow represents support. Conceptual illustration, not measured hardware data.
 
 Gravity compensation provides the output needed to support the weight of an arm
 and its load. It is useful even when the motor is holding still, where velocity
@@ -275,6 +309,8 @@ changes. Setting torque-enable register **40** to zero clears compensation and
 turns motor output off.
 
 ## Starting and stopping extension mode
+
+![Extension-session lifecycle](assets/readme/illustrations/extension-session.png)
 
 The following sequence uses the register numbers and commands documented later.
 Selection prepares a session; enabling motor power starts control.
@@ -327,6 +363,8 @@ torque enable to zero. Sensor freshness checks, motor protection,
 and the firmware watchdog remain active while moving and holding.
 
 ## Extension protocol
+
+![Extension-protocol unicast request and response](assets/readme/illustrations/extension-protocol.png)
 
 This section describes the exact messages exchanged between the host and servo.
 It is intended for readers connecting their own software.
@@ -466,6 +504,8 @@ not advance the motion sequence. The requested value remains active until
 replaced or disarmed.
 
 ## Extension registers
+
+![Extension register blocks](assets/readme/illustrations/extension-registers.png)
 
 An **offset** is the starting byte of a field, counting from zero within its
 block. Offsets below are decimal; selectors use hexadecimal notation (`0x...`). All writes use instruction `0x91`; reads use
@@ -638,6 +678,8 @@ refer to different moments; compare their timestamps and sample numbers.
 
 ## Build and verification
 
+![Firmware build and offline verification](assets/readme/illustrations/build-verification.png)
+
 Firmware sources, tests and build rules are in [`firmware/`](firmware/README.md).
 After installing the [toolchain](firmware/README.md#build-and-verify), run:
 
@@ -652,6 +694,8 @@ flashing-tool and viewer tests. To install a published firmware release, use the
 [flash and recovery tool](tools/flash/README.md).
 
 ## Repository layout
+
+![Firmware, host and tools responsibilities](assets/readme/illustrations/repository-layout.png)
 
 | Directory | Responsibility |
 | --- | --- |
@@ -674,6 +718,10 @@ For implementation details, see the
 headers and [vendor README](firmware/platform/gd32f130/vendor/README.md).
 
 ## Current limits
+
+[![Gearbox backlash and frame flex](assets/readme/posters/mechanical-limits.jpg)](assets/readme/videos/mechanical-limits.mp4)
+
+[Watch video (MP4)](assets/readme/videos/mechanical-limits.mp4)
 
 Temperature reported through extension feedback is checked to suppress isolated
 jumps, but the motor's temperature protection still uses the raw sensor readings.
