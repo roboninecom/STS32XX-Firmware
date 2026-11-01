@@ -1,5 +1,9 @@
 # Pinned GD32F1x0 declarations
 
+<!-- documentation-languages -->
+[English](../../../../docs/i18n/en/firmware/platform/gd32f130/vendor/README.md) · [Русский](../../../../docs/i18n/ru/firmware/platform/gd32f130/vendor/README.md) · [Español](../../../../docs/i18n/es/firmware/platform/gd32f130/vendor/README.md) · [Français](../../../../docs/i18n/fr/firmware/platform/gd32f130/vendor/README.md) · [Deutsch](../../../../docs/i18n/de/firmware/platform/gd32f130/vendor/README.md) · [Português (Brasil)](../../../../docs/i18n/pt-BR/firmware/platform/gd32f130/vendor/README.md) · [简体中文](../../../../docs/i18n/zh-CN/firmware/platform/gd32f130/vendor/README.md) · [日本語](../../../../docs/i18n/ja/firmware/platform/gd32f130/vendor/README.md) · [हिन्दी](../../../../docs/i18n/hi/firmware/platform/gd32f130/vendor/README.md) · [العربية](../../../../docs/i18n/ar/firmware/platform/gd32f130/vendor/README.md)
+<!-- /documentation-languages -->
+
 Source: community `sts3215-firmware/firmware/lib` at repository revision
 `24ba15ba80bfe8213684c6bb4523a7d7ee079998`. The GD32 device/SPL
 headers identify GigaDevice V3.3.0 (2020-09-21). The CMSIS core header

@@ -1,5 +1,9 @@
 # Telemetry viewer
 
+<!-- documentation-languages -->
+[English](../../docs/i18n/en/tools/simulation/README.md) · [Русский](../../docs/i18n/ru/tools/simulation/README.md) · [Español](../../docs/i18n/es/tools/simulation/README.md) · [Français](../../docs/i18n/fr/tools/simulation/README.md) · [Deutsch](../../docs/i18n/de/tools/simulation/README.md) · [Português (Brasil)](../../docs/i18n/pt-BR/tools/simulation/README.md) · [简体中文](../../docs/i18n/zh-CN/tools/simulation/README.md) · [日本語](../../docs/i18n/ja/tools/simulation/README.md) · [हिन्दी](../../docs/i18n/hi/tools/simulation/README.md) · [العربية](../../docs/i18n/ar/tools/simulation/README.md)
+<!-- /documentation-languages -->
+
 View live telemetry or replay a controller recording in MuJoCo. The viewer reads
 log files; it never connects to motors or sends commands. Both models use the
 same viewer, charts and reference overlay. It displays recorded motion; it does

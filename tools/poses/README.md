@@ -1,5 +1,9 @@
 # Record and replay poses
 
+<!-- documentation-languages -->
+[English](../../docs/i18n/en/tools/poses/README.md) · [Русский](../../docs/i18n/ru/tools/poses/README.md) · [Español](../../docs/i18n/es/tools/poses/README.md) · [Français](../../docs/i18n/fr/tools/poses/README.md) · [Deutsch](../../docs/i18n/de/tools/poses/README.md) · [Português (Brasil)](../../docs/i18n/pt-BR/tools/poses/README.md) · [简体中文](../../docs/i18n/zh-CN/tools/poses/README.md) · [日本語](../../docs/i18n/ja/tools/poses/README.md) · [हिन्दी](../../docs/i18n/hi/tools/poses/README.md) · [العربية](../../docs/i18n/ar/tools/poses/README.md)
+<!-- /documentation-languages -->
+
 Record named positions with torque off, then replay them with either saved legacy
 settings or tuned extension settings. Commands run from the repository root.
 

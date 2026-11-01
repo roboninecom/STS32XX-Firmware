@@ -1,5 +1,9 @@
 # Automated tuning
 
+<!-- documentation-languages -->
+[English](../../docs/i18n/en/tools/tuning/README.md) · [Русский](../../docs/i18n/ru/tools/tuning/README.md) · [Español](../../docs/i18n/es/tools/tuning/README.md) · [Français](../../docs/i18n/fr/tools/tuning/README.md) · [Deutsch](../../docs/i18n/de/tools/tuning/README.md) · [Português (Brasil)](../../docs/i18n/pt-BR/tools/tuning/README.md) · [简体中文](../../docs/i18n/zh-CN/tools/tuning/README.md) · [日本語](../../docs/i18n/ja/tools/tuning/README.md) · [हिन्दी](../../docs/i18n/hi/tools/tuning/README.md) · [العربية](../../docs/i18n/ar/tools/tuning/README.md)
+<!-- /documentation-languages -->
+
 Run a bounded batch of candidate settings, compare repeated moves and longer
 holds, and get a machine-readable recommendation. Uses the same v9 driver,
 controller and calibrated gravity model as replay and teleoperation. No settings

@@ -1,5 +1,9 @@
 # SO-ARM 102 model
 
+<!-- documentation-languages -->
+[English](../../../docs/i18n/en/tools/simulation/urdf/README.md) · [Русский](../../../docs/i18n/ru/tools/simulation/urdf/README.md) · [Español](../../../docs/i18n/es/tools/simulation/urdf/README.md) · [Français](../../../docs/i18n/fr/tools/simulation/urdf/README.md) · [Deutsch](../../../docs/i18n/de/tools/simulation/urdf/README.md) · [Português (Brasil)](../../../docs/i18n/pt-BR/tools/simulation/urdf/README.md) · [简体中文](../../../docs/i18n/zh-CN/tools/simulation/urdf/README.md) · [日本語](../../../docs/i18n/ja/tools/simulation/urdf/README.md) · [हिन्दी](../../../docs/i18n/hi/tools/simulation/urdf/README.md) · [العربية](../../../docs/i18n/ar/tools/simulation/urdf/README.md)
+<!-- /documentation-languages -->
+
 URDF and eight STL meshes from [Robonine's SO-ARM-102](https://github.com/roboninecom/SO-ARM-102/tree/0f0dd95526638042a3213598ee0ae7f167c40efe/simulation/urdf),
 commit `0f0dd95526638042a3213598ee0ae7f167c40efe`. The files are copied unchanged.
 `source.json` records their checksums. Xacro and ROS package scaffolding are not

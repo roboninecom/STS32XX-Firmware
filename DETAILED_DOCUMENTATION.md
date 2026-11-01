@@ -1,5 +1,9 @@
 # Detailed documentation
 
+<!-- documentation-languages -->
+[English](docs/i18n/en/DETAILED_DOCUMENTATION.md) · [Русский](docs/i18n/ru/DETAILED_DOCUMENTATION.md) · [Español](docs/i18n/es/DETAILED_DOCUMENTATION.md) · [Français](docs/i18n/fr/DETAILED_DOCUMENTATION.md) · [Deutsch](docs/i18n/de/DETAILED_DOCUMENTATION.md) · [Português (Brasil)](docs/i18n/pt-BR/DETAILED_DOCUMENTATION.md) · [简体中文](docs/i18n/zh-CN/DETAILED_DOCUMENTATION.md) · [日本語](docs/i18n/ja/DETAILED_DOCUMENTATION.md) · [हिन्दी](docs/i18n/hi/DETAILED_DOCUMENTATION.md) · [العربية](docs/i18n/ar/DETAILED_DOCUMENTATION.md)
+<!-- /documentation-languages -->
+
 Start with the **[Quick start](QUICKSTART.md)** guide for flashing, testing, replay and
 gravity compensation. See [tools](tools/README.md) for individual command guides.
 

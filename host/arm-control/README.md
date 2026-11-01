@@ -1,5 +1,9 @@
 # Shared arm controller and gravity compensation
 
+<!-- documentation-languages -->
+[English](../../docs/i18n/en/host/arm-control/README.md) · [Русский](../../docs/i18n/ru/host/arm-control/README.md) · [Español](../../docs/i18n/es/host/arm-control/README.md) · [Français](../../docs/i18n/fr/host/arm-control/README.md) · [Deutsch](../../docs/i18n/de/host/arm-control/README.md) · [Português (Brasil)](../../docs/i18n/pt-BR/host/arm-control/README.md) · [简体中文](../../docs/i18n/zh-CN/host/arm-control/README.md) · [日本語](../../docs/i18n/ja/host/arm-control/README.md) · [हिन्दी](../../docs/i18n/hi/host/arm-control/README.md) · [العربية](../../docs/i18n/ar/host/arm-control/README.md)
+<!-- /documentation-languages -->
+
 Live teleoperation, tuning, named-pose replay and timed-session replay use one follower
 controller. It handles setup, targets, measured feedback, gravity and cleanup.
 The [servo driver](../servo-driver/README.md) owns packet encoding and transport.

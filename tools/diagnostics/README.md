@@ -1,5 +1,9 @@
 # Bus benchmark and telemetry diagnostics
 
+<!-- documentation-languages -->
+[English](../../docs/i18n/en/tools/diagnostics/README.md) · [Русский](../../docs/i18n/ru/tools/diagnostics/README.md) · [Español](../../docs/i18n/es/tools/diagnostics/README.md) · [Français](../../docs/i18n/fr/tools/diagnostics/README.md) · [Deutsch](../../docs/i18n/de/tools/diagnostics/README.md) · [Português (Brasil)](../../docs/i18n/pt-BR/tools/diagnostics/README.md) · [简体中文](../../docs/i18n/zh-CN/tools/diagnostics/README.md) · [日本語](../../docs/i18n/ja/tools/diagnostics/README.md) · [हिन्दी](../../docs/i18n/hi/tools/diagnostics/README.md) · [العربية](../../docs/i18n/ar/tools/diagnostics/README.md)
+<!-- /documentation-languages -->
+
 Two command-line tools for STS servos: measure communication performance and
 check stationary telemetry for unusual readings. Requires Node.js 20 or newer.
 From the repository root, install dependencies with `npm install`.

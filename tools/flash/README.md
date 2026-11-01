@@ -1,5 +1,9 @@
 # Flash firmware
 
+<!-- documentation-languages -->
+[English](../../docs/i18n/en/tools/flash/README.md) · [Русский](../../docs/i18n/ru/tools/flash/README.md) · [Español](../../docs/i18n/es/tools/flash/README.md) · [Français](../../docs/i18n/fr/tools/flash/README.md) · [Deutsch](../../docs/i18n/de/tools/flash/README.md) · [Português (Brasil)](../../docs/i18n/pt-BR/tools/flash/README.md) · [简体中文](../../docs/i18n/zh-CN/tools/flash/README.md) · [日本語](../../docs/i18n/ja/tools/flash/README.md) · [हिन्दी](../../docs/i18n/hi/tools/flash/README.md) · [العربية](../../docs/i18n/ar/tools/flash/README.md)
+<!-- /documentation-languages -->
+
 Flash custom or factory firmware on a compatible **GD32F130 STS TTL servo**.
 One uploader handles both; the release manifest selects the application checks.
 

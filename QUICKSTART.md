@@ -1,5 +1,9 @@
 # Quick start
 
+<!-- documentation-languages -->
+[English](docs/i18n/en/QUICKSTART.md) · [Русский](docs/i18n/ru/QUICKSTART.md) · [Español](docs/i18n/es/QUICKSTART.md) · [Français](docs/i18n/fr/QUICKSTART.md) · [Deutsch](docs/i18n/de/QUICKSTART.md) · [Português (Brasil)](docs/i18n/pt-BR/QUICKSTART.md) · [简体中文](docs/i18n/zh-CN/QUICKSTART.md) · [日本語](docs/i18n/ja/QUICKSTART.md) · [हिन्दी](docs/i18n/hi/QUICKSTART.md) · [العربية](docs/i18n/ar/QUICKSTART.md)
+<!-- /documentation-languages -->
+
 For GD32F130-based STS TTL servos. Commands below use macOS/Linux shell syntax
 and run from the repository root. Extension motion tools require firmware v9;
 legacy replay also supports factory firmware.

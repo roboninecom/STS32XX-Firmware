@@ -1,0 +1,21 @@
+name: Documentation translations
+
+on:
+  pull_request:
+    paths: ['**/*.md', 'docs/i18n/manifest.json', '.github/scripts/check_translations.py', '.github/workflows/documentation-translations.yml']
+  push:
+    branches: [main]
+    paths: ['**/*.md', 'docs/i18n/manifest.json', '.github/scripts/check_translations.py', '.github/workflows/documentation-translations.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python .github/scripts/check_translations.py

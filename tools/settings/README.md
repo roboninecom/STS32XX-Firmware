@@ -1,5 +1,9 @@
 # Discovery, calibration and settings
 
+<!-- documentation-languages -->
+[English](../../docs/i18n/en/tools/settings/README.md) · [Русский](../../docs/i18n/ru/tools/settings/README.md) · [Español](../../docs/i18n/es/tools/settings/README.md) · [Français](../../docs/i18n/fr/tools/settings/README.md) · [Deutsch](../../docs/i18n/de/tools/settings/README.md) · [Português (Brasil)](../../docs/i18n/pt-BR/tools/settings/README.md) · [简体中文](../../docs/i18n/zh-CN/tools/settings/README.md) · [日本語](../../docs/i18n/ja/tools/settings/README.md) · [हिन्दी](../../docs/i18n/hi/tools/settings/README.md) · [العربية](../../docs/i18n/ar/tools/settings/README.md)
+<!-- /documentation-languages -->
+
 Find STS servos and back up or restore their persistent legacy settings. Uses the
 repository's shared driver and STS control table. Requires Node.js 20 or newer.
 Run these commands from the repository root after `npm ci`.

@@ -1,5 +1,9 @@
 # Teleoperation
 
+<!-- documentation-languages -->
+[English](../../docs/i18n/en/tools/teleoperation/README.md) · [Русский](../../docs/i18n/ru/tools/teleoperation/README.md) · [Español](../../docs/i18n/es/tools/teleoperation/README.md) · [Français](../../docs/i18n/fr/tools/teleoperation/README.md) · [Deutsch](../../docs/i18n/de/tools/teleoperation/README.md) · [Português (Brasil)](../../docs/i18n/pt-BR/tools/teleoperation/README.md) · [简体中文](../../docs/i18n/zh-CN/tools/teleoperation/README.md) · [日本語](../../docs/i18n/ja/tools/teleoperation/README.md) · [हिन्दी](../../docs/i18n/hi/tools/teleoperation/README.md) · [العربية](../../docs/i18n/ar/tools/teleoperation/README.md)
+<!-- /documentation-languages -->
+
 Move a powered follower by moving an unpowered leader by hand. Supports 1–6
 joint pairs on two separate serial buses. The leader may use factory firmware;
 the follower requires this repository's v9 firmware.

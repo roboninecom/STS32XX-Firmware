@@ -1,5 +1,9 @@
 # STS32XX servo driver
 
+<!-- documentation-languages -->
+[English](../../docs/i18n/en/host/servo-driver/README.md) · [Русский](../../docs/i18n/ru/host/servo-driver/README.md) · [Español](../../docs/i18n/es/host/servo-driver/README.md) · [Français](../../docs/i18n/fr/host/servo-driver/README.md) · [Deutsch](../../docs/i18n/de/host/servo-driver/README.md) · [Português (Brasil)](../../docs/i18n/pt-BR/host/servo-driver/README.md) · [简体中文](../../docs/i18n/zh-CN/host/servo-driver/README.md) · [日本語](../../docs/i18n/ja/host/servo-driver/README.md) · [हिन्दी](../../docs/i18n/hi/host/servo-driver/README.md) · [العربية](../../docs/i18n/ar/host/servo-driver/README.md)
+<!-- /documentation-languages -->
+
 Node.js driver for STS serial servos and the STS32XX firmware **v9 motion
 extension**. It provides discovery, register access, settings operations,
 S-curve motion commands, gravity compensation and feedback through one serial

@@ -1,5 +1,9 @@
 # Hardware comparison tests
 
+<!-- documentation-languages -->
+[English](../../docs/i18n/en/tools/hw-diff-tests/README.md) · [Русский](../../docs/i18n/ru/tools/hw-diff-tests/README.md) · [Español](../../docs/i18n/es/tools/hw-diff-tests/README.md) · [Français](../../docs/i18n/fr/tools/hw-diff-tests/README.md) · [Deutsch](../../docs/i18n/de/tools/hw-diff-tests/README.md) · [Português (Brasil)](../../docs/i18n/pt-BR/tools/hw-diff-tests/README.md) · [简体中文](../../docs/i18n/zh-CN/tools/hw-diff-tests/README.md) · [日本語](../../docs/i18n/ja/tools/hw-diff-tests/README.md) · [हिन्दी](../../docs/i18n/hi/tools/hw-diff-tests/README.md) · [العربية](../../docs/i18n/ar/tools/hw-diff-tests/README.md)
+<!-- /documentation-languages -->
+
 Compare factory and custom firmware on STS servos. The suite covers the legacy
 protocol, settings, motion, calibration and protection. It does not test extension
 protocol v9 control. Tests use the repository's [shared driver](../../host/servo-driver/README.md).
