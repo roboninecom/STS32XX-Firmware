@@ -1,0 +1,21 @@
+STS32XX Firmware
+Copyright 2026 Robonine
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes third-party components distributed under their own
+licenses:
+
+  * GigaDevice GD32F1x0 device and standard peripheral library headers
+    (Copyright (c) 2020, GigaDevice Semiconductor Inc.) and ARM CMSIS core
+    headers (Copyright (c) 2009-2013 ARM LIMITED), BSD-style licenses.
+    Location: firmware/platform/gd32f130/vendor/
+    The upstream notices are retained unmodified in each header file.
+
+  * The gd32f1x0_libopt.h aggregator header from the community
+    sts3215-firmware project (Copyright (c) 2025 Feetec Firmware
+    Contributors), MIT License.
+    Location: firmware/platform/gd32f130/vendor/COMMUNITY_LICENSE
+
+The Node.js servo driver in host/servo-driver/ is separately licensed under
+the MIT License; see host/servo-driver/LICENSE.
